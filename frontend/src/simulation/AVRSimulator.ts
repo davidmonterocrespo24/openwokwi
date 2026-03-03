@@ -1,4 +1,4 @@
-import { CPU, AVRTimer, timer0Config, AVRUSART, usart0Config, AVRIOPort, portBConfig, portCConfig, portDConfig } from 'avr8js';
+import { CPU, AVRTimer, timer0Config, AVRUSART, usart0Config, AVRIOPort, portBConfig, portCConfig, portDConfig, avrInstruction, PinState } from 'avr8js';
 import { PinManager } from './PinManager';
 import { hexToUint8Array } from '../utils/hexParser';
 
@@ -84,10 +84,11 @@ export class AVRSimulator {
 
     // PORTB (Digital pins 8-13)
     // Pin 13 (LED_BUILTIN) = PORTB5
-    this.portB!.addListener((value) => {
-      console.log(`[PORTB LISTENER CALLED] value: 0x${value.toString(16).padStart(2, '0')} (was 0x${this.lastPortBValue.toString(16).padStart(2, '0')})`);
+    this.portB!.addListener((value, _oldValue) => {
+      console.log(`[PORTB LISTENER CALLED] register value: 0x${value.toString(16).padStart(2, '0')}`);
       console.log(`  Binary: ${value.toString(2).padStart(8, '0')}`);
-      console.log(`  Bit 5 (Pin 13): ${(value & 0x20) ? 'HIGH' : 'LOW'}`);
+      console.log(`  Pin 13 (bit 5) state: ${this.portB!.pinState(5) === PinState.High ? 'HIGH' : 'LOW'}`);
+
       if (value !== this.lastPortBValue) {
         this.pinManager.updatePort('PORTB', value, this.lastPortBValue);
         this.lastPortBValue = value;
@@ -95,8 +96,9 @@ export class AVRSimulator {
     });
 
     // PORTC (Analog pins A0-A5)
-    this.portC!.addListener((value) => {
-      console.log(`[PORTC LISTENER CALLED] value: 0x${value.toString(16).padStart(2, '0')}`);
+    this.portC!.addListener((value, _oldValue) => {
+      console.log(`[PORTC LISTENER CALLED] register value: 0x${value.toString(16).padStart(2, '0')}`);
+
       if (value !== this.lastPortCValue) {
         this.pinManager.updatePort('PORTC', value, this.lastPortCValue);
         this.lastPortCValue = value;
@@ -104,8 +106,9 @@ export class AVRSimulator {
     });
 
     // PORTD (Digital pins 0-7)
-    this.portD!.addListener((value) => {
-      console.log(`[PORTD LISTENER CALLED] value: 0x${value.toString(16).padStart(2, '0')}`);
+    this.portD!.addListener((value, _oldValue) => {
+      console.log(`[PORTD LISTENER CALLED] register value: 0x${value.toString(16).padStart(2, '0')}`);
+
       if (value !== this.lastPortDValue) {
         this.pinManager.updatePort('PORTD', value, this.lastPortDValue);
         this.lastPortDValue = value;
@@ -144,9 +147,9 @@ export class AVRSimulator {
 
       try {
         for (let i = 0; i < cyclesPerFrame; i++) {
-          // Execute one instruction
-          // Note: AVRTimer and AVRUSART are updated automatically by CPU.tick()
-          this.cpu.tick();
+          // Execute one AVR instruction and update peripherals
+          avrInstruction(this.cpu);  // CRITICAL: Execute the actual instruction
+          this.cpu.tick();            // Update peripheral timers and cycles
         }
 
         // Log every 60 frames (once per second at 60fps)
@@ -241,8 +244,7 @@ export class AVRSimulator {
   step(): void {
     if (!this.cpu) return;
 
-    this.cpu.tick();
-    if (this.timer0) this.timer0.tick();
-    if (this.usart) this.usart.tick();
+    avrInstruction(this.cpu);  // Execute the instruction
+    this.cpu.tick();            // Update peripherals
   }
 }
