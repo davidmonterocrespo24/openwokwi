@@ -1,15 +1,15 @@
 import { PartSimulationRegistry } from './PartSimulationRegistry';
-import type { AVRSimulator } from '../AVRSimulator';
+import type { AnySimulator } from './PartSimulationRegistry';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Read the ADC instance from the simulator (returns null if not initialized) */
-function getADC(avrSimulator: AVRSimulator): any | null {
+function getADC(avrSimulator: AnySimulator): any | null {
     return (avrSimulator as any).getADC?.() ?? null;
 }
 
 /** Write an analog voltage (0-5V) to an ADC channel derived from an Arduino pin (A0-A5 = 14-19) */
-function setAdcVoltage(avrSimulator: AVRSimulator, arduinoPin: number, voltage: number): boolean {
+function setAdcVoltage(avrSimulator: AnySimulator, arduinoPin: number, voltage: number): boolean {
     if (arduinoPin < 14 || arduinoPin > 19) return false;
     const channel = arduinoPin - 14;
     const adc = getADC(avrSimulator);
@@ -404,7 +404,7 @@ PartSimulationRegistry.register('buzzer', {
 
 function createLcdSimulation(cols: number, rows: number) {
     return {
-        attachEvents: (element: HTMLElement, avrSimulator: AVRSimulator, getArduinoPinHelper: (pin: string) => number | null) => {
+        attachEvents: (element: HTMLElement, avrSimulator: AnySimulator, getArduinoPinHelper: (pin: string) => number | null) => {
             const el = element as any;
 
             const ddram = new Uint8Array(128).fill(0x20);
