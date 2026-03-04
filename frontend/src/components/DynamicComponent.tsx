@@ -179,8 +179,11 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
 
     const logic = PartSimulationRegistry.get(metadata.id || id.split('-')[0]); // Fallback if id is like led-1
 
+    console.log(`[DynamicComponent] Component ${id} (${metadata.id}): Logic found =`, !!logic);
+
     let cleanupSimulationEvents: (() => void) | undefined;
     if (logic && logic.attachEvents) {
+      console.log(`[DynamicComponent] Attaching events for ${id} (${metadata.id})`);
       // We need AVRSimulator instance. We can grab it from store.
       const simulator = useSimulatorStore.getState().simulator;
       if (simulator) {
