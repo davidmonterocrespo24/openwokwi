@@ -23,39 +23,39 @@ Interactive component properties dialog and segment-based wire editing
 ## Features
 
 ### Code Editing
-- ✅ **Monaco Editor** — Full C++ editor with syntax highlighting, autocomplete, minimap, and dark theme
-- ✅ **Arduino compilation** via `arduino-cli` backend — compile sketches to `.hex` files
-- ✅ **Compile / Run / Stop / Reset** toolbar buttons with status messages
+- **Monaco Editor** — Full C++ editor with syntax highlighting, autocomplete, minimap, and dark theme
+- **Arduino compilation** via `arduino-cli` backend — compile sketches to `.hex` files
+- **Compile / Run / Stop / Reset** toolbar buttons with status messages
 
 ### AVR8 Simulation (avr8js)
-- ✅ **Real ATmega328p emulation** at 16 MHz using avr8js
-- ✅ **Intel HEX parser** with checksum verification
-- ✅ **Full GPIO support** — PORTB (pins 8-13), PORTC (A0-A5), PORTD (pins 0-7)
-- ✅ **Timer0 peripheral** support
-- ✅ **USART (Serial)** support
-- ✅ **~60 FPS simulation loop** with `requestAnimationFrame` (~267k cycles/frame)
-- ✅ **Speed control** — adjustable from 0.1x to 10x
-- ✅ **Single-step debugging** API
-- ✅ **External pin state injection** for input components (buttons, potentiometers)
+- **Real ATmega328p emulation** at 16 MHz using avr8js
+- **Intel HEX parser** with checksum verification
+- **Full GPIO support** — PORTB (pins 8-13), PORTC (A0-A5), PORTD (pins 0-7)
+- **Timer0 peripheral** support
+- **USART (Serial)** support
+- **~60 FPS simulation loop** with `requestAnimationFrame` (~267k cycles/frame)
+- **Speed control** — adjustable from 0.1x to 10x
+- **Single-step debugging** API
+- **External pin state injection** for input components (buttons, potentiometers)
 
 ### Component System (48+ Components)
-- ✅ **48 electronic components** auto-discovered from wokwi-elements source code
-- ✅ **Component picker modal** with search bar, category filtering, and live wokwi-element previews as thumbnails
-- ✅ **9 component categories**: Boards (4), Sensors (6), Displays (3), Input (5), Output (5), Motors (2), Passive (4), Other (19)
-- ✅ **Dynamic component rendering** from build-time metadata (TypeScript AST parser extracts `@customElement` tags, `@property` decorators, and pin counts)
-- ✅ **Drag-and-drop repositioning** on the simulation canvas
-- ✅ **Component rotation** in 90° increments
-- ✅ **Property dialog** (single-click) — shows pin roles, Arduino pin assignment, rotate & delete actions
-- ✅ **Pin selector** (double-click) — assign Arduino pins D0-D13 and A0-A5 to component pins
-- ✅ **Pin overlay system** — clickable cyan dots on each component pin with hover animation
-- ✅ **Keyboard shortcuts** — Delete/Backspace to remove, Escape to cancel
+- **48 electronic components** auto-discovered from wokwi-elements source code
+- **Component picker modal** with search bar, category filtering, and live wokwi-element previews as thumbnails
+- **9 component categories**: Boards (4), Sensors (6), Displays (3), Input (5), Output (5), Motors (2), Passive (4), Other (19)
+- **Dynamic component rendering** from build-time metadata (TypeScript AST parser extracts `@customElement` tags, `@property` decorators, and pin counts)
+- **Drag-and-drop repositioning** on the simulation canvas
+- **Component rotation** in 90° increments
+- **Property dialog** (single-click) — shows pin roles, Arduino pin assignment, rotate & delete actions
+- **Pin selector** (double-click) — assign Arduino pins D0-D13 and A0-A5 to component pins
+- **Pin overlay system** — clickable cyan dots on each component pin with hover animation
+- **Keyboard shortcuts** — Delete/Backspace to remove, Escape to cancel
 
 ### Part Simulation Behaviors
-- ✅ **LED** — pin state drives LED on/off
-- ✅ **RGB LED** — digital HIGH/LOW mapped to individual R/G/B channels
-- ✅ **Pushbutton** — press/release events inject active-LOW pin state into simulation
-- ✅ **Potentiometer** — reads element value (0-1023), converts to voltage, injects into ADC channel
-- ✅ **LCD 1602 & LCD 2004** — Full HD44780 controller emulation:
+- **LED** — pin state drives LED on/off
+- **RGB LED** — digital HIGH/LOW mapped to individual R/G/B channels
+- **Pushbutton** — press/release events inject active-LOW pin state into simulation
+- **Potentiometer** — reads element value (0-1023), converts to voltage, injects into ADC channel
+- **LCD 1602 & LCD 2004** — Full HD44780 controller emulation:
   - 4-bit mode protocol (high nibble first, then low nibble)
   - DDRAM with proper line address mapping
   - Commands: Clear Display, Return Home, Entry Mode Set, Display On/Off, Cursor/Display Shift, Function Set
@@ -63,18 +63,18 @@ Interactive component properties dialog and segment-based wire editing
   - Enable pin falling-edge detection for data latching
 
 ### Wire System
-- ✅ **Wire creation** — click a pin to start, click another pin to connect
-- ✅ **Real-time preview** — dashed green wire with L-shaped orthogonal routing while creating
-- ✅ **Orthogonal wire rendering** — no diagonal paths
-- ✅ **Segment-based wire editing** — hover to highlight, drag segments perpendicular to their orientation
-- ✅ **Smooth dragging** with `requestAnimationFrame`
-- ✅ **8 signal-type wire colors**: Red (VCC), Black (GND), Blue (Analog), Green (Digital), Purple (PWM), Gold (I2C), Orange (SPI), Cyan (USART)
-- ✅ **Automatic overlap offset** — parallel wires are offset symmetrically (6px spacing)
-- ✅ **Auto-update positions** — wire endpoints recalculate when components move
-- ✅ **Grid snapping** (20px grid)
+- **Wire creation** — click a pin to start, click another pin to connect
+- **Real-time preview** — dashed green wire with L-shaped orthogonal routing while creating
+- **Orthogonal wire rendering** — no diagonal paths
+- **Segment-based wire editing** — hover to highlight, drag segments perpendicular to their orientation
+- **Smooth dragging** with `requestAnimationFrame`
+- **8 signal-type wire colors**: Red (VCC), Black (GND), Blue (Analog), Green (Digital), Purple (PWM), Gold (I2C), Orange (SPI), Cyan (USART)
+- **Automatic overlap offset** — parallel wires are offset symmetrically (6px spacing)
+- **Auto-update positions** — wire endpoints recalculate when components move
+- **Grid snapping** (20px grid)
 
 ### Example Projects
-- ✅ **8 built-in example projects** with full code, components, and wire definitions:
+- **8 built-in example projects** with full code, components, and wire definitions:
 
 | Example | Category | Difficulty |
 |---------|----------|------------|
@@ -87,14 +87,14 @@ Interactive component properties dialog and segment-based wire editing
 | Simon Says Game | Games | Advanced |
 | LCD 20x4 Display | Displays | Intermediate |
 
-- ✅ **Examples gallery** with category and difficulty filters
-- ✅ **One-click loading** — loads code, components, and wires into the editor and simulator
+- **Examples gallery** with category and difficulty filters
+- **One-click loading** — loads code, components, and wires into the editor and simulator
 
 ### Wokwi Libraries (Local Clones)
-- ✅ **wokwi-elements** — 48+ electronic web components (Lit-based Web Components)
-- ✅ **avr8js** — AVR8 CPU emulator
-- ✅ **rp2040js** — RP2040 emulator (cloned, for future use)
-- ✅ **Build-time metadata generation** — TypeScript AST parser reads wokwi-elements source to generate component metadata automatically
+- **wokwi-elements** — 48+ electronic web components (Lit-based Web Components)
+- **avr8js** — AVR8 CPU emulator
+- **rp2040js** — RP2040 emulator (cloned, for future use)
+- **Build-time metadata generation** — TypeScript AST parser reads wokwi-elements source to generate component metadata automatically
 
 ## Prerequisites
 
@@ -265,12 +265,12 @@ openwokwi/
 
 ## Planned Features
 
-- 📋 **Serial Monitor** — UI for reading USART output from the simulation
-- 📋 **Project Persistence** — Save/load projects with SQLite
-- 📋 **Undo/Redo** — Edit history for code and circuit changes
-- 📋 **Multi-board Support** — Runtime board switching (Mega, Nano, ESP32)
-- 📋 **Wire Validation** — Electrical validation and error highlighting
-- 📋 **Export/Import** — Share projects as files
+- **Serial Monitor** — UI for reading USART output from the simulation
+- **Project Persistence** — Save/load projects with SQLite
+- **Undo/Redo** — Edit history for code and circuit changes
+- **Multi-board Support** — Runtime board switching (Mega, Nano, ESP32)
+- **Wire Validation** — Electrical validation and error highlighting
+- **Export/Import** — Share projects as files
 
 ## Update Wokwi Libraries
 

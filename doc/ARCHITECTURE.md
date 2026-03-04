@@ -438,44 +438,44 @@ This allows:
 
 ## Architecture Advantages
 
-### ✅ Real Emulation
+### Real Emulation
 - True AVR8 CPU execution, not simulation mockups
 - Same avr8js engine used by Wokwi.com
 - Accurate timing with configurable speed
 
-### ✅ Plugin-Based Component Behaviors
+### Plugin-Based Component Behaviors
 - PartSimulationRegistry decouples simulation logic from rendering
 - Easy to add new component behaviors
 - Supports both input (event-driven) and output (pin-state-driven) components
 
-### ✅ Automatic Component Discovery
+### Automatic Component Discovery
 - Build-time TypeScript AST parser extracts metadata from wokwi-elements source
 - No manual component registration needed
 - New wokwi-elements components appear automatically after rebuild
 
-### ✅ Separation of Concerns
+### Separation of Concerns
 - **Frontend**: UI, visualization, simulation engine
 - **Backend**: Compilation via arduino-cli
 - **Wokwi Libs**: Emulation and components (maintained by Wokwi community)
 
-### ✅ Wokwi Compatibility
+### Wokwi Compatibility
 - Official repositories = same functionality as Wokwi.com
 - Automatic updates with `git pull`
 - New components available immediately after rebuild
 
-### ✅ Local Development
+### Local Development
 - No internet required after initial setup
 - Local compilation with arduino-cli
 - All simulation runs in the browser
 
 ## Planned Improvements
 
-- 📋 **Serial Monitor** — UI for USART output display
-- 📋 **Project Persistence** — SQLite database for save/load
-- 📋 **Undo/Redo** — Edit history for code and circuit changes
-- 📋 **Multi-board Support** — Runtime board switching (Mega, Nano, ESP32)
-- 📋 **Wire Validation** — Electrical validation and error highlighting
-- 📋 **Export/Import** — Share projects as files
+- **Serial Monitor** — UI for USART output display
+- **Project Persistence** — SQLite database for save/load
+- **Undo/Redo** — Edit history for code and circuit changes
+- **Multi-board Support** — Runtime board switching (Mega, Nano, ESP32)
+- **Wire Validation** — Electrical validation and error highlighting
+- **Export/Import** — Share projects as files
 
 ## References
 

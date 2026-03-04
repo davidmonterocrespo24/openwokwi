@@ -4,28 +4,28 @@ Este proyecto utiliza los repositorios oficiales de Wokwi clonados localmente, l
 
 ## Repositorios Clonados
 
-### 📦 wokwi-elements
+### wokwi-elements
 - **Ubicación**: `wokwi-libs/wokwi-elements/`
 - **Descripción**: Web Components (Lit) para 48+ elementos electrónicos (LEDs, resistencias, botones, LCDs, sensores, etc.)
 - **Repositorio**: https://github.com/wokwi/wokwi-elements
 - **Licencia**: MIT
 - **Uso actual**: Renderizado visual de todos los componentes en el canvas de simulación. Un script de generación de metadata (`scripts/generate-component-metadata.ts`) parsea el código fuente TypeScript para descubrir automáticamente todos los componentes, sus propiedades y pines.
 
-### 🎮 avr8js
+### avr8js
 - **Ubicación**: `wokwi-libs/avr8js/`
 - **Descripción**: Emulador completo de microcontroladores AVR8 (ATmega328p) en JavaScript
 - **Repositorio**: https://github.com/wokwi/avr8js
 - **Licencia**: MIT
 - **Uso actual**: Emulación real del CPU a 16MHz, con Timer0/1/2, USART, ADC, y puertos GPIO (PORTB/C/D). Ejecuta ~267,000 ciclos por frame a ~60fps.
 
-### 🚀 rp2040js
+### rp2040js
 - **Ubicación**: `wokwi-libs/rp2040js/`
 - **Descripción**: Emulador de Raspberry Pi Pico (RP2040) en JavaScript
 - **Repositorio**: https://github.com/wokwi/rp2040js
 - **Licencia**: MIT
 - **Uso**: Clonado para futuro soporte de Raspberry Pi Pico
 
-### 📝 wokwi-features
+### wokwi-features
 - **Ubicación**: `wokwi-libs/wokwi-features/`
 - **Descripción**: Documentación y tracking de features de Wokwi
 - **Repositorio**: https://github.com/wokwi/wokwi-features
@@ -300,7 +300,7 @@ const metadata = registry.getById('led');
 
 ## Ventajas de Este Enfoque
 
-### ✅ Ventajas
+### Ventajas
 
 1. **Actualización Fácil**: Un simple `git pull` + rebuild te da las últimas mejoras
 2. **Compatible con Wokwi**: Usas exactamente el mismo código que Wokwi.com
@@ -310,7 +310,7 @@ const metadata = registry.getById('led');
 6. **Sin Dependencia de npm**: No dependes de que publiquen actualizaciones en npm
 7. **100% Offline**: Funciona completamente sin internet después de la configuración inicial
 
-### ⚠️ Consideraciones
+### Consideraciones
 
 1. **Espacio en Disco**: Los repositorios clonados ocupan más espacio (~200MB)
 2. **Compilación**: Debes compilar los repositorios después de actualizarlos
