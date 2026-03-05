@@ -33,6 +33,14 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
         }
     }, []);
 
+    // Fetch installed list when modal opens (to cross-reference in search tab)
+    useEffect(() => {
+        if (isOpen) {
+            fetchInstalled();
+        }
+    }, [isOpen, fetchInstalled]);
+
+    // Also refresh when switching to the installed tab
     useEffect(() => {
         if (isOpen && activeTab === 'installed') {
             fetchInstalled();
@@ -69,6 +77,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
             const result = await installLibrary(libName);
             if (result.success) {
                 setStatusMsg({ type: 'success', text: `"${libName}" installed successfully!` });
+                fetchInstalled(); // Refresh installed list so search tab reflects new state
             } else {
                 setStatusMsg({ type: 'error', text: result.error || `Failed to install "${libName}"` });
             }
@@ -87,6 +96,11 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     };
 
     if (!isOpen) return null;
+
+    const isInstalled = (libName: string): boolean =>
+        installedLibraries.some(
+            (il) => (il.library?.name || il.name || '').toLowerCase() === libName.toLowerCase()
+        );
 
     const getLibName = (lib: ArduinoLibrary): string => lib.name || 'Unknown';
     const getLibVersion = (lib: ArduinoLibrary): string => lib.latest?.version || lib.version || '';
@@ -207,17 +221,24 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                                         {getLibVersion(lib) && (
                                             <span className="lib-item-version">{getLibVersion(lib)}</span>
                                         )}
-                                        <button
-                                            className="lib-install-btn"
-                                            onClick={() => handleInstall(getLibName(lib))}
-                                            disabled={installingLib !== null}
-                                        >
-                                            {installingLib === getLibName(lib) ? (
-                                                <span className="lib-installing">Installing...</span>
-                                            ) : (
-                                                'INSTALL'
-                                            )}
-                                        </button>
+                                        {isInstalled(getLibName(lib)) ? (
+                                            <span className="lib-item-version lib-installed-badge">
+                                                INSTALLED
+                                                <svg style={{ display: 'inline', marginLeft: '4px', verticalAlign: 'middle' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                            </span>
+                                        ) : (
+                                            <button
+                                                className="lib-install-btn"
+                                                onClick={() => handleInstall(getLibName(lib))}
+                                                disabled={installingLib !== null}
+                                            >
+                                                {installingLib === getLibName(lib) ? (
+                                                    <span className="lib-installing">Installing...</span>
+                                                ) : (
+                                                    'INSTALL'
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
