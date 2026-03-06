@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Velxio** — a fully local, open-source Arduino emulator (formerly OpenWokwi).
+**Velxio** — a fully local, open-source Arduino emulator 
 - GitHub: https://github.com/davidmonterocrespo24/velxio
 - Frontend: React + Vite + TypeScript with Monaco Editor and visual simulation canvas
 - Backend: FastAPI + Python for Arduino code compilation via arduino-cli
