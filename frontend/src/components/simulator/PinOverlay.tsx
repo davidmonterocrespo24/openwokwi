@@ -20,6 +20,9 @@ interface PinOverlayProps {
   componentY: number;
   onPinClick: (componentId: string, pinName: string, x: number, y: number) => void;
   showPins: boolean;
+  /** Extra offset to compensate for wrapper padding/border. Default: 4 (x), 6 (y) for component wrappers. Pass 0 when the element has no wrapper. */
+  wrapperOffsetX?: number;
+  wrapperOffsetY?: number;
 }
 
 export const PinOverlay: React.FC<PinOverlayProps> = ({
@@ -28,6 +31,8 @@ export const PinOverlay: React.FC<PinOverlayProps> = ({
   componentY,
   onPinClick,
   showPins,
+  wrapperOffsetX = 4,
+  wrapperOffsetY = 6,
 }) => {
   const [pins, setPins] = useState<PinInfo[]>([]);
 
@@ -47,8 +52,8 @@ export const PinOverlay: React.FC<PinOverlayProps> = ({
     <div
       style={{
         position: 'absolute',
-        left: `${componentX + 6}px`, // +6px for wrapper padding (4px padding + 2px border)
-        top: `${componentY + 6}px`,
+        left: `${componentX + wrapperOffsetX}px`,
+        top: `${componentY + wrapperOffsetY}px`,
         pointerEvents: 'none',
         zIndex: 10, // Above wires (1) and components, below modals/dialogs (1000+)
       }}
@@ -63,27 +68,27 @@ export const PinOverlay: React.FC<PinOverlayProps> = ({
             key={pin.name}
             onClick={(e) => {
               e.stopPropagation();
-              onPinClick(componentId, pin.name, componentX + 6 + pinX, componentY + 6 + pinY);
+              onPinClick(componentId, pin.name, componentX + wrapperOffsetX + pinX, componentY + wrapperOffsetY + pinY);
             }}
             style={{
               position: 'absolute',
-              left: `${pinX - 6}px`,
-              top: `${pinY - 6}px`,
-              width: '12px',
-              height: '12px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(0, 200, 255, 0.7)',
-              border: '2px solid white',
+              left: `${pinX - 4}px`,
+              top: `${pinY - 4}px`,
+              width: '8px',
+              height: '8px',
+              borderRadius: '2px',
+              backgroundColor: 'rgba(0, 200, 255, 0.8)',
+              border: '1.5px solid white',
               cursor: 'crosshair',
               pointerEvents: 'all',
-              transition: 'all 0.2s',
+              transition: 'all 0.15s',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = 'rgba(0, 255, 100, 1)';
-              e.currentTarget.style.transform = 'scale(1.3)';
+              e.currentTarget.style.transform = 'scale(1.4)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(0, 200, 255, 0.7)';
+              e.currentTarget.style.backgroundColor = 'rgba(0, 200, 255, 0.8)';
               e.currentTarget.style.transform = 'scale(1)';
             }}
             title={pin.name}

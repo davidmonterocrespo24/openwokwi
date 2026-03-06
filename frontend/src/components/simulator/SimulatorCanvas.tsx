@@ -460,6 +460,8 @@ export const SimulatorCanvas = () => {
             componentY={ARDUINO_POSITION.y}
             onPinClick={handlePinClick}
             showPins={true}
+            wrapperOffsetX={0}
+            wrapperOffsetY={0}
           />
 
           {/* Components using wokwi-elements */}
