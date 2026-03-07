@@ -296,6 +296,15 @@ export const WireRenderer: React.FC<WireRendererProps> = ({ wire, isSelected }) 
         onClick={handleWireClick}
       />
 
+      {/* Background erasing path for visual crossing effect */}
+      <path
+        d={path}
+        stroke="#1a1a1a"
+        strokeWidth={isSelected ? '7' : '6'}
+        fill="none"
+        style={{ pointerEvents: 'none' }}
+      />
+
       {/* Visible wire path */}
       <path
         d={path}

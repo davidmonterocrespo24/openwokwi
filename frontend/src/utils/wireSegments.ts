@@ -158,20 +158,46 @@ export function updateOrthogonalPointsForSegmentDrag(
   offset: number
 ): Array<{ x: number; y: number }> {
   const newPoints = orthoPoints.map((p) => ({ ...p }));
-
   const { startIndex, endIndex, orientation } = segment;
 
+  let newStart = { ...newPoints[startIndex] };
+  let newEnd = { ...newPoints[endIndex] };
+
   if (orientation === 'horizontal') {
-    // Move horizontal segment up/down (change Y)
-    newPoints[startIndex].y += offset;
-    newPoints[endIndex].y += offset;
+    newStart.y += offset;
+    newEnd.y += offset;
   } else {
-    // Move vertical segment left/right (change X)
-    newPoints[startIndex].x += offset;
-    newPoints[endIndex].x += offset;
+    newStart.x += offset;
+    newEnd.x += offset;
   }
 
-  return newPoints;
+  const resultPoints: Array<{ x: number; y: number }> = [];
+
+  // Add points before the dragged segment
+  for (let i = 0; i < startIndex; i++) {
+    resultPoints.push(newPoints[i]);
+  }
+
+  // If dragging the first segment, inject the original start pin to act as a stub anchor
+  if (startIndex === 0 && offset !== 0) {
+    resultPoints.push({ ...newPoints[0] });
+  }
+
+  // Add the dragged segment's end points
+  resultPoints.push(newStart);
+  resultPoints.push(newEnd);
+
+  // If dragging the last segment, inject the original end pin to act as a stub anchor
+  if (endIndex === newPoints.length - 1 && offset !== 0) {
+    resultPoints.push({ ...newPoints[newPoints.length - 1] });
+  }
+
+  // Add points after the dragged segment
+  for (let i = endIndex + 1; i < newPoints.length; i++) {
+    resultPoints.push(newPoints[i]);
+  }
+
+  return resultPoints;
 }
 
 /**
@@ -183,8 +209,8 @@ export function updateOrthogonalPointsForSegmentDrag(
  */
 export function orthogonalPointsToControlPoints(
   orthoPoints: Array<{ x: number; y: number }>,
-  start: { x: number; y: number },
-  end: { x: number; y: number }
+  _start: { x: number; y: number },
+  _end: { x: number; y: number }
 ): WireControlPoint[] {
   if (orthoPoints.length < 2) {
     return [];
@@ -197,10 +223,6 @@ export function orthogonalPointsToControlPoints(
     return [];
   }
 
-  // Use actual orthoPoints for prev/next comparison (not start/end parameters)
-  const actualStart = orthoPoints[0];
-  const actualEnd = orthoPoints[orthoPoints.length - 1];
-
   // Keep only corner points (where direction changes)
   const controlPoints: WireControlPoint[] = [];
 
@@ -211,9 +233,14 @@ export function orthogonalPointsToControlPoints(
     const next = orthoPoints[i + 2]; // Next point in orthoPoints
 
     // Check if current point is a corner (changes direction)
-    const isCorner =
-      (prev.x === current.x && current.y === next.y) ||
-      (prev.y === current.y && current.x === next.x);
+    // We use a cross product check to tolerate slight non-90-degree angles during drag
+    const dx1 = current.x - prev.x;
+    const dy1 = current.y - prev.y;
+    const dx2 = next.x - current.x;
+    const dy2 = next.y - current.y;
+    
+    // Cross product magnitude. If > 0.1, the path bends here.
+    const isCorner = Math.abs(dx1 * dy2 - dy1 * dx2) > 0.1;
 
     if (isCorner) {
       controlPoints.push({
