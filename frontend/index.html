@@ -207,14 +207,18 @@
     }
     </script>
   </head>
-  <body>
+  <style>
+    /* Hide SEO fallback content instantly — React removes it on mount.
+       Crawlers ignore visibility:hidden and still index the text. */
+    #root-seo { visibility: hidden; position: absolute; pointer-events: none; }
+  </style>
+  <body style="margin:0;background:#1e1e1e;">
+    <div id="root"></div>
     <!--
       Static pre-rendered content for search engine crawlers.
-      Google renders JavaScript, but this ensures content is available
-      on the first crawl wave (before JS execution).
-      React will replace #root when it mounts — this is intentional.
+      Hidden from users via CSS; React app renders in #root above.
     -->
-    <div id="root">
+    <div id="root-seo" aria-hidden="true">
       <header style="font-family:sans-serif;background:#0d1117;color:#e6edf3;padding:1.5rem 2rem;">
         <a href="/" style="text-decoration:none;color:inherit;">
           <h1 style="margin:0;font-size:1.5rem;">Velxio &mdash; Free Local Arduino Emulator</h1>
@@ -267,5 +271,6 @@
       </main>
     </div>
     <script type="module" src="/src/main.tsx"></script>
+
   </body>
 </html>
