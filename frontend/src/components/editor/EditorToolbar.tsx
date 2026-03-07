@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useSimulatorStore, BOARD_FQBN, BOARD_LABELS } from '../../store/useSimulatorStore';
 import { compileCode } from '../../services/compilation';
 import { LibraryManagerModal } from '../simulator/LibraryManagerModal';
 import { parseCompileResult } from '../../utils/compilationLogger';
 import type { CompilationLog } from '../../utils/compilationLogger';
+import { exportToWokwiZip, importFromWokwiZip } from '../../utils/wokwiZip';
 import './EditorToolbar.css';
 
 interface EditorToolbarProps {
@@ -29,6 +30,7 @@ export const EditorToolbar = ({ consoleOpen, setConsoleOpen, compileLogs: _compi
   const [compiling, setCompiling] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [libManagerOpen, setLibManagerOpen] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const addLog = useCallback((log: CompilationLog) => {
     setCompileLogs((prev: CompilationLog[]) => [...prev, log]);
@@ -91,6 +93,36 @@ export const EditorToolbar = ({ consoleOpen, setConsoleOpen, compileLogs: _compi
   const handleReset = () => {
     resetSimulation();
     setMessage(null);
+  };
+
+  const handleExport = async () => {
+    try {
+      const { components, wires } = useSimulatorStore.getState();
+      const projectName = files.find((f) => f.name.endsWith('.ino'))?.name.replace('.ino', '') || 'velxio-project';
+      await exportToWokwiZip(files, components, wires, boardType, projectName);
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Export failed.' });
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!importInputRef.current) return;
+    importInputRef.current.value = '';
+    if (!file) return;
+    try {
+      const result = await importFromWokwiZip(file);
+      const { loadFiles } = useEditorStore.getState();
+      const { setComponents, setWires, setBoardType, stopSimulation } = useSimulatorStore.getState();
+      stopSimulation();
+      if (result.boardType) setBoardType(result.boardType);
+      setComponents(result.components);
+      setWires(result.wires);
+      if (result.files.length > 0) loadFiles(result.files);
+      setMessage({ type: 'success', text: `Imported ${file.name}` });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Import failed.' });
+    }
   };
 
   return (
@@ -173,6 +205,39 @@ export const EditorToolbar = ({ consoleOpen, setConsoleOpen, compileLogs: _compi
               <span className="tb-status-text">{message.text}</span>
             </span>
           )}
+
+          {/* Import Wokwi zip */}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".zip"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+          <button
+            onClick={() => importInputRef.current?.click()}
+            className="tb-btn tb-btn-lib"
+            title="Import Wokwi zip"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </button>
+
+          {/* Export Wokwi zip */}
+          <button
+            onClick={handleExport}
+            className="tb-btn tb-btn-lib"
+            title="Export as Wokwi zip"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </button>
 
           {/* Libraries */}
           <button

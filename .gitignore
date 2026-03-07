@@ -77,3 +77,4 @@ wokwi-libs/*/.cache/
 .claude/settings.local.json
 .history/*
 .daveagent/*
+example_zip/*

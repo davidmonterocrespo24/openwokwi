@@ -23,6 +23,7 @@
     "@wokwi/elements": "file:../wokwi-libs/wokwi-elements",
     "avr8js": "file:../wokwi-libs/avr8js",
     "axios": "^1.13.6",
+    "jszip": "^3.10.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/jszip": "^3.4.0",
     "@types/node": "^24.11.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
