@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import './DocsPage.css';
 
@@ -23,6 +23,8 @@ const IcoGitHub = () => (
 /* ── Doc sections ──────────────────────────────────────── */
 type SectionId = 'intro' | 'getting-started' | 'emulator' | 'components' | 'roadmap';
 
+const VALID_SECTIONS: SectionId[] = ['intro', 'getting-started', 'emulator', 'components', 'roadmap'];
+
 interface NavItem {
   id: SectionId;
   label: string;
@@ -35,6 +37,31 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'components', label: 'Components Reference' },
   { id: 'roadmap', label: 'Roadmap' },
 ];
+
+/* ── Per-section SEO metadata ──────────────────────────── */
+interface SectionMeta { title: string; description: string; }
+const SECTION_META: Record<SectionId, SectionMeta> = {
+  'intro': {
+    title: 'Introduction — Velxio Documentation',
+    description: 'Learn about Velxio, the free open-source Arduino emulator with real AVR8 and RP2040 CPU emulation and 48+ interactive electronic components.',
+  },
+  'getting-started': {
+    title: 'Getting Started — Velxio Documentation',
+    description: 'Get started with Velxio: use the hosted editor, self-host with Docker, or set up a local development environment. Simulate your first Arduino sketch in minutes.',
+  },
+  'emulator': {
+    title: 'Emulator Architecture — Velxio Documentation',
+    description: 'How Velxio emulates AVR8 (ATmega328p) and RP2040 CPUs. Covers the execution loop, peripherals (GPIO, Timers, USART, ADC, SPI, I2C), and pin mapping.',
+  },
+  'components': {
+    title: 'Components Reference — Velxio Documentation',
+    description: 'Full reference for all 48+ interactive electronic components in Velxio: LEDs, displays, sensors, buttons, potentiometers, and more. Includes wiring and property details.',
+  },
+  'roadmap': {
+    title: 'Roadmap — Velxio Documentation',
+    description: "Velxio's feature roadmap: what's implemented, what's in progress, and what's planned for future releases.",
+  },
+};
 
 /* ── Section content ───────────────────────────────────── */
 const IntroSection: React.FC = () => (
@@ -461,11 +488,77 @@ const SECTION_MAP: Record<SectionId, React.FC> = {
 
 /* ── Page ─────────────────────────────────────────────── */
 export const DocsPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<SectionId>('intro');
+  const { section } = useParams<{ section?: string }>();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = useAuthStore((s) => s.user);
 
+  // Derive active section from URL; fall back to 'intro'
+  const activeSection: SectionId =
+    section && VALID_SECTIONS.includes(section as SectionId)
+      ? (section as SectionId)
+      : 'intro';
+
+  // Redirect bare /docs → /docs/intro so every section has a canonical URL
+  useEffect(() => {
+    if (!section) {
+      navigate('/docs/intro', { replace: true });
+    }
+  }, [section, navigate]);
+
+  // Capture the original <head> values once on mount and restore them on unmount
+  useEffect(() => {
+    const origTitle = document.title;
+    const descEl = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    const origDesc = descEl?.getAttribute('content') ?? '';
+    const canonicalEl = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    const origCanonical = canonicalEl?.getAttribute('href') ?? '';
+
+    return () => {
+      document.title = origTitle;
+      if (descEl) descEl.setAttribute('content', origDesc);
+      if (canonicalEl) canonicalEl.setAttribute('href', origCanonical);
+      document.getElementById('docs-jsonld')?.remove();
+    };
+  }, []); // runs once on mount; cleanup runs once on unmount
+
+  // Update document title, meta description, canonical, and JSON-LD per section.
+  // No cleanup here — the mount effect above restores defaults on unmount,
+  // and on a section change the next run of this effect immediately overwrites.
+  useEffect(() => {
+    const meta = SECTION_META[activeSection];
+
+    document.title = meta.title;
+
+    const descEl = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (descEl) descEl.setAttribute('content', meta.description);
+
+    const canonicalEl = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonicalEl) canonicalEl.setAttribute('href', `https://velxio.dev/docs/${activeSection}`);
+
+    // Inject / update JSON-LD structured data for this doc page
+    const ldId = 'docs-jsonld';
+    let ldScript = document.getElementById(ldId) as HTMLScriptElement | null;
+    if (!ldScript) {
+      ldScript = document.createElement('script');
+      ldScript.id = ldId;
+      ldScript.type = 'application/ld+json';
+      document.head.appendChild(ldScript);
+    }
+    ldScript.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'TechArticle',
+      headline: meta.title,
+      description: meta.description,
+      url: `https://velxio.dev/docs/${activeSection}`,
+      isPartOf: { '@type': 'WebSite', url: 'https://velxio.dev/', name: 'Velxio' },
+      inLanguage: 'en-US',
+      author: { '@type': 'Person', name: 'David Montero Crespo', url: 'https://github.com/davidmonterocrespo24' },
+    });
+  }, [activeSection]);
+
   const ActiveContent = SECTION_MAP[activeSection];
+  const activeIdx = NAV_ITEMS.findIndex((i) => i.id === activeSection);
 
   return (
     <div className="docs-page">
@@ -509,13 +602,14 @@ export const DocsPage: React.FC = () => {
           <div className="docs-sidebar-title">Documentation</div>
           <nav className="docs-sidebar-nav">
             {NAV_ITEMS.map((item) => (
-              <button
+              <Link
                 key={item.id}
+                to={`/docs/${item.id}`}
                 className={`docs-sidebar-item${activeSection === item.id ? ' docs-sidebar-item--active' : ''}`}
-                onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+                onClick={() => setSidebarOpen(false)}
               >
                 {item.label}
-              </button>
+              </Link>
             ))}
           </nav>
           <div className="docs-sidebar-divider" />
@@ -538,29 +632,23 @@ export const DocsPage: React.FC = () => {
 
           {/* Prev / Next navigation */}
           <div className="docs-pagination">
-            {NAV_ITEMS.findIndex((i) => i.id === activeSection) > 0 && (
-              <button
+            {activeIdx > 0 && (
+              <Link
+                to={`/docs/${NAV_ITEMS[activeIdx - 1].id}`}
                 className="docs-pagination-btn docs-pagination-btn--prev"
-                onClick={() => {
-                  const idx = NAV_ITEMS.findIndex((i) => i.id === activeSection);
-                  setActiveSection(NAV_ITEMS[idx - 1].id);
-                  window.scrollTo(0, 0);
-                }}
+                onClick={() => window.scrollTo(0, 0)}
               >
-                ← {NAV_ITEMS[NAV_ITEMS.findIndex((i) => i.id === activeSection) - 1].label}
-              </button>
+                ← {NAV_ITEMS[activeIdx - 1].label}
+              </Link>
             )}
-            {NAV_ITEMS.findIndex((i) => i.id === activeSection) < NAV_ITEMS.length - 1 && (
-              <button
+            {activeIdx < NAV_ITEMS.length - 1 && (
+              <Link
+                to={`/docs/${NAV_ITEMS[activeIdx + 1].id}`}
                 className="docs-pagination-btn docs-pagination-btn--next"
-                onClick={() => {
-                  const idx = NAV_ITEMS.findIndex((i) => i.id === activeSection);
-                  setActiveSection(NAV_ITEMS[idx + 1].id);
-                  window.scrollTo(0, 0);
-                }}
+                onClick={() => window.scrollTo(0, 0)}
               >
-                {NAV_ITEMS[NAV_ITEMS.findIndex((i) => i.id === activeSection) + 1].label} →
-              </button>
+                {NAV_ITEMS[activeIdx + 1].label} →
+              </Link>
             )}
           </div>
         </main>

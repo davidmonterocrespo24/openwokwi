@@ -1,40 +1,40 @@
 # Wokwi Libraries Integration
 
-Este proyecto utiliza los repositorios oficiales de Wokwi clonados localmente, lo que permite mantenerlos actualizados y compatibles con las últimas versiones. Los repositorios locales alimentan tanto la emulación AVR como el sistema dinámico de componentes con 48+ elementos electrónicos.
+This project uses the official Wokwi repositories cloned locally, which allows keeping them up-to-date and compatible with the latest versions. The local repositories power both AVR emulation and the dynamic component system with 48+ electronic elements.
 
-## Repositorios Clonados
+## Cloned Repositories
 
 ### wokwi-elements
-- **Ubicación**: `wokwi-libs/wokwi-elements/`
-- **Descripción**: Web Components (Lit) para 48+ elementos electrónicos (LEDs, resistencias, botones, LCDs, sensores, etc.)
-- **Repositorio**: https://github.com/wokwi/wokwi-elements
-- **Licencia**: MIT
-- **Uso actual**: Renderizado visual de todos los componentes en el canvas de simulación. Un script de generación de metadata (`scripts/generate-component-metadata.ts`) parsea el código fuente TypeScript para descubrir automáticamente todos los componentes, sus propiedades y pines.
+- **Location**: `wokwi-libs/wokwi-elements/`
+- **Description**: Web Components (Lit) for 48+ electronic elements (LEDs, resistors, buttons, LCDs, sensors, etc.)
+- **Repository**: https://github.com/wokwi/wokwi-elements
+- **License**: MIT
+- **Current usage**: Visual rendering of all components on the simulation canvas. A metadata generation script (`scripts/generate-component-metadata.ts`) parses the TypeScript source code to automatically discover all components, their properties, and pins.
 
 ### avr8js
-- **Ubicación**: `wokwi-libs/avr8js/`
-- **Descripción**: Emulador completo de microcontroladores AVR8 (ATmega328p) en JavaScript
-- **Repositorio**: https://github.com/wokwi/avr8js
-- **Licencia**: MIT
-- **Uso actual**: Emulación real del CPU a 16MHz, con Timer0/1/2, USART, ADC, y puertos GPIO (PORTB/C/D). Ejecuta ~267,000 ciclos por frame a ~60fps.
+- **Location**: `wokwi-libs/avr8js/`
+- **Description**: Complete AVR8 microcontroller emulator (ATmega328p) in JavaScript
+- **Repository**: https://github.com/wokwi/avr8js
+- **License**: MIT
+- **Current usage**: Real CPU emulation at 16MHz, with Timer0/1/2, USART, ADC, and GPIO ports (PORTB/C/D). Runs ~267,000 cycles per frame at ~60fps.
 
 ### rp2040js
-- **Ubicación**: `wokwi-libs/rp2040js/`
-- **Descripción**: Emulador de Raspberry Pi Pico (RP2040) en JavaScript
-- **Repositorio**: https://github.com/wokwi/rp2040js
-- **Licencia**: MIT
-- **Uso**: Clonado para futuro soporte de Raspberry Pi Pico
+- **Location**: `wokwi-libs/rp2040js/`
+- **Description**: Raspberry Pi Pico (RP2040) emulator in JavaScript
+- **Repository**: https://github.com/wokwi/rp2040js
+- **License**: MIT
+- **Usage**: Cloned for future Raspberry Pi Pico support
 
 ### wokwi-features
-- **Ubicación**: `wokwi-libs/wokwi-features/`
-- **Descripción**: Documentación y tracking de features de Wokwi
-- **Repositorio**: https://github.com/wokwi/wokwi-features
+- **Location**: `wokwi-libs/wokwi-features/`
+- **Description**: Wokwi documentation and feature tracking
+- **Repository**: https://github.com/wokwi/wokwi-features
 
-## Configuración del Proyecto
+## Project Configuration
 
 ### Frontend (Vite)
 
-El archivo `frontend/vite.config.ts` está configurado para usar los repositorios locales mediante aliases:
+The `frontend/vite.config.ts` file is configured to use the local repositories via aliases:
 
 ```typescript
 resolve: {
@@ -48,7 +48,7 @@ optimizeDeps: {
 }
 ```
 
-El archivo `frontend/package.json` referencia los paquetes locales:
+The `frontend/package.json` file references the local packages:
 
 ```json
 {
@@ -59,103 +59,103 @@ El archivo `frontend/package.json` referencia los paquetes locales:
 }
 ```
 
-### Generación Automática de Metadata
+### Automatic Metadata Generation
 
-El script `scripts/generate-component-metadata.ts` parsea el código fuente de wokwi-elements usando AST de TypeScript para extraer:
-- Nombre del tag (`@customElement('wokwi-led')` → `wokwi-led`)
-- Propiedades (`@property()` decorators → tipo, valor por defecto)
-- Cantidad de pines
-- Categoría, descripción y tags
+The `scripts/generate-component-metadata.ts` script parses the wokwi-elements source code using the TypeScript AST to extract:
+- Tag name (`@customElement('wokwi-led')` → `wokwi-led`)
+- Properties (`@property()` decorators → type, default value)
+- Number of pins
+- Category, description, and tags
 
-El resultado se almacena en `frontend/public/components-metadata.json` y es consumido por el `ComponentRegistry` en tiempo de ejecución.
+The result is stored in `frontend/public/components-metadata.json` and consumed by the `ComponentRegistry` at runtime.
 
-## Actualizar las Librerías de Wokwi
+## Updating the Wokwi Libraries
 
-Para mantener tu proyecto actualizado con las últimas versiones de Wokwi:
+To keep your project up-to-date with the latest versions of Wokwi:
 
-### Opción 1: Actualizar todas las librerías (Recomendado)
+### Option 1: Update all libraries (Recommended)
 
 ```bash
-# Script para actualizar todos los repositorios
+# Script to update all repositories
 update-wokwi-libs.bat
 ```
 
-### Opción 2: Actualizar manualmente cada repositorio
+### Option 2: Update each repository manually
 
 ```bash
 cd wokwi-libs
 
-# Actualizar wokwi-elements
+# Update wokwi-elements
 cd wokwi-elements
 git pull origin main
 npm install
 npm run build
 
-# Actualizar avr8js
+# Update avr8js
 cd ../avr8js
 git pull origin main
 npm install
 npm run build
 
-# Actualizar rp2040js
+# Update rp2040js
 cd ../rp2040js
 git pull origin main
 npm install
 npm run build
 ```
 
-### Opción 3: Actualizar a una versión específica
+### Option 3: Update to a specific version
 
 ```bash
 cd wokwi-libs/wokwi-elements
 
-# Ver versiones disponibles
+# View available versions
 git tag -l
 
-# Cambiar a una versión específica
+# Switch to a specific version
 git checkout v1.9.2
 
-# Recompilar
+# Rebuild
 npm install
 npm run build
 ```
 
-### Después de Actualizar wokwi-elements
+### After Updating wokwi-elements
 
-Si actualizaste wokwi-elements, regenera la metadata de componentes para que nuevos componentes aparezcan en la UI:
+If you updated wokwi-elements, regenerate the component metadata so that new components appear in the UI:
 
 ```bash
 cd frontend
 npx tsx ../scripts/generate-component-metadata.ts
 ```
 
-## Script de Actualización Automática
+## Automatic Update Script
 
-El script `update-wokwi-libs.bat` facilita las actualizaciones:
+The `update-wokwi-libs.bat` script simplifies updates:
 
 ```batch
 @echo off
 echo ========================================
-echo Actualizando Wokwi Libraries
+echo Updating Wokwi Libraries
 echo ========================================
 
 cd wokwi-libs
 
-echo [1/3] Actualizando wokwi-elements...
+echo [1/3] Updating wokwi-elements...
 cd wokwi-elements
 git pull origin main
 npm install
 npm run build
 cd ..
 
-echo [2/3] Actualizando avr8js...
+echo [2/3] Updating avr8js...
 cd avr8js
 git pull origin main
 npm install
 npm run build
 cd ..
 
-echo [3/3] Actualizando rp2040js...
+echo [3/3] Updating rp2040js...
 cd rp2040js
 git pull origin main
 npm install
@@ -163,24 +163,26 @@ npm run build
 cd ..
 
 echo ========================================
-echo Actualizacion completada!
+echo Update complete!
 echo ========================================
 pause
 ```
 
-## Cómo Se Usan las Librerías
+## How the Libraries Are Used
 
-### avr8js — Emulación AVR
+### avr8js — AVR Emulation
 
-El `AVRSimulator` (`frontend/src/simulation/AVRSimulator.ts`) usa avr8js para crear:
+The `AVRSimulator` (`frontend/src/simulation/AVRSimulator.ts`) uses avr8js to create:
 
 ```typescript
 import { CPU, avrInstruction, AVRTimer, AVRUSART, AVRADC, AVRIOPort } from 'avr8js';
+```typescript
+import { CPU, avrInstruction, AVRTimer, AVRUSART, AVRADC, AVRIOPort } from 'avr8js';
 
-// CPU ATmega328p a 16MHz
+// ATmega328p CPU at 16MHz
 const cpu = new CPU(programMemory);
 
-// Periféricos
+// Peripherals
 const timer0 = new AVRTimer(cpu, timer0Config);
 const timer1 = new AVRTimer(cpu, timer1Config);
 const timer2 = new AVRTimer(cpu, timer2Config);
@@ -190,67 +192,67 @@ const portB  = new AVRIOPort(cpu, portBConfig);  // pins 8-13
 const portC  = new AVRIOPort(cpu, portCConfig);  // A0-A5
 const portD  = new AVRIOPort(cpu, portDConfig);  // pins 0-7
 
-// Loop de simulación (~60fps)
+// Simulation loop (~60fps)
 function runFrame() {
   const cyclesToRun = Math.floor(267000 * speed);
   for (let i = 0; i < cyclesToRun; i++) {
-    avrInstruction(cpu);  // Ejecuta instrucción AVR
-    cpu.tick();            // Actualiza periféricos
+    avrInstruction(cpu);  // Execute AVR instruction
+    cpu.tick();            // Update peripherals
   }
   requestAnimationFrame(runFrame);
 }
 ```
 
-### wokwi-elements — Componentes Visuales
+### wokwi-elements — Visual Components
 
-Los componentes se renderizan de dos formas:
+Components are rendered in two ways:
 
-**1. DynamicComponent (sistema actual — 48 componentes)**
+**1. DynamicComponent (current system — 48 components)**
 
 ```typescript
 import { ComponentRegistry } from './services/ComponentRegistry';
 
-// Carga metadata desde /components-metadata.json
+// Load metadata from /components-metadata.json
 const registry = ComponentRegistry.getInstance();
 const metadata = registry.getById('led');
 
-// DynamicComponent crea el web component dinámicamente
+// DynamicComponent creates the web component dynamically
 // document.createElement(metadata.tagName) → <wokwi-led>
-// Sincroniza propiedades React → web component
-// Extrae pinInfo del DOM para wire connections
+// Syncs React props → web component
+// Extracts pinInfo from the DOM for wire connections
 ```
 
-**2. React wrappers legacy (5 componentes)**
+**2. Legacy React wrappers (5 components)**
 
 ```tsx
-// ArduinoUno.tsx — sigue en uso activo para el board principal
+// ArduinoUno.tsx — still actively used for the main board
 <wokwi-arduino-uno ref={ref} led13={led13} />
 ```
 
-### PartSimulationRegistry — Comportamientos de Simulación
+### PartSimulationRegistry — Simulation Behaviors
 
-16 partes tienen lógica de simulación registrada que conecta los web components con el emulador AVR:
+16 parts have registered simulation logic that connects the web components to the AVR emulator:
 
-| Parte | Tipo | Comportamiento |
-|-------|------|----------------|
+| Part | Type | Behavior |
+|------|------|----------|
 | `led` | Output | Pin state → `element.value` |
-| `rgb-led` | Output | Digital + PWM en R/G/B |
-| `led-bar-graph` | Output | 10 LEDs independientes |
-| `7segment` | Output | 8 segmentos (A-G + DP) |
+| `rgb-led` | Output | Digital + PWM on R/G/B |
+| `led-bar-graph` | Output | 10 independent LEDs |
+| `7segment` | Output | 8 segments (A-G + DP) |
 | `pushbutton` | Input | Press/release → `setPinState()` |
-| `pushbutton-6mm` | Input | Mismo que pushbutton |
+| `pushbutton-6mm` | Input | Same as pushbutton |
 | `slide-switch` | Input | Change event → pin state |
-| `dip-switch-8` | Input | 8 switches independientes |
-| `potentiometer` | Input | Valor → voltaje ADC |
-| `slide-potentiometer` | Input | Misma lógica por SIG/OUT |
-| `photoresistor-sensor` | Input/Output | Voltaje analógico + LED digital |
+| `dip-switch-8` | Input | 8 independent switches |
+| `potentiometer` | Input | Value → ADC voltage |
+| `slide-potentiometer` | Input | Same logic via SIG/OUT |
+| `photoresistor-sensor` | Input/Output | Analog voltage + digital LED |
 | `analog-joystick` | Input | VRX/VRY (ADC) + SW (digital) |
-| `servo` | Output | Registros OCR1A/ICR1 → ángulo 0-180° |
+| `servo` | Output | OCR1A/ICR1 registers → angle 0-180° |
 | `buzzer` | Output | Web Audio API + Timer2 |
-| `lcd1602` | Output | Protocolo HD44780 4-bit completo (16×2) |
-| `lcd2004` | Output | Protocolo HD44780 4-bit completo (20×4) |
+| `lcd1602` | Output | Full HD44780 4-bit protocol (16×2) |
+| `lcd2004` | Output | Full HD44780 4-bit protocol (20×4) |
 
-## Componentes Wokwi Disponibles (48)
+## Available Wokwi Components (48)
 
 ### Boards (4)
 - `wokwi-arduino-uno` — Arduino Uno R3
@@ -259,68 +261,68 @@ const metadata = registry.getById('led');
 - `wokwi-esp32-devkit-v1` — ESP32 DevKit v1
 
 ### Sensors (6)
-- `wokwi-dht22` — Temperatura y humedad
-- `wokwi-hc-sr04` — Ultrasónico de distancia
-- `wokwi-pir-motion-sensor` — Sensor de movimiento PIR
-- `wokwi-photoresistor-sensor` — Fotoresistor (LDR)
-- `wokwi-ntc-temperature-sensor` — Sensor NTC
-- `wokwi-analog-joystick` — Joystick analógico
+- `wokwi-dht22` — Temperature and humidity sensor
+- `wokwi-hc-sr04` — Ultrasonic distance sensor
+- `wokwi-pir-motion-sensor` — PIR motion sensor
+- `wokwi-photoresistor-sensor` — Photoresistor (LDR)
+- `wokwi-ntc-temperature-sensor` — NTC temperature sensor
+- `wokwi-analog-joystick` — Analog joystick
 
 ### Displays (3)
-- `wokwi-lcd1602` — LCD 16x2 con protocolo HD44780
-- `wokwi-lcd2004` — LCD 20x4 con protocolo HD44780
-- `wokwi-7segment` — Display de 7 segmentos
+- `wokwi-lcd1602` — LCD 16x2 with HD44780 protocol
+- `wokwi-lcd2004` — LCD 20x4 with HD44780 protocol
+- `wokwi-7segment` — 7-segment display
 
 ### Input (5)
-- `wokwi-pushbutton` — Botón pulsador
-- `wokwi-pushbutton-6mm` — Botón 6mm
-- `wokwi-slide-switch` — Interruptor deslizante
-- `wokwi-dip-switch-8` — DIP switch de 8 posiciones
-- `wokwi-potentiometer` — Potenciómetro
+- `wokwi-pushbutton` — Push button
+- `wokwi-pushbutton-6mm` — 6mm push button
+- `wokwi-slide-switch` — Slide switch
+- `wokwi-dip-switch-8` — 8-position DIP switch
+- `wokwi-potentiometer` — Potentiometer
 
 ### Output (5)
-- `wokwi-led` — LED de colores
-- `wokwi-rgb-led` — LED RGB
-- `wokwi-led-bar-graph` — Barra de LEDs (10)
-- `wokwi-buzzer` — Buzzer piezoeléctrico
-- `wokwi-neopixel` — LED RGB direccionable (WS2812)
+- `wokwi-led` — Colored LED
+- `wokwi-rgb-led` — RGB LED
+- `wokwi-led-bar-graph` — LED bar graph (10 LEDs)
+- `wokwi-buzzer` — Piezoelectric buzzer
+- `wokwi-neopixel` — Addressable RGB LED (WS2812)
 
 ### Motors (2)
 - `wokwi-servo` — Servo motor
-- `wokwi-stepper-motor` — Motor paso a paso
+- `wokwi-stepper-motor` — Stepper motor
 
 ### Passive (4)
-- `wokwi-resistor` — Resistencia con código de colores
-- `wokwi-slide-potentiometer` — Potenciómetro deslizante
-- `wokwi-led-ring` — Anillo de LEDs
-- `wokwi-membrane-keypad` — Teclado matricial
+- `wokwi-resistor` — Resistor with color code
+- `wokwi-slide-potentiometer` — Slide potentiometer
+- `wokwi-led-ring` — LED ring
+- `wokwi-membrane-keypad` — Matrix keypad
 
 ### Other (19)
-- Componentes variados incluyendo `wokwi-ir-receiver`, `wokwi-ds1307`, breadboards, etc.
+- Various components including `wokwi-ir-receiver`, `wokwi-ds1307`, breadboards, etc.
 
-## Ventajas de Este Enfoque
+## Advantages of This Approach
 
-### Ventajas
+### Advantages
 
-1. **Actualización Fácil**: Un simple `git pull` + rebuild te da las últimas mejoras
-2. **Compatible con Wokwi**: Usas exactamente el mismo código que Wokwi.com
-3. **Descubrimiento Automático**: Nuevos componentes aparecen automáticamente tras regenerar metadata
-4. **Control de Versiones**: Puedes hacer checkout a versiones específicas
-5. **Desarrollo Flexible**: Código fuente disponible para debugging y modificaciones
-6. **Sin Dependencia de npm**: No dependes de que publiquen actualizaciones en npm
-7. **100% Offline**: Funciona completamente sin internet después de la configuración inicial
+1. **Easy Updates**: A simple `git pull` + rebuild gives you the latest improvements
+2. **Wokwi Compatible**: Uses exactly the same code as Wokwi.com
+3. **Automatic Discovery**: New components appear automatically after regenerating metadata
+4. **Version Control**: You can checkout to specific versions
+5. **Flexible Development**: Source code available for debugging and modifications
+6. **No npm Dependency**: You don't depend on npm package publications
+7. **100% Offline**: Works completely without internet after initial setup
 
-### Consideraciones
+### Considerations
 
-1. **Espacio en Disco**: Los repositorios clonados ocupan más espacio (~200MB)
-2. **Compilación**: Debes compilar los repositorios después de actualizarlos
-3. **Metadata**: Regenerar `components-metadata.json` después de actualizar wokwi-elements
+1. **Disk Space**: Cloned repositories take more disk space (~200MB)
+2. **Compilation**: You must rebuild the repositories after updating them
+3. **Metadata**: Regenerate `components-metadata.json` after updating wokwi-elements
 
 ## Troubleshooting
 
 ### Error: "Module not found: @wokwi/elements"
 
-Asegúrate de que wokwi-elements esté compilado:
+Make sure wokwi-elements is built:
 
 ```bash
 cd wokwi-libs/wokwi-elements
@@ -330,7 +332,7 @@ npm run build
 
 ### Error: "Cannot find module 'avr8js'"
 
-Verifica que el alias en `vite.config.ts` esté correcto y que avr8js esté compilado:
+Verify that the alias in `vite.config.ts` is correct and that avr8js is built:
 
 ```bash
 cd wokwi-libs/avr8js
@@ -338,29 +340,29 @@ npm install
 npm run build
 ```
 
-### Los componentes no se muestran en el picker
+### Components are not shown in the picker
 
-Regenera la metadata de componentes:
+Regenerate the component metadata:
 
 ```bash
 cd frontend
 npx tsx ../scripts/generate-component-metadata.ts
 ```
 
-### Nuevo componente de wokwi-elements no aparece
+### New wokwi-elements component does not appear
 
-1. Actualiza wokwi-elements: `cd wokwi-libs/wokwi-elements && git pull && npm run build`
-2. Regenera metadata: `cd frontend && npx tsx ../scripts/generate-component-metadata.ts`
-3. Si necesita simulación, registra su comportamiento en `frontend/src/simulation/parts/`
+1. Update wokwi-elements: `cd wokwi-libs/wokwi-elements && git pull && npm run build`
+2. Regenerate metadata: `cd frontend && npx tsx ../scripts/generate-component-metadata.ts`
+3. If it needs simulation, register its behavior in `frontend/src/simulation/parts/`
 
-### Los componentes se ven pero no responden a la simulación
+### Components are visible but do not respond to simulation
 
-Verifica que el componente tenga lógica de simulación registrada en `PartSimulationRegistry` (archivos `BasicParts.ts` o `ComplexParts.ts`). Solo los 16 componentes registrados tienen comportamiento interactivo.
+Verify that the component has simulation logic registered in `PartSimulationRegistry` (files `BasicParts.ts` or `ComplexParts.ts`). Only the 16 registered components have interactive behavior.
 
-## Referencias
+## References
 
 - [Wokwi Elements Documentation](https://elements.wokwi.com/)
 - [AVR8js Repository](https://github.com/wokwi/avr8js)
 - [Wokwi Simulator](https://wokwi.com)
-- [Lit Documentation](https://lit.dev/) — Framework usado por wokwi-elements
+- [Lit Documentation](https://lit.dev/) — Framework used by wokwi-elements
 - [Web Components Guide](https://developer.mozilla.org/en-US/docs/Web/Web_Components)

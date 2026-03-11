@@ -1,98 +1,98 @@
-# Estado del Proyecto - Velxio Arduino Emulator
+# Project Status - Velxio Arduino Emulator
 
-## Resumen de Funcionalidades Implementadas
+## Summary of Implemented Features
 
-### Repositorios de Wokwi Clonados y Configurados
+### Wokwi Repositories Cloned and Configured
 
-Repositorios oficiales de Wokwi en `wokwi-libs/`:
+Official Wokwi repositories in `wokwi-libs/`:
 
-| Repositorio | Estado | Descripción |
-|-------------|--------|-------------|
-| **wokwi-elements** | Compilado y en uso | 48+ componentes electrónicos Web Components |
-| **avr8js** | Compilado y en uso | Emulación real de AVR8 (ATmega328p) |
-| **rp2040js** | Clonado | Emulador RP2040 (futuro) |
-| **wokwi-features** | Clonado | Documentación y features |
+| Repository | Status | Description |
+|------------|--------|-------------|
+| **wokwi-elements** | Built and in use | 48+ electronic Web Components |
+| **avr8js** | Built and in use | Real AVR8 emulation (ATmega328p) |
+| **rp2040js** | Cloned | RP2040 emulator (future use) |
+| **wokwi-features** | Cloned | Documentation and feature tracking |
 
-### Emulación AVR Real (avr8js)
+### Real AVR Emulation (avr8js)
 
-| Feature | Estado |
+| Feature | Status |
 |---------|--------|
-| CPU ATmega328p a 16MHz | Funcionando |
-| Timer0, Timer1, Timer2 | Funcionando |
-| USART (Serial) | Funcionando |
-| ADC (analogRead) | Funcionando |
-| GPIO completo (PORTB/C/D) | Funcionando |
-| Loop ~60fps (267k ciclos/frame) | Funcionando |
-| Control de velocidad (0.1x - 10x) | Funcionando |
-| Debugging paso a paso (step) | Funcionando |
-| Monitoreo PWM (6 canales) | Funcionando |
-| Inyección de pin externo (inputs) | Funcionando |
+| ATmega328p CPU at 16MHz | Working |
+| Timer0, Timer1, Timer2 | Working |
+| USART (Serial) | Working |
+| ADC (analogRead) | Working |
+| Full GPIO (PORTB/C/D) | Working |
+| Loop ~60fps (267k cycles/frame) | Working |
+| Speed control (0.1x - 10x) | Working |
+| Step-by-step debugging | Working |
+| PWM monitoring (6 channels) | Working |
+| External pin injection (inputs) | Working |
 
-### Sistema de Componentes (48+)
+### Component System (48+)
 
-| Feature | Estado |
+| Feature | Status |
 |---------|--------|
-| Descubrimiento automático por AST | 48 componentes detectados |
-| ComponentPickerModal con búsqueda | Funcionando |
-| 9 categorías con filtros | Functioning |
-| Thumbnails en vivo (web components) | Funcionando |
-| DynamicComponent renderer genérico | Funcionando |
-| Drag-and-drop en el canvas | Funcionando |
-| Rotación (90° incrementos) | Funcionando |
-| Diálogo de propiedades (click) | Funcionando |
-| Selector de pines (doble-click) | Funcionando |
-| Pin overlay (puntos cyan clickeables) | Funcionando |
+| Automatic discovery via AST | 48 components detected |
+| ComponentPickerModal with search | Working |
+| 9 categories with filters | Working |
+| Live thumbnails (web components) | Working |
+| Generic DynamicComponent renderer | Working |
+| Drag-and-drop on canvas | Working |
+| Rotation (90° increments) | Working |
+| Properties dialog (click) | Working |
+| Pin selector (double-click) | Working |
+| Pin overlay (clickable cyan dots) | Working |
 
-### 16 Partes con Simulación Interactiva
+### 16 Parts with Interactive Simulation
 
-| Parte | Tipo | Estado |
-|-------|------|--------|
-| LED | Output | |
-| RGB LED | Output (digital + PWM) | |
-| LED Bar Graph (10 LEDs) | Output | |
-| 7-Segment Display | Output | |
-| Pushbutton | Input | |
-| Pushbutton 6mm | Input | |
-| Slide Switch | Input | |
-| DIP Switch 8 | Input | |
-| Potentiometer | Input (ADC) | |
-| Slide Potentiometer | Input (ADC) | |
-| Photoresistor | Input/Output | |
-| Analog Joystick | Input (ADC + digital) | |
-| Servo | Output | |
-| Buzzer | Output (Web Audio) | |
-| LCD 1602 | Output (HD44780 completo) | |
-| LCD 2004 | Output (HD44780 completo) | |
+| Part | Type | Status |
+|------|------|--------|
+| LED | Output | ✅ |
+| RGB LED | Output (digital + PWM) | ✅ |
+| LED Bar Graph (10 LEDs) | Output | ✅ |
+| 7-Segment Display | Output | ✅ |
+| Pushbutton | Input | ✅ |
+| Pushbutton 6mm | Input | ✅ |
+| Slide Switch | Input | ✅ |
+| DIP Switch 8 | Input | ✅ |
+| Potentiometer | Input (ADC) | ✅ |
+| Slide Potentiometer | Input (ADC) | ✅ |
+| Photoresistor | Input/Output | ✅ |
+| Analog Joystick | Input (ADC + digital) | ✅ |
+| Servo | Output | ✅ |
+| Buzzer | Output (Web Audio) | ✅ |
+| LCD 1602 | Output (full HD44780) | ✅ |
+| LCD 2004 | Output (full HD44780) | ✅ |
 
-### Sistema de Cables (Wires)
+### Wire System
 
-| Feature | Estado |
+| Feature | Status |
 |---------|--------|
-| Creación pin-a-pin con click | Funcionando |
-| Preview en tiempo real (verde, punteado) | Funcionando |
-| Routing ortogonal (sin diagonales) | Funcionando |
-| Edición por segmentos (drag perpendicular) | Funcionando |
-| 8 colores por tipo de señal | Funcionando |
-| Offset automático para cables paralelos | Funcionando |
-| Auto-actualización al mover componentes | Funcionando |
-| Grid snapping (20px) | Funcionando |
-| Selección y eliminación de cables | Funcionando |
+| Pin-to-pin creation with click | Working |
+| Real-time preview (green, dashed) | Working |
+| Orthogonal routing (no diagonals) | Working |
+| Segment editing (perpendicular drag) | Working |
+| 8 colors by signal type | Working |
+| Automatic offset for parallel wires | Working |
+| Auto-update when moving components | Working |
+| Grid snapping (20px) | Working |
+| Wire selection and deletion | Working |
 
-### Editor de Código
+### Code Editor
 
-| Feature | Estado |
+| Feature | Status |
 |---------|--------|
-| Monaco Editor (C++, dark theme) | Funcionando |
-| Syntax highlighting + autocomplete | Funcionando |
-| Botones Compile/Run/Stop/Reset | Funcionando |
-| Compilación via arduino-cli backend | Funcionando |
-| Mensajes de error/éxito | Funcionando |
-| Font size configurable | Funcionando |
+| Monaco Editor (C++, dark theme) | Working |
+| Syntax highlighting + autocomplete | Working |
+| Compile/Run/Stop/Reset buttons | Working |
+| Compilation via arduino-cli backend | Working |
+| Error/success messages | Working |
+| Configurable font size | Working |
 
-### Ejemplos (8 Proyectos)
+### Examples (8 Projects)
 
-| Ejemplo | Categoría | Dificultad |
-|---------|-----------|------------|
+| Example | Category | Difficulty |
+|---------|----------|------------|
 | Blink LED | basics | beginner |
 | Traffic Light | basics | beginner |
 | Button Control | basics | beginner |
@@ -102,41 +102,41 @@ Repositorios oficiales de Wokwi en `wokwi-libs/`:
 | Simon Says Game | games | advanced |
 | LCD 20x4 Display | displays | intermediate |
 
-- Galería con filtros de categoría y dificultad
-- Carga con un click (código + componentes + cables)
+- Gallery with category and difficulty filters
+- One-click load (code + components + wires)
 
-### Integración Configurada
+### Configured Integrations
 
-| Item | Estado |
+| Item | Status |
 |------|--------|
-| Vite aliases para repos locales | |
-| Package.json con `file:../wokwi-libs/...` | |
-| TypeScript declarations para Web Components | |
-| CORS backend (puertos 5173-5175) | |
-| React Router (2 rutas) | |
-| Zustand stores (editor + simulator) | |
+| Vite aliases for local repos | ✅ |
+| Package.json with `file:../wokwi-libs/...` | ✅ |
+| TypeScript declarations for Web Components | ✅ |
+| Backend CORS (ports 5173-5175) | ✅ |
+| React Router (2 routes) | ✅ |
+| Zustand stores (editor + simulator) | ✅ |
 
-### Documentación
+### Documentation
 
-| Archivo | Descripción |
-|---------|-------------|
-| `README.md` | Instrucciones de instalación y uso |
-| `docs/ARCHITECTURE.md` | Arquitectura detallada del proyecto |
-| `docs/WOKWI_LIBS.md` | Guía de integración con Wokwi |
-| `docs/SETUP_COMPLETE.md` | Este archivo — estado del proyecto |
-| `CLAUDE.md` | Guía para asistentes IA |
-| `update-wokwi-libs.bat` | Script de actualización automática |
+| File | Description |
+|------|-------------|
+| `README.md` | Installation and usage instructions |
+| `docs/ARCHITECTURE.md` | Detailed project architecture |
+| `docs/WOKWI_LIBS.md` | Wokwi integration guide |
+| `docs/SETUP_COMPLETE.md` | This file — project status |
+| `CLAUDE.md` | Guide for AI assistants |
+| `update-wokwi-libs.bat` | Automatic update script |
 
-## Cómo Empezar
+## Getting Started
 
-### 1. Asegúrate de tener arduino-cli instalado
+### 1. Ensure arduino-cli is installed
 
 ```bash
 arduino-cli version
 arduino-cli core install arduino:avr
 ```
 
-### 2. Inicia el Backend
+### 2. Start the Backend
 
 ```bash
 cd backend
@@ -144,44 +144,44 @@ venv\Scripts\activate
 uvicorn app.main:app --reload --port 8001
 ```
 
-### 3. Inicia el Frontend
+### 3. Start the Frontend
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-### 4. Abre en el Navegador
+### 4. Open in the Browser
 
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:8001
 - API Docs: http://localhost:8001/docs
 
-## Actualizar Librerías de Wokwi
+## Update Wokwi Libraries
 
 ```bash
-# Ejecutar script de actualización
+# Run the update script
 update-wokwi-libs.bat
 
-# Regenerar metadata de componentes (si actualizaste wokwi-elements)
+# Regenerate component metadata (if you updated wokwi-elements)
 cd frontend
 npx tsx ../scripts/generate-component-metadata.ts
 ```
 
-## Próximos Pasos (Pendiente)
+## Next Steps (Pending)
 
-| Feature | Prioridad | Descripción |
-|---------|-----------|-------------|
-| Serial Monitor | Alta | UI para leer output USART de la simulación |
-| Persistencia | Alta | SQLite para guardar/cargar proyectos |
-| Undo/Redo | Media | Historial de edición para código y circuito |
-| Multi-board | Media | Cambio de board en runtime (Mega, Nano, ESP32) |
-| Validación de cables | Media | Validación eléctrica y resaltado de errores |
-| Export/Import | Baja | Compartir proyectos como archivos |
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Serial Monitor | High | UI for reading USART output from the simulation |
+| Persistence | High | SQLite for saving/loading projects |
+| Undo/Redo | Medium | Edit history for code and circuit |
+| Multi-board | Medium | Board switching at runtime (Mega, Nano, ESP32) |
+| Wire validation | Medium | Electrical validation and error highlighting |
+| Export/Import | Low | Share projects as files |
 
 ## Troubleshooting
 
-### Los componentes no se muestran
+### Components are not displayed
 
 ```bash
 cd wokwi-libs/wokwi-elements
@@ -196,7 +196,7 @@ npm install
 npm run build
 ```
 
-### arduino-cli no funciona
+### arduino-cli does not work
 
 ```bash
 arduino-cli version
@@ -204,29 +204,29 @@ arduino-cli core list
 arduino-cli core install arduino:avr
 ```
 
-### LED no parpadea en simulación
+### LED does not blink in simulation
 
-- Verifica que compilaste el código (botón Compile)
-- Verifica que ejecutaste la simulación (botón Run)
-- Revisa la consola del navegador para errores de port listeners
-- Verifica el pin mapping en el diálogo de propiedades del componente
+- Verify that you compiled the code (Compile button)
+- Verify that you started the simulation (Run button)
+- Check the browser console for port listener errors
+- Verify the pin mapping in the component properties dialog
 
-### Componente nuevo no aparece en el picker
+### New component does not appear in the picker
 
 ```bash
 cd frontend
 npx tsx ../scripts/generate-component-metadata.ts
 ```
 
-## Estado General
+## General Status
 
-El proyecto tiene implementadas todas las funcionalidades core:
+The project has all core features implemented:
 
-- Editor de código profesional (Monaco)
-- Compilación Arduino local (arduino-cli)
-- Emulación AVR8 real con periféricos completos
-- 48+ componentes electrónicos con descubrimiento automático
-- 16 partes con simulación interactiva (LED, LCD, buttons, potentiometers, servo, buzzer)
-- Sistema de cables ortogonales con edición visual
-- 8 proyectos de ejemplo con galería filtrable
-- Sistema de actualización automática para librerías Wokwi
+- Professional code editor (Monaco)
+- Local Arduino compilation (arduino-cli)
+- Real AVR8 emulation with full peripherals
+- 48+ electronic components with automatic discovery
+- 16 parts with interactive simulation (LED, LCD, buttons, potentiometers, servo, buzzer)
+- Orthogonal wire system with visual editing
+- 8 example projects with a filterable gallery
+- Automatic update system for Wokwi libraries

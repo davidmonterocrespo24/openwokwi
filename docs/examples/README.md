@@ -1,11 +1,11 @@
 # Example Projects
 
-Esta carpeta contiene las imágenes de preview para los 8 proyectos de ejemplo de la galería.
+This folder contains the preview images for the 8 example projects in the gallery.
 
-## Ejemplos Disponibles
+## Available Examples
 
-| ID | Título | Categoría | Dificultad | Componentes |
-|----|--------|-----------|------------|-------------|
+| ID | Title | Category | Difficulty | Components |
+|----|-------|----------|------------|------------|
 | `blink-led` | Blink LED | basics | beginner | Arduino Uno |
 | `traffic-light` | Traffic Light | basics | beginner | 3 LEDs (R/Y/G) |
 | `button-led` | Button Control | basics | beginner | Button + LED |
@@ -15,28 +15,28 @@ Esta carpeta contiene las imágenes de preview para los 8 proyectos de ejemplo d
 | `simon-says` | Simon Says Game | games | advanced | 4 LEDs + 4 buttons |
 | `lcd-hello` | LCD 20x4 Display | displays | intermediate | LCD 2004 |
 
-Cada ejemplo incluye:
-- Código Arduino completo
-- Definiciones de componentes con posiciones
-- Conexiones de cables con pines y colores
+Each example includes:
+- Complete Arduino sketch code
+- Component definitions with positions
+- Wire connections with pin names and colors
 
-Los ejemplos se definen en `frontend/src/data/examples.ts` y se renderizan en la galería `ExamplesGallery.tsx` con filtros por categoría y dificultad.
+The examples are defined in `frontend/src/data/examples.ts` and rendered in the `ExamplesGallery.tsx` gallery with category and difficulty filters.
 
-## Cómo Crear Screenshots
+## How to Create Screenshots
 
-### Método 1: Captura Manual (Recomendado)
+### Method 1: Manual Capture (Recommended)
 
-1. Carga el ejemplo en el editor (http://localhost:5173/examples)
-2. Haz click en el ejemplo para cargarlo
-3. Ajusta el zoom del canvas si es necesario
-4. Usa una herramienta de captura de pantalla para capturar solo el área del simulador
-5. Guarda la imagen con el nombre correspondiente
+1. Load the example in the editor (http://localhost:5173/examples)
+2. Click the example to load it
+3. Adjust the canvas zoom if needed
+4. Use a screenshot tool to capture only the simulator area
+5. Save the image with the corresponding name
 
-### Método 2: Usando DevTools
+### Method 2: Using DevTools
 
-1. Abre el ejemplo en el navegador
-2. Abre DevTools (F12)
-3. Ve a la consola y ejecuta:
+1. Open the example in the browser
+2. Open DevTools (F12)
+3. Go to the console and run:
 ```javascript
 const canvas = document.querySelector('.canvas-content');
 html2canvas(canvas).then(canvas => {
@@ -47,9 +47,9 @@ html2canvas(canvas).then(canvas => {
 });
 ```
 
-## Nombres de Archivos
+## File Names
 
-Los archivos deben seguir el ID del ejemplo:
+Files must follow the example ID:
 
 - `blink-led.png` — Blink LED
 - `traffic-light.png` — Traffic Light
@@ -60,26 +60,26 @@ Los archivos deben seguir el ID del ejemplo:
 - `simon-says.png` — Simon Says Game
 - `lcd-hello.png` — LCD 20x4 Display
 
-## Dimensiones Recomendadas
+## Recommended Dimensions
 
-- **Ancho**: 800px
-- **Alto**: 500px
-- **Formato**: PNG con fondo oscuro (#1e1e1e)
+- **Width**: 800px
+- **Height**: 500px
+- **Format**: PNG with dark background (#1e1e1e)
 
-## Placeholder Actual
+## Current Placeholder
 
-Mientras no haya imágenes, se muestra un placeholder con:
-- Icono de la categoría (emoji grande)
-- Número de componentes (azul cian)
-- Número de cables (amarillo)
-- Fondo degradado con borde punteado
+While no images are available, a placeholder is shown with:
+- Category icon (large emoji)
+- Number of components (cyan blue)
+- Number of wires (yellow)
+- Gradient background with dashed border
 
-## Agregar un Nuevo Ejemplo
+## Adding a New Example
 
-1. Agregar la definición en `frontend/src/data/examples.ts` con:
+1. Add the definition in `frontend/src/data/examples.ts` with:
    - `id`, `title`, `description`, `category`, `difficulty`
-   - `code`: Sketch Arduino completo
-   - `components[]`: Tipo, posición, propiedades
-   - `wires[]`: Conexiones con `startPinName`, `endPinName`, `color`
-2. (Opcional) Capturar screenshot y guardarlo aquí como `{id}.png`
-3. El ejemplo aparecerá automáticamente en la galería con filtrado por categoría y dificultad
+   - `code`: Complete Arduino sketch
+   - `components[]`: Type, position, properties
+   - `wires[]`: Connections with `startPinName`, `endPinName`, `color`
+2. (Optional) Capture a screenshot and save it here as `{id}.png`
+3. The example will automatically appear in the gallery with category and difficulty filtering

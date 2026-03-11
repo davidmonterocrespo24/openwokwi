@@ -180,6 +180,7 @@
   border-radius: var(--radius);
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
+  text-decoration: none;
 }
 
 .docs-sidebar-item:hover {
@@ -406,6 +407,7 @@
   padding: 9px 16px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
+  text-decoration: none;
 }
 
 .docs-pagination-btn:hover {
