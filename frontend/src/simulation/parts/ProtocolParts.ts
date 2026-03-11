@@ -19,7 +19,7 @@
  */
 
 import { PartSimulationRegistry } from './PartSimulationRegistry';
-import { VirtualDS1307 } from '../I2CBusManager';
+import { VirtualDS1307, VirtualBMP280, VirtualDS3231, VirtualPCF8574 } from '../I2CBusManager';
 import type { I2CDevice } from '../I2CBusManager';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -747,5 +747,111 @@ PartSimulationRegistry.register('microsd-card', {
       respQueue.length = 0;
       cmdBuf = [];
     };
+  },
+});
+
+// ─── BMP280 Barometric Pressure / Temperature Sensor ─────────────────────────
+
+/**
+ * BMP280 — I2C barometric pressure + temperature sensor.
+ *
+ * Addresses:
+ *   0x76 (SDO pin pulled LOW, default)
+ *   0x77 (SDO pin pulled HIGH — set element.address = '0x77')
+ *
+ * The element may expose `temperature` (°C) and `pressure` (hPa) properties
+ * that are read on attach and forwarded to the virtual device.
+ *
+ * The virtual device uses the BMP280 datasheet calibration example to compute
+ * raw ADC values for any desired temperature/pressure combination, so Arduino
+ * sketches using Adafruit_BMP280 or Bosch's reference driver receive correct
+ * compensated readings.
+ */
+PartSimulationRegistry.register('bmp280', {
+  attachEvents: (element, simulator, _getPin) => {
+    const sim = simulator as any;
+    if (typeof sim.addI2CDevice !== 'function') return () => {};
+
+    const el   = element as any;
+    const addr = (el.address === '0x77' || el.address === 0x77) ? 0x77 : 0x76;
+    const dev  = new VirtualBMP280(addr);
+
+    if (el.temperature !== undefined) dev.temperatureC  = parseFloat(el.temperature);
+    if (el.pressure    !== undefined) dev.pressureHPa   = parseFloat(el.pressure);
+
+    sim.addI2CDevice(dev);
+    return () => removeI2CDevice(sim, dev.address);
+  },
+});
+
+// ─── DS3231 Real-Time Clock ───────────────────────────────────────────────────
+
+/**
+ * DS3231 — I2C RTC with on-chip temperature sensor (address 0x68).
+ *
+ * Returns the browser's current system time as BCD in registers 0x00–0x06,
+ * identical to DS1307 for the time registers. Additionally exposes:
+ *   0x0E  Control register
+ *   0x0F  Status register (OSF cleared)
+ *   0x11  Temperature MSB (integer °C, signed)
+ *   0x12  Temperature LSB (fractional, 0.25°C per bit in bits 7:6)
+ *
+ * Ambient temperature defaults to 25°C; override via `element.temperature`.
+ */
+PartSimulationRegistry.register('ds3231', {
+  attachEvents: (element, simulator, _getPin) => {
+    const sim = simulator as any;
+    if (typeof sim.addI2CDevice !== 'function') return () => {};
+
+    const el  = element as any;
+    const dev = new VirtualDS3231();
+    if (el.temperature !== undefined) dev.temperatureC = parseFloat(el.temperature);
+
+    sim.addI2CDevice(dev);
+    return () => removeI2CDevice(sim, dev.address);
+  },
+});
+
+// ─── PCF8574 I/O Expander ────────────────────────────────────────────────────
+
+/**
+ * PCF8574 — I2C 8-bit quasi-bidirectional I/O expander.
+ *
+ * Default address: 0x27 (all three address pins HIGH — typical LCD backpack).
+ * Override with `element.i2cAddress` (e.g. '0x20', '0x3F').
+ *
+ * `element.portState` (0–255) sets the external input state visible to the
+ * Arduino on a read. Defaults to 0xFF (all pins pulled high / floating input).
+ *
+ * Writes from the Arduino update `dev.outputLatch` and fire `dev.onWrite`
+ * which sets `element.value` so wokwi-LCD-I2C or similar elements can render.
+ */
+PartSimulationRegistry.register('pcf8574', {
+  attachEvents: (element, simulator, _getPin) => {
+    const sim = simulator as any;
+    if (typeof sim.addI2CDevice !== 'function') return () => {};
+
+    const el = element as any;
+
+    // Parse address from element property (accepts '0x27', '39', or numeric)
+    let addr = 0x27;
+    if (el.i2cAddress !== undefined) {
+      const raw    = String(el.i2cAddress).trim();
+      const parsed = raw.startsWith('0x') || raw.startsWith('0X')
+        ? parseInt(raw, 16)
+        : parseInt(raw, 10);
+      if (!isNaN(parsed)) addr = parsed;
+    }
+
+    const dev = new VirtualPCF8574(addr);
+
+    // Seed port state from element if present
+    if (el.portState !== undefined) dev.portState = Number(el.portState) & 0xFF;
+
+    // Feed writes back to the element so visual components can re-render
+    dev.onWrite = (value: number) => { el.value = value; };
+
+    sim.addI2CDevice(dev);
+    return () => removeI2CDevice(sim, dev.address);
   },
 });
