@@ -1,19 +1,33 @@
 """
 ESP32 emulation integration tests — backend side
 
-Covers:
+What works with Espressif QEMU v9.2.2:
+  ✅ Boot ESP32 / ESP32-S3 firmware (ROM → IDF bootloader → app)
+  ✅ Serial Monitor — UART0 via TCP socket (output AND input)
+  ✅ Arduino API: digitalWrite, pinMode, Serial.print
+  ✅ ROM busy-wait (ets_delay_us) — safe in QEMU
+  ✅ Compilation to .merged.bin via arduino-cli (FlashMode=dio required)
+
+What does NOT work with Espressif QEMU v9.2.2:
+  ❌ Observing GPIO state from outside — needs lcgamboa QEMU fork (no Windows binary)
+  ❌ delay() — crashes QEMU (FreeRTOS scheduler triggers cache error)
+  ❌ WiFi / Bluetooth
+  ❌ ADC / DAC / Touch / RMT / LEDC
+  ❌ ESP32-C3 — needs qemu-system-riscv32 Espressif build
+
+Test coverage:
   1. ESP32 pin mapping   — boardPinToNumber logic for GPIO pins
-  2. EspQemuManager API  — start/stop/send_serial_bytes/set_pin_state/load_firmware
+  2. EspQemuManager API  — start/stop/send_serial_bytes/load_firmware
   3. EspInstance emit    — callback mechanics
-  4. GPIO chardev protocol — _handle_gpio_line parsing
-  5. WebSocket route     — start_esp32 / stop_esp32 / load_firmware /
+  4. WebSocket route     — start_esp32 / stop_esp32 / load_firmware /
                            esp32_serial_input / esp32_gpio_in messages
-  6. arduino_cli         — ESP32 FQBN detection (_is_esp32_board)
-  7. Live blink test     — (skipped unless QEMU binary present)
+  5. arduino_cli         — ESP32 FQBN detection (_is_esp32_board)
+  6. Live blink test     — boots firmware in real QEMU, verifies serial output
 
 Run with:
   cd e:/Hardware/wokwi_clon
-  python -m pytest test/esp32/test_esp32_integration.py -v
+  QEMU_ESP32_BINARY=C:/esp-qemu/qemu/bin/qemu-system-xtensa.exe \\
+    python -m pytest test/esp32/test_esp32_integration.py -v
 """
 
 import asyncio
@@ -162,20 +176,6 @@ class TestEspQemuManagerApi(unittest.IsolatedAsyncioTestCase):
     async def test_send_serial_bytes_unknown_instance_is_noop(self):
         await self.manager.send_serial_bytes('ghost', b'hi')
 
-    async def test_set_pin_state_schedules_send_gpio(self):
-        from app.services.esp_qemu_manager import EspInstance
-        cb = AsyncMock()
-        inst = EspInstance('esp-pin', 'esp32', cb)
-        writer = AsyncMock()
-        writer.drain = AsyncMock()
-        inst._gpio_writer = writer
-        inst.running = True
-        self.manager._instances['esp-pin'] = inst
-
-        with patch.object(self.manager, '_send_gpio', new=AsyncMock()) as mock_send:
-            self.manager.set_pin_state('esp-pin', 2, 1)
-            await asyncio.sleep(0)  # let create_task run
-
     async def test_load_firmware_triggers_restart(self):
         """load_firmware stops and restarts the instance with new firmware."""
         cb = AsyncMock()
@@ -205,72 +205,7 @@ class TestEspQemuManagerApi(unittest.IsolatedAsyncioTestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. GPIO chardev protocol — _handle_gpio_line
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestEsp32GpioProtocol(unittest.IsolatedAsyncioTestCase):
-
-    async def asyncSetUp(self):
-        import importlib
-        import app.services.esp_qemu_manager as em_mod
-        importlib.reload(em_mod)
-        from app.services.esp_qemu_manager import EspQemuManager, EspInstance
-        self.manager = EspQemuManager()
-        self.cb = AsyncMock()
-        self.inst = EspInstance('esp-gpio', 'esp32', self.cb)
-        self.manager._instances['esp-gpio'] = self.inst
-
-    async def test_valid_gpio_line_emits_gpio_change(self):
-        await self.manager._handle_gpio_line(self.inst, 'GPIO 2 1')
-        self.cb.assert_awaited_once_with('gpio_change', {'pin': 2, 'state': 1})
-
-    async def test_gpio_line_low_state(self):
-        await self.manager._handle_gpio_line(self.inst, 'GPIO 13 0')
-        self.cb.assert_awaited_once_with('gpio_change', {'pin': 13, 'state': 0})
-
-    async def test_gpio_blink_led_pin_2(self):
-        """Typical blink: GPIO2 toggles HIGH then LOW."""
-        await self.manager._handle_gpio_line(self.inst, 'GPIO 2 1')
-        await self.manager._handle_gpio_line(self.inst, 'GPIO 2 0')
-        calls = self.cb.await_args_list
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[0].args, ('gpio_change', {'pin': 2, 'state': 1}))
-        self.assertEqual(calls[1].args, ('gpio_change', {'pin': 2, 'state': 0}))
-
-    async def test_malformed_gpio_line_is_ignored(self):
-        await self.manager._handle_gpio_line(self.inst, 'INVALID DATA')
-        self.cb.assert_not_awaited()
-
-    async def test_set_command_is_not_a_gpio_output(self):
-        await self.manager._handle_gpio_line(self.inst, 'SET 2 1')
-        self.cb.assert_not_awaited()
-
-    async def test_gpio_line_non_numeric_pin_is_ignored(self):
-        await self.manager._handle_gpio_line(self.inst, 'GPIO abc 1')
-        self.cb.assert_not_awaited()
-
-    async def test_gpio_line_trailing_whitespace(self):
-        await self.manager._handle_gpio_line(self.inst, 'GPIO 5 1  ')
-        self.cb.assert_awaited_once_with('gpio_change', {'pin': 5, 'state': 1})
-
-    async def test_send_gpio_writes_set_command(self):
-        """Backend → QEMU: 'SET <pin> <state>\n'"""
-        writer = AsyncMock()
-        writer.drain = AsyncMock()
-        self.inst._gpio_writer = writer
-        await self.manager._send_gpio(self.inst, 2, True)
-        writer.write.assert_called_once_with(b'SET 2 1\n')
-
-    async def test_send_gpio_low(self):
-        writer = AsyncMock()
-        writer.drain = AsyncMock()
-        self.inst._gpio_writer = writer
-        await self.manager._send_gpio(self.inst, 2, False)
-        writer.write.assert_called_once_with(b'SET 2 0\n')
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. WebSocket simulation route — ESP32 message handling
+# 3. WebSocket simulation route — ESP32 message handling
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestEsp32WebSocketMessages(unittest.IsolatedAsyncioTestCase):
@@ -419,7 +354,7 @@ class TestEsp32WebSocketMessages(unittest.IsolatedAsyncioTestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. arduino_cli — ESP32 FQBN detection
+# 4. arduino_cli — ESP32 FQBN detection
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestArduinoCliEsp32Detection(unittest.TestCase):
@@ -487,7 +422,7 @@ class TestArduinoCliEsp32Detection(unittest.TestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Live blink test (skipped unless QEMU Espressif binary is available)
+# 5. Live blink test (skipped unless QEMU Espressif binary is available)
 # ─────────────────────────────────────────────────────────────────────────────
 
 QEMU_XTENSA = os.environ.get('QEMU_ESP32_BINARY', 'qemu-system-xtensa')
