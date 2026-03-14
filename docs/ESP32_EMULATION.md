@@ -1,11 +1,241 @@
 # ESP32 Emulation — Documentación Técnica
 
-> Estado: **Funcional** · Backend completo · Frontend parcial
+> Estado: **Funcional** · Backend completo · Frontend completo
 > Motor: **lcgamboa/qemu-8.1.3** · Plataforma: **arduino-esp32 2.0.17 (IDF 4.4.x)**
 
 ---
 
-## 1. Arquitectura general
+## Índice
+
+1. [Instalación rápida](#1-instalación-rápida)
+2. [Arquitectura general](#2-arquitectura-general)
+3. [Componentes del sistema](#3-componentes-del-sistema)
+4. [Firmware — Requisitos para lcgamboa](#4-firmware--requisitos-para-lcgamboa)
+5. [WiFi emulada](#5-wifi-emulada)
+6. [I2C emulado](#6-i2c-emulado)
+7. [RMT / NeoPixel (WS2812)](#7-rmt--neopixel-ws2812)
+8. [LEDC / PWM](#8-ledc--pwm)
+9. [Compilación de la DLL](#9-compilación-de-la-dll)
+10. [Tests](#10-tests)
+11. [Frontend — Eventos implementados](#11-frontend--eventos-implementados)
+12. [Limitaciones conocidas](#12-limitaciones-conocidas)
+13. [Variables de entorno](#13-variables-de-entorno)
+
+---
+
+## 1. Instalación rápida
+
+Esta sección cubre todo lo necesario para tener la emulación ESP32 funcionando desde cero en Windows.
+
+### 1.1 Prerrequisitos de sistema
+
+| Herramienta | Versión mínima | Para qué se usa |
+|-------------|----------------|-----------------|
+| Python | 3.11+ | Backend FastAPI |
+| MSYS2 | cualquiera | Compilar la DLL de QEMU |
+| arduino-cli | 1.x | Compilar sketches ESP32 |
+| esptool | 4.x o 5.x | Crear imágenes flash de 4 MB |
+| Git | 2.x | Clonar submodule qemu-lcgamboa |
+
+### 1.2 Instalar MSYS2
+
+Descarga e instala desde [msys2.org](https://www.msys2.org) o via winget:
+
+```powershell
+winget install MSYS2.MSYS2
+```
+
+Abre la terminal **MSYS2 MINGW64** y ejecuta:
+
+```bash
+pacman -Syu   # actualizar base
+
+pacman -S \
+  mingw-w64-x86_64-gcc \
+  mingw-w64-x86_64-glib2 \
+  mingw-w64-x86_64-libgcrypt \
+  mingw-w64-x86_64-libslirp \
+  mingw-w64-x86_64-pixman \
+  mingw-w64-x86_64-ninja \
+  mingw-w64-x86_64-meson \
+  mingw-w64-x86_64-python \
+  mingw-w64-x86_64-pkg-config \
+  git diffutils
+```
+
+### 1.3 Instalar arduino-cli y el core ESP32 2.0.17
+
+```bash
+# Instalar arduino-cli (si no lo tienes)
+winget install ArduinoSA.arduino-cli
+
+# Verificar
+arduino-cli version
+
+# Añadir soporte ESP32
+arduino-cli core update-index
+arduino-cli core install esp32:esp32@2.0.17   # ← IMPORTANTE: 2.x, NO 3.x
+
+# Verificar
+arduino-cli core list   # debe mostrar esp32:esp32  2.0.17
+```
+
+> **¿Por qué 2.0.17 y no 3.x?** El WiFi emulado de lcgamboa desactiva la caché SPI flash
+> periódicamente. En IDF 5.x (arduino-esp32 3.x) esto provoca un crash de caché cuando las
+> interrupciones del core 0 intentan ejecutar código desde IROM. IDF 4.4.x es compatible.
+
+### 1.4 Instalar esptool
+
+```bash
+pip install esptool
+# Verificar
+esptool version   # o: python -m esptool version
+```
+
+### 1.5 Compilar la DLL de QEMU (libqemu-xtensa.dll)
+
+La DLL es el motor principal de la emulación. Hay que compilarla una vez desde el submodule `wokwi-libs/qemu-lcgamboa`.
+
+```bash
+# Asegurarse de tener el submodule
+git submodule update --init wokwi-libs/qemu-lcgamboa
+
+# Abrir terminal MSYS2 MINGW64 y navegar al repo
+cd /e/Hardware/wokwi_clon   # ajusta la ruta
+
+# Paso 1: Configurar QEMU para Xtensa
+cd wokwi-libs/qemu-lcgamboa
+./configure \
+  --target-list=xtensa-softmmu \
+  --disable-werror \
+  --enable-tcg \
+  --enable-gcrypt \
+  --enable-slirp \
+  --enable-iconv \
+  --without-default-features
+
+# Paso 2: Compilar el binario principal (5-20 min según CPU)
+ninja -j$(nproc) qemu-system-xtensa.exe
+
+# Paso 3: Relinkar como DLL (script automático)
+cd /e/Hardware/wokwi_clon
+bash build_qemu_step4.sh
+```
+
+El script `build_qemu_step4.sh` genera `libqemu-xtensa.dll` y la copia automáticamente a `backend/app/services/`.
+
+**Verificar que la DLL se creó:**
+```bash
+ls -lh backend/app/services/libqemu-xtensa.dll
+# → debe ser ~40-50 MB
+```
+
+**Verificar exports:**
+```bash
+objdump -p backend/app/services/libqemu-xtensa.dll | grep -i "qemu_picsimlab\|qemu_init"
+# → debe mostrar qemu_init, qemu_main_loop, qemu_picsimlab_register_callbacks, etc.
+```
+
+### 1.6 Obtener los ROM binaries del ESP32
+
+La DLL necesita dos archivos ROM de Espressif para arrancar el ESP32. Vienen incluidos en la instalación de Espressif QEMU:
+
+**Opción A — Desde esp-qemu (si está instalado):**
+```bash
+copy "C:\esp-qemu\qemu\share\qemu\esp32-v3-rom.bin" backend\app\services\
+copy "C:\esp-qemu\qemu\share\qemu\esp32-v3-rom-app.bin" backend\app\services\
+```
+
+**Opción B — Descargar directamente:**
+
+Los ROM binaries son del repositorio oficial de Espressif:
+```bash
+# Busca en: https://github.com/espressif/qemu/tree/esp-develop/pc-bios
+# Descargar: esp32-v3-rom.bin  y  esp32-v3-rom-app.bin
+# Colocarlos en backend/app/services/
+```
+
+**Verificar:**
+```bash
+ls -lh backend/app/services/esp32-v3-rom.bin
+ls -lh backend/app/services/esp32-v3-rom-app.bin
+# → ambos ~446 KB
+```
+
+### 1.7 Instalar dependencias Python del backend
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows
+pip install -r requirements.txt
+```
+
+### 1.8 Verificar instalación con los tests
+
+```bash
+# Desde la raíz del repo (con venv activado):
+python -m pytest test/esp32/test_esp32_lib_bridge.py -v
+
+# Resultado esperado: 28 passed en ~13 segundos
+```
+
+Si ves `28 passed` — la emulación está completamente funcional.
+
+**Tests adicionales (Arduino ↔ ESP32 serial):**
+```bash
+python -m pytest test/esp32/test_arduino_esp32_integration.py -v
+# Resultado esperado: 13 passed
+```
+
+### 1.9 Arrancar el backend con emulación ESP32
+
+```bash
+cd backend
+venv\Scripts\activate
+uvicorn app.main:app --reload --port 8001
+```
+
+El sistema detecta automáticamente la DLL. Verifica en los logs:
+```
+INFO: libqemu-xtensa.dll found at backend/app/services/libqemu-xtensa.dll
+INFO: EspLibManager: DLL mode active (GPIO, ADC, UART, WiFi, I2C, SPI, RMT, LEDC)
+```
+
+Si no aparece, verifica con:
+```bash
+python -c "
+import sys; sys.path.insert(0,'backend')
+from app.services.esp32_lib_manager import esp_lib_manager
+print('DLL disponible:', esp_lib_manager.is_available())
+"
+```
+
+### 1.10 Compilar un sketch propio para ESP32
+
+```bash
+# Compilar con DIO flash mode (requerido por QEMU lcgamboa):
+arduino-cli compile \
+  --fqbn esp32:esp32:esp32:FlashMode=dio \
+  --output-dir build/ \
+  mi_sketch/
+
+# Crear imagen 4 MB completa (obligatorio para QEMU):
+esptool --chip esp32 merge_bin \
+  --fill-flash-size 4MB \
+  -o firmware.merged.bin \
+  --flash_mode dio \
+  --flash_size 4MB \
+  0x1000  build/mi_sketch.ino.bootloader.bin \
+  0x8000  build/mi_sketch.ino.partitions.bin \
+  0x10000 build/mi_sketch.ino.bin
+```
+
+El archivo `firmware.merged.bin` es el que se carga en la emulación.
+
+---
+
+## 2. Arquitectura general
 
 ```
 Usuario (browser)
@@ -39,13 +269,13 @@ QEMU_ESP32_LIB=C:/ruta/a/libqemu-xtensa.dll uvicorn app.main:app
 
 ---
 
-## 2. Componentes del sistema
+## 3. Componentes del sistema
 
-### 2.1 `libqemu-xtensa.dll`
+### 3.1 `libqemu-xtensa.dll`
 
 Compilada desde el fork [lcgamboa/qemu](https://github.com/lcgamboa/qemu) rama `qemu-8.1.3`.
 
-**Dependencias en runtime (Windows):**
+**Dependencias en runtime (Windows) — resueltas automáticamente:**
 ```
 C:\msys64\mingw64\bin\
   libglib-2.0-0.dll
@@ -59,20 +289,15 @@ C:\msys64\mingw64\bin\
 
 El bridge las registra automáticamente con `os.add_dll_directory()`.
 
-**ROM binaries requeridas** (deben estar en la misma carpeta que la DLL):
+**ROM binaries requeridas** (en la misma carpeta que la DLL):
 ```
 backend/app/services/
-  libqemu-xtensa.dll        ← motor principal
-  esp32-v3-rom.bin          ← ROM de boot del ESP32 (copiar de esp-qemu)
-  esp32-v3-rom-app.bin      ← ROM de aplicación
+  libqemu-xtensa.dll        ← motor principal (no en git — 43 MB)
+  esp32-v3-rom.bin          ← ROM de boot del ESP32 (no en git — 446 KB)
+  esp32-v3-rom-app.bin      ← ROM de aplicación  (no en git — 446 KB)
 ```
 
-**Cómo obtener los ROM binaries:**
-```bash
-# Desde instalación de Espressif QEMU:
-copy "C:\esp-qemu\qemu\share\qemu\esp32-v3-rom.bin" backend\app\services\
-copy "C:\esp-qemu\qemu\share\qemu\esp32-v3-rom-app.bin" backend\app\services\
-```
+> Estos archivos están en `.gitignore` por su tamaño. Cada desarrollador los genera/obtiene localmente (ver sección 1.5 y 1.6).
 
 **Exports de la DLL:**
 ```c
@@ -102,7 +327,7 @@ typedef struct {
 
 ---
 
-### 2.2 GPIO Pinmap
+### 3.2 GPIO Pinmap
 
 ```python
 # Identity mapping: QEMU IRQ slot i → GPIO number i-1
@@ -119,7 +344,7 @@ El bridge traduce automáticamente slot → GPIO real antes de notificar listene
 
 ---
 
-### 2.3 `Esp32LibBridge` (Python ctypes)
+### 3.3 `Esp32LibBridge` (Python ctypes)
 
 Archivo: `backend/app/services/esp32_lib_bridge.py`
 
@@ -150,9 +375,6 @@ bridge.uart_send(uart_id, data)      # Enviar bytes al UART RX del ESP32
 # LEDC/PWM
 bridge.get_ledc_duty(channel)        # canal 0-15 → raw duty | None
 bridge.get_tiocm()                   # UART modem lines bitmask
-
-# Helper
-bridge.decode_rmt_item(value)        # → (level0, dur0, level1, dur1)
 ```
 
 **Threading crítico:**
@@ -171,7 +393,7 @@ lib.qemu_main_loop()       # en thread B  ← crash: "qemu_mutex_unlock_iothread
 
 ---
 
-### 2.4 `EspLibManager` (Python)
+### 3.4 `EspLibManager` (Python)
 
 Archivo: `backend/app/services/esp32_lib_manager.py`
 
@@ -179,14 +401,14 @@ Convierte callbacks de hardware en **eventos WebSocket** para el frontend:
 
 | Evento emitido | Datos | Cuándo |
 |----------------|-------|--------|
-| `system` | `{event: 'booting'\|'booted'\|'crash'\|'reboot', ...}` | Ciclo de vida |
-| `serial_output` | `{data: str, uart: 0\|1\|2}` | UART TX del ESP32 |
-| `gpio_change` | `{pin: int, state: 0\|1}` | GPIO output cambia |
-| `gpio_dir` | `{pin: int, dir: 0\|1}` | GPIO cambia dirección |
+| `system` | `{event: 'booting'│'booted'│'crash'│'reboot', ...}` | Ciclo de vida |
+| `serial_output` | `{data: str, uart: 0│1│2}` | UART TX del ESP32 |
+| `gpio_change` | `{pin: int, state: 0│1}` | GPIO output cambia |
+| `gpio_dir` | `{pin: int, dir: 0│1}` | GPIO cambia dirección |
 | `i2c_event` | `{bus, addr, event, response}` | Transacción I2C |
 | `spi_event` | `{bus, event, response}` | Transacción SPI |
 | `rmt_event` | `{channel, config0, value, level0, dur0, level1, dur1}` | Pulso RMT |
-| `ws2812_update` | `{channel, pixels: [{r,g,b}]}` | Frame NeoPixel completo |
+| `ws2812_update` | `{channel, pixels: [[r,g,b],...]}` | Frame NeoPixel completo |
 | `ledc_update` | `{channel, duty, duty_pct}` | PWM duty cycle |
 | `error` | `{message: str}` | Error de boot |
 
@@ -218,7 +440,7 @@ manager.get_status(client_id)                         # → dict con runtime sta
 
 ---
 
-### 2.5 `simulation.py` — Mensajes WebSocket
+### 3.5 `simulation.py` — Mensajes WebSocket
 
 **Frontend → Backend (mensajes entrantes):**
 
@@ -238,15 +460,14 @@ manager.get_status(client_id)                         # → dict con runtime sta
 
 ---
 
-## 3. Firmware — Requisitos para lcgamboa
+## 4. Firmware — Requisitos para lcgamboa
 
-### 3.1 Versión de plataforma requerida
+### 4.1 Versión de plataforma requerida
 
 **✅ Usar: arduino-esp32 2.x (IDF 4.4.x)**
 **❌ No usar: arduino-esp32 3.x (IDF 5.x)**
 
 ```bash
-# Instalar/cambiar a 2.x:
 arduino-cli core install esp32:esp32@2.0.17
 ```
 
@@ -259,7 +480,7 @@ Cache disabled but cached memory region accessed
 EXCCAUSE: 0x00000007
 ```
 
-### 3.2 Imagen de flash
+### 4.2 Imagen de flash
 
 La imagen debe ser un archivo binario completo de **4 MB** (formato merged flash):
 
@@ -270,17 +491,18 @@ arduino-cli compile --fqbn esp32:esp32:esp32:FlashMode=dio \
 
 # Crear imagen 4MB completa (¡obligatorio! QEMU requiere 2/4/8/16 MB exactos):
 esptool --chip esp32 merge_bin \
-  --fill-flash-size 4MB \          # ← sin esto QEMU falla con "only 2,4,8,16 MB supported"
+  --fill-flash-size 4MB \
   -o firmware.merged.bin \
-  --flash_mode dio --flash_size 4MB \
-  0x1000  bootloader.bin \
-  0x8000  partitions.bin \
-  0x10000 app.bin
+  --flash_mode dio \
+  --flash_size 4MB \
+  0x1000  build/sketch.ino.bootloader.bin \
+  0x8000  build/sketch.ino.partitions.bin \
+  0x10000 build/sketch.ino.bin
 ```
 
 El backend (`arduino_cli.py`) fuerza `FlashMode=dio` automáticamente para todos los targets `esp32:*`.
 
-### 3.3 Sketch compatible con lcgamboa (ejemplo mínimo)
+### 4.3 Sketch compatible con lcgamboa (ejemplo mínimo IRAM-safe)
 
 Para sketches que necesiten máxima compatibilidad (sin Arduino framework):
 
@@ -320,7 +542,7 @@ void IRAM_ATTR loop() { ets_delay_us(1000000); }
 
 ---
 
-## 4. WiFi emulada
+## 5. WiFi emulada
 
 lcgamboa implementa una WiFi simulada con SSIDs hardcoded:
 
@@ -343,7 +565,7 @@ El ESP32 emulado puede:
 
 ---
 
-## 5. I2C emulado
+## 6. I2C emulado
 
 El callback I2C es **síncrono** — QEMU espera la respuesta antes de continuar:
 
@@ -359,7 +581,6 @@ El callback I2C es **síncrono** — QEMU espera la respuesta antes de continuar
 ```python
 # Configurar qué byte devuelve el ESP32 cuando lee la dirección 0x48:
 esp_lib_manager.set_i2c_response(client_id, addr=0x48, response_byte=75)
-# → analogRead equivalente: el firmware leerá 75 de ese registro
 ```
 
 Desde WebSocket:
@@ -369,7 +590,7 @@ Desde WebSocket:
 
 ---
 
-## 6. RMT / NeoPixel (WS2812)
+## 7. RMT / NeoPixel (WS2812)
 
 El evento RMT lleva un item de 32 bits codificado así:
 ```
@@ -392,17 +613,14 @@ El evento emitido al frontend:
   "type": "ws2812_update",
   "data": {
     "channel": 0,
-    "pixels": [
-      {"r": 255, "g": 0, "b": 0},
-      {"r": 0, "g": 255, "b": 0}
-    ]
+    "pixels": [[255, 0, 0], [0, 255, 0]]
   }
 }
 ```
 
 ---
 
-## 7. LEDC / PWM
+## 8. LEDC / PWM
 
 `qemu_picsimlab_get_internals(0)` retorna un puntero a un array de 16 `uint32_t` con el duty cycle de cada canal LEDC. Llamar periódicamente (cada ~50 ms):
 
@@ -415,38 +633,30 @@ El duty máximo típico es 8192 (timer de 13 bits). Para brillo de LED: `duty_pc
 
 ---
 
-## 8. Compilación de la DLL
+## 9. Compilación de la DLL
 
-### 8.1 Requisitos
-
-- **MSYS2** instalado en `C:\msys64`
-- Paquetes MINGW64: `gcc glib2 libgcrypt libslirp pixman ninja meson python git`
+### 9.1 Proceso completo (resumen)
 
 ```bash
-pacman -S mingw-w64-x86_64-{gcc,glib2,libgcrypt,libslirp,pixman,ninja,meson,python,git}
-```
-
-### 8.2 Proceso de build
-
-```bash
-# 1. Configurar (en MSYS2 MINGW64):
+# En MSYS2 MINGW64:
 cd wokwi-libs/qemu-lcgamboa
+
 ./configure \
   --target-list=xtensa-softmmu \
-  --disable-werror --enable-tcg \
-  --enable-gcrypt --enable-slirp \
-  --enable-iconv --without-default-features
+  --disable-werror \
+  --enable-tcg \
+  --enable-gcrypt \
+  --enable-slirp \
+  --enable-iconv \
+  --without-default-features
 
-# 2. Compilar el binario principal:
 ninja -j$(nproc) qemu-system-xtensa.exe
 
-# 3. Relinkar como DLL (script automatizado):
+# Desde bash normal (no MSYS2):
 bash build_qemu_step4.sh
-# → genera libqemu-xtensa.dll en build/
-# → la copia a backend/app/services/
 ```
 
-### 8.3 Detalle del relink como DLL
+### 9.2 Detalle del relink como DLL
 
 El proceso extrae el comando de link de `build.ninja`, elimina `softmmu_main.c.obj` (que contiene `main()`), y agrega flags de DLL:
 
@@ -458,7 +668,7 @@ cc -m64 -mcx16 -shared \
    @dll_link.rsp      # todos los .obj excepto softmmu_main
 ```
 
-### 8.4 Verificar exports
+### 9.3 Verificar exports
 
 ```bash
 objdump -p libqemu-xtensa.dll | grep -i "qemu_picsimlab\|qemu_init\|qemu_main"
@@ -474,7 +684,7 @@ objdump -p libqemu-xtensa.dll | grep -i "qemu_picsimlab\|qemu_init\|qemu_main"
 #   qemu_picsimlab_get_TIOCM
 ```
 
-### 8.5 Parche requerido en scripts/symlink-install-tree.py
+### 9.4 Parche requerido en scripts/symlink-install-tree.py
 
 Windows no permite crear symlinks sin privilegios de administrador. El script de QEMU falla con `WinError 1314`. Parche aplicado:
 
@@ -493,18 +703,16 @@ if os.name == 'nt':
 
 ---
 
-## 9. Tests
+## 10. Tests
+
+### 10.1 Test suite principal (28 tests)
 
 Archivo: `test/esp32/test_esp32_lib_bridge.py`
 
 ```bash
-# Ejecutar todos los tests:
-backend/venv/Scripts/python.exe -m pytest test/esp32/test_esp32_lib_bridge.py -v
-
+python -m pytest test/esp32/test_esp32_lib_bridge.py -v
 # Resultado esperado: 28 passed en ~13 segundos
 ```
-
-**Grupos de tests:**
 
 | Grupo | Tests | Qué verifica |
 |-------|-------|--------------|
@@ -514,12 +722,111 @@ backend/venv/Scripts/python.exe -m pytest test/esp32/test_esp32_lib_bridge.py -v
 | `TestManagerAvailability` | 2 | `is_available()`, API surface |
 | `TestEsp32LibIntegration` | 15 | QEMU real con firmware blink: boot, UART, GPIO, ADC, SPI, I2C |
 
-**Firmware de test:** `test/esp32-emulator/binaries_lcgamboa/blink_lcgamboa.ino.merged.bin`
-Compilado con arduino-esp32 2.0.17, DIO flash mode, imagen 4MB completa.
+### 10.2 Test integración Arduino ↔ ESP32 (13 tests)
+
+Archivo: `test/esp32/test_arduino_esp32_integration.py`
+
+Simula comunicación serial completa entre un Arduino Uno (emulado en Python) y el ESP32 (QEMU lcgamboa). El "Arduino" envía comandos `LED_ON`/`LED_OFF`/`PING` al ESP32 y verifica respuestas + cambios GPIO.
+
+```bash
+python -m pytest test/esp32/test_arduino_esp32_integration.py -v
+# Resultado esperado: 13 passed en ~30 segundos
+```
+
+| Test | Qué verifica |
+|------|-------------|
+| `test_01_esp32_boots_ready` | ESP32 arranca y envía "READY" por UART |
+| `test_02_ping_pong` | Arduino→"PING", ESP32→"PONG" |
+| `test_03_led_on_command` | LED_ON → GPIO2=HIGH + "OK:ON" |
+| `test_04_led_off_command` | LED_OFF → GPIO2=LOW + "OK:OFF" |
+| `test_05_toggle_five_times` | 5 ciclos ON/OFF → ≥10 transiciones GPIO2 |
+| `test_06_gpio_sequence` | Secuencia correcta: ON→OFF→ON→OFF |
+| `test_07_unknown_cmd_ignored` | Comando desconocido no crashea el ESP32 |
+| `test_08_rapid_commands` | 20 comandos en burst → todas las respuestas llegan |
+
+**Firmware de test:** `test/esp32-emulator/binaries_lcgamboa/serial_led.ino.merged.bin`
+Sketch fuente: `test/esp32-emulator/sketches/serial_led/serial_led.ino`
+
+### 10.3 Omitir tests de integración (solo unitarios)
+
+```bash
+SKIP_LIB_INTEGRATION=1 python -m pytest test/esp32/ -v
+```
+
+### 10.4 Recompilar el firmware de test
+
+Si necesitas recompilar los binarios de test:
+
+```bash
+# Blink (firmware IRAM-safe para test de GPIO):
+arduino-cli compile \
+  --fqbn esp32:esp32:esp32:FlashMode=dio \
+  --output-dir test/esp32-emulator/out_blink \
+  test/esp32-emulator/sketches/blink_lcgamboa
+
+esptool --chip esp32 merge_bin --fill-flash-size 4MB \
+  -o test/esp32-emulator/binaries_lcgamboa/blink_lcgamboa.ino.merged.bin \
+  --flash_mode dio --flash_size 4MB \
+  0x1000  test/esp32-emulator/out_blink/blink_lcgamboa.ino.bootloader.bin \
+  0x8000  test/esp32-emulator/out_blink/blink_lcgamboa.ino.partitions.bin \
+  0x10000 test/esp32-emulator/out_blink/blink_lcgamboa.ino.bin
+
+# Serial LED (firmware para test Arduino↔ESP32):
+arduino-cli compile \
+  --fqbn esp32:esp32:esp32:FlashMode=dio \
+  --output-dir test/esp32-emulator/out_serial_led \
+  test/esp32-emulator/sketches/serial_led
+
+esptool --chip esp32 merge_bin --fill-flash-size 4MB \
+  -o test/esp32-emulator/binaries_lcgamboa/serial_led.ino.merged.bin \
+  --flash_mode dio --flash_size 4MB \
+  0x1000  test/esp32-emulator/out_serial_led/serial_led.ino.bootloader.bin \
+  0x8000  test/esp32-emulator/out_serial_led/serial_led.ino.partitions.bin \
+  0x10000 test/esp32-emulator/out_serial_led/serial_led.ino.bin
+```
 
 ---
 
-## 10. Limitaciones conocidas (no solucionables sin modificar QEMU)
+## 11. Frontend — Eventos implementados
+
+Todos los eventos del backend están conectados al frontend:
+
+| Evento | Componente | Estado |
+|--------|-----------|--------|
+| `gpio_change` | `PinManager.triggerPinChange()` → LEDs/componentes conectados | ✅ Implementado |
+| `ledc_update` | `PinManager.updatePwm()` → brillo variable en `LED.tsx` | ✅ Implementado |
+| `ws2812_update` | `NeoPixel.tsx` — strip de LEDs RGB con canvas | ✅ Implementado |
+| `gpio_dir` | Callback `onPinDir` en `Esp32Bridge.ts` | ✅ Implementado |
+| `i2c_event` | Callback `onI2cEvent` en `Esp32Bridge.ts` | ✅ Implementado |
+| `spi_event` | Callback `onSpiEvent` en `Esp32Bridge.ts` | ✅ Implementado |
+| `system: crash` | Banner rojo en `SimulatorCanvas.tsx` con botón Dismiss | ✅ Implementado |
+| `system: reboot` | `onSystemEvent` en `Esp32Bridge.ts` | ✅ Implementado |
+
+**Métodos de envío disponibles en `Esp32Bridge` (frontend → backend):**
+```typescript
+bridge.sendSerialBytes(bytes, uart?)   // Enviar datos serial al ESP32
+bridge.sendPinEvent(gpioPin, state)    // Simular input externo en un GPIO
+bridge.setAdc(channel, millivolts)     // Setear voltaje ADC (0-3300 mV)
+bridge.setI2cResponse(addr, response)  // Respuesta de dispositivo I2C
+bridge.setSpiResponse(response)        // Byte MISO de dispositivo SPI
+```
+
+**Uso del componente NeoPixel:**
+```tsx
+// El id debe seguir el patrón ws2812-{boardId}-{channel}
+// para que el store pueda enviarle los pixels via CustomEvent
+<NeoPixel
+  id="ws2812-esp32-0"
+  count={8}
+  x={200}
+  y={300}
+  direction="horizontal"
+/>
+```
+
+---
+
+## 12. Limitaciones conocidas (no solucionables sin modificar QEMU)
 
 | Limitación | Causa | Workaround |
 |------------|-------|------------|
@@ -533,28 +840,23 @@ Compilado con arduino-esp32 2.0.17, DIO flash mode, imagen 4MB completa.
 
 ---
 
-## 11. Pendiente en el frontend
-
-Los eventos son emitidos por el backend pero el frontend aún no los consume:
-
-| Evento | Componente frontend a crear |
-|--------|-----------------------------|
-| `ws2812_update` | `NeoPixel.tsx` — strip de LEDs RGB |
-| `ledc_update` | Modificar `LED.tsx` para brillo variable |
-| `gpio_change` | Conectar al `PinManager` del ESP32 (análogo al AVR) |
-| `gpio_dir` | Mostrar dirección de pin en el inspector |
-| `i2c_event` | Sensores I2C simulados (SSD1306, BME280, etc.) |
-| `spi_event` | Displays SPI (ILI9341 ya implementado para AVR) |
-| `system: crash` | Notificación en la UI + botón de restart |
-| `system: reboot` | Indicador de reinicio en el canvas |
-
----
-
-## 12. Variables de entorno
+## 13. Variables de entorno
 
 | Variable | Valor | Efecto |
 |----------|-------|--------|
 | `QEMU_ESP32_LIB` | ruta a `libqemu-xtensa.dll` | Fuerza ruta de DLL (override auto-detect) |
 | `QEMU_ESP32_BINARY` | ruta a `qemu-system-xtensa.exe` | Fallback subprocess (sin DLL) |
+| `SKIP_LIB_INTEGRATION` | `1` | Omite tests de integración QEMU en pytest |
 
-Si `QEMU_ESP32_LIB` no está seteado, el sistema busca `libqemu-xtensa.dll` en la misma carpeta que `esp32_lib_bridge.py`.
+Si `QEMU_ESP32_LIB` no está seteado, el sistema busca `libqemu-xtensa.dll` en la misma carpeta que `esp32_lib_bridge.py` (`backend/app/services/`).
+
+**Ejemplo arranque completo:**
+```bash
+# Con DLL (emulación completa GPIO + WiFi + ADC + I2C + SPI + RMT + LEDC):
+cd backend && venv\Scripts\activate
+uvicorn app.main:app --reload --port 8001
+
+# Sin DLL (fallback: solo UART serial via subprocess QEMU):
+QEMU_ESP32_BINARY=C:/esp-qemu/qemu/bin/qemu-system-xtensa.exe \
+  uvicorn app.main:app --reload --port 8001
+```
