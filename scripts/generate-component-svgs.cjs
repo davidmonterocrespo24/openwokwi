@@ -464,8 +464,8 @@ const BOARD_COPIES = [
   ['wokwi-arduino-nano-board','arduino-nano.svg'],
   ['wokwi-arduino-mega',      'arduino-mega.svg'],
   ['wokwi-arduino-mega-board','arduino-mega.svg'],
-  ['wokwi-esp32-board', 'esp32-devkit-c-v4.svg'],
-  ['velxio-raspberry-pi-3', 'Raspberry_Pi_3.svg'],
+  ['wokwi-esp32-board',       'esp32-devkit-c-v4.svg'],
+  ['velxio-raspberry-pi-3',   'Raspberry_Pi_3.svg'],
 ];
 
 console.log('\n📋 Copying board SVGs from public/boards/...');

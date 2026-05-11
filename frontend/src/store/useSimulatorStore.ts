@@ -1049,6 +1049,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         bridge.onPinChange = (gpioPin, state) => {
           const boardPm = pinManagerMap.get(id);
           if (boardPm) boardPm.triggerPinChange(gpioPin, state, 'mcu');
+          getOscilloscopeCallback(id)(gpioPin, state, performance.now());
         };
         // Wire scope sampling for ESP32 (GPIO transitions + synthesized
         // UART TX bits).  Mirrors what AVR/RP2040 simulators get for free
@@ -1961,6 +1962,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         bridge.onPinChange = (gpioPin, state) => {
           const boardPm = pinManagerMap.get(boardId);
           if (boardPm) boardPm.triggerPinChange(gpioPin, state, 'mcu');
+          getOscilloscopeCallback(boardId)(gpioPin, state, performance.now());
         };
         bridge.onPinChangeWithTime = getOscilloscopeCallback(boardId);
         bridge.onCrash = () => {
@@ -2016,7 +2018,8 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
               const boards = s.boards.map((b) =>
                 b.id === boardId ? { ...b, serialBaudRate: baud } : b,
               );
-              return { boards, serialBaudRate: baud };
+              const isActive = s.activeBoardId === boardId;
+              return { boards, ...(isActive ? { serialBaudRate: baud } : {}) };
             }),
           getOscilloscopeCallback(boardId),
         );
@@ -2073,6 +2076,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         bridge.onPinChange = (gpioPin, state) => {
           const boardPm = pinManagerMap.get(boardId);
           if (boardPm) boardPm.triggerPinChange(gpioPin, state, 'mcu');
+          getOscilloscopeCallback(boardId)(gpioPin, state, performance.now());
         };
         bridge.onPinChangeWithTime = getOscilloscopeCallback(boardId);
         bridge.onCrash = () => {
@@ -2110,7 +2114,8 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
               const boards = s.boards.map((b) =>
                 b.id === boardId ? { ...b, serialBaudRate: baud } : b,
               );
-              return { boards, serialBaudRate: baud };
+              const isActive = s.activeBoardId === boardId;
+              return { boards, ...(isActive ? { serialBaudRate: baud } : {}) };
             }),
           getOscilloscopeCallback(boardId),
         );

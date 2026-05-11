@@ -47,8 +47,7 @@ export function ElectricalOverlay() {
       return {
         id: b.id,
         vcc: pg.vcc,
-        groundPinNames: pg.gnd,
-        vccPinNames: pg.vcc_pins,
+        pinTargets: pg.pinTargets,
         pins: {},
       };
     });

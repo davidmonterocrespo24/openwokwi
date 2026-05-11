@@ -36,7 +36,8 @@ function collectPinStates(
     if (w.end.componentId === boardId) pinNames.add(w.end.pinName);
   }
   for (const pinName of pinNames) {
-    if (group.gnd.includes(pinName) || group.vcc_pins.includes(pinName)) continue;
+    const target = group.pinTargets[pinName]?.toUpperCase() ?? '';
+    if (target === 'GND' || target.startsWith('POWER')) continue;
     const arduinoPin = /^\d+$/.test(pinName) ? parseInt(pinName, 10) : -1;
     if (arduinoPin < 0) continue;
     const pwmDuty = pm.getPwmValue(arduinoPin);

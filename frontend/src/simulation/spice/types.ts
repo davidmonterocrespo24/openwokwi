@@ -41,10 +41,8 @@ export interface BoardForSpice {
    *   type === 'input'   → no source stamped (pin is high-impedance)
    */
   pins: Record<string, PinSourceState>;
-  /** Names of pins that should be treated as ground (e.g., "GND", "GND.1"). */
-  groundPinNames?: string[];
-  /** Names of pins that should be treated as VCC rail. */
-  vccPinNames?: string[];
+  /** Map of pin name to semantic target (e.g., "GND", "power(3.3)", "GPIO12"). */
+  pinTargets: Record<string, string>;
 }
 
 export type PinSourceState =

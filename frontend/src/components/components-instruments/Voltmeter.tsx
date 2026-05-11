@@ -25,18 +25,18 @@ export function Voltmeter({ id }: VoltmeterProps) {
   const boards = useSimulatorStore((s) => s.boards);
 
   const reading = useMemo(() => {
-    const groundPins = boards.flatMap((b) =>
-      (BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default).gnd.map((pin) => ({
-        componentId: b.id,
-        pinName: pin,
-      })),
-    );
-    const vccPins = boards.flatMap((b) =>
-      (BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default).vcc_pins.map((pin) => ({
-        componentId: b.id,
-        pinName: pin,
-      })),
-    );
+    const groundPins = boards.flatMap((b) => {
+      const pg = BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default;
+      return Object.entries(pg.pinTargets)
+        .filter(([, target]) => target.toUpperCase() === 'GND')
+        .map(([pinName]) => ({ componentId: b.id, pinName }));
+    });
+    const vccPins = boards.flatMap((b) => {
+      const pg = BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default;
+      return Object.entries(pg.pinTargets)
+        .filter(([, target]) => target.toLowerCase().startsWith('power'))
+        .map(([pinName]) => ({ componentId: b.id, pinName }));
+    });
     const netLookup = buildPinNetLookup(wires, groundPins, vccPins);
     return readVoltmeter(
       { id, metadataId: 'instr-voltmeter', properties: {} },

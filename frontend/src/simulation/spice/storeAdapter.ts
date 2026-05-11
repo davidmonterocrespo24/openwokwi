@@ -187,8 +187,7 @@ export function buildInputFromStore(snap: StoreSnapshot): BuildNetlistInput {
       id: b.id,
       vcc: group.vcc,
       pins: b.pinStates,
-      groundPinNames: group.gnd,
-      vccPinNames: group.vcc_pins,
+      pinTargets: group.pinTargets,
     };
   });
 

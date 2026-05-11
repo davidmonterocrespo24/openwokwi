@@ -1,0 +1,584 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="18mm" height="24.61mm" version="1.1" role="graphics-document" viewBox="0 0 18 24.61" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:bx="https://boxy-svg.com">
+  <desc>Partial clone of "Adafruit QT Py ESP32-C3"
+
+This SVG was designet by GeekGarage</desc>
+  <title>Aiwin Robot ESP32-C3 SuperMini</title>
+  <defs>
+    <linearGradient id="color-0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0.993062, 0, 0, 0.99049, 2.125684, 0.104167)" bx:pinned="true">
+      <title>PCB</title>
+      <stop style="stop-color: rgb(0, 0, 0);"/>
+    </linearGradient>
+    <linearGradient id="color-1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(8.110618, 0, 0, 5.328476, 8.914738, -39.102264)" bx:pinned="true">
+      <title>Metal</title>
+      <stop style="stop-color: rgb(173, 173, 173);"/>
+    </linearGradient>
+    <linearGradient id="color-2" gradientUnits="userSpaceOnUse" gradientTransform="matrix(29.452265, 0, 0, 29.452265, 247.216838, -393.218042)" bx:pinned="true">
+      <title>Text</title>
+      <stop style="stop-color: rgb(225, 225, 225);"/>
+    </linearGradient>
+    <linearGradient id="color-3" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0.600919, -0.555252, 0.821469, 0.759041, -10.523318, 10.410967)" bx:pinned="true">
+      <title>BTN / IC Casing</title>
+      <stop style="stop-color: rgb(110, 107, 107);"/>
+    </linearGradient>
+    <linearGradient id="color-4" gradientUnits="userSpaceOnUse" gradientTransform="matrix(1.04563, 0, 0, 1, -1.783735, 0.120313)" bx:pinned="true">
+      <title>LED Casing</title>
+      <stop style="stop-color: rgb(255, 255, 255);"/>
+    </linearGradient>
+    <linearGradient id="color-5" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0.190615, 0, 0, 0.148214, 2.379644, 6.088616)" bx:pinned="true">
+      <title>Emitter Red</title>
+      <stop style="stop-color: rgb(225, 156, 156);"/>
+    </linearGradient>
+    <linearGradient id="color-9" gradientUnits="userSpaceOnUse">
+      <title>Emitter Blue</title>
+      <stop style="stop-color: rgb(156, 167, 225);"/>
+    </linearGradient>
+    <linearGradient id="color-6" gradientUnits="userSpaceOnUse" gradientTransform="matrix(1, 0, 0, 1, 0.336101, -0.000441)" bx:pinned="true">
+      <title>Emitter Pins</title>
+      <stop style="stop-color: rgb(145, 204, 125);"/>
+    </linearGradient>
+    <linearGradient id="color-7" gradientUnits="userSpaceOnUse" gradientTransform="matrix(7.322376, 0, 0, 2.965481, 75.716888, -5.94983)" bx:pinned="true">
+      <title>Solder Pads</title>
+      <stop style="stop-color: rgb(255, 223, 164);"/>
+    </linearGradient>
+    <linearGradient id="gradient-0" bx:pinned="true">
+      <stop offset="0.266" style="stop-color: rgb(173, 173, 173);"/>
+      <stop offset="0.516" style="stop-color: rgb(105, 103, 103);"/>
+      <stop offset="0.621" style="stop-color: rgb(110, 110, 110);"/>
+      <stop offset="0.869" style="stop-color: rgb(172, 172, 172);"/>
+    </linearGradient>
+    <linearGradient id="gradient-5">
+      <title>Socket</title>
+      <stop style="stop-color: rgb(173, 173, 173);" offset="0"/>
+      <stop style="stop-color: rgb(105, 103, 103);" offset="0.133"/>
+      <stop style="stop-color: rgb(110, 110, 110);" offset="0.859"/>
+      <stop style="stop-color: rgb(172, 172, 172);" offset="1"/>
+    </linearGradient>
+    <linearGradient id="color-8" gradientUnits="userSpaceOnUse" gradientTransform="matrix(1, 0, 0, 1, 0, 0)" bx:pinned="true">
+      <title>Antenna</title>
+      <stop style="stop-color: rgb(144, 44, 44);"/>
+    </linearGradient>
+    <linearGradient id="gradient-0-0" gradientUnits="userSpaceOnUse" x1="11.845" y1="22.32" x2="11.845" y2="23.72" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-1" gradientUnits="userSpaceOnUse" x1="5.691" y1="22.32" x2="5.691" y2="23.72" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-2" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000001, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-3" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-4" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000004, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-5" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-6" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-7" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-8" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000002)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-9" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-10" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000001, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-11" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-12" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000004, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-13" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-14" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-15" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-16" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000002)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-17" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-18" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000001, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-19" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-20" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000004, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-21" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-22" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-23" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-24" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000002)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-25" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-26" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000001, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-27" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-28" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000004, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-29" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-30" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-31" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-32" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000003, 0.000002)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-33" gradientUnits="userSpaceOnUse" x1="10.442" y1="12.546" x2="10.442" y2="12.877" gradientTransform="matrix(1, 0, 0, 1, 0.000002, 0)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-34" gradientUnits="userSpaceOnUse" x1="8.886" y1="9.722" x2="8.886" y2="10.142" gradientTransform="matrix(1, 0, 0, 1, -0.000002, 0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-35" gradientUnits="userSpaceOnUse" x1="8.886" y1="9.722" x2="8.886" y2="10.142" gradientTransform="matrix(1, 0, 0, 1, -0.000003, -0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-36" gradientUnits="userSpaceOnUse" x1="8.886" y1="9.722" x2="8.886" y2="10.142" gradientTransform="matrix(1, 0, 0, 1, -0.000003, -0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-37" gradientUnits="userSpaceOnUse" x1="8.886" y1="9.722" x2="8.886" y2="10.142" gradientTransform="matrix(1, 0, 0, 1, -0.000002, 0.000001)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-38" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-39" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" gradientTransform="matrix(1, 0, 0, 1, -6.471353, -6.831068)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-40" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" gradientTransform="matrix(1, 0, 0, 1, -0.112145, 10.942121)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-41" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" gradientTransform="matrix(1, 0, 0, 1, -6.357565, -17.579668)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-42" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" gradientTransform="matrix(1, 0, 0, 1, 1.789795, 10.942334)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-43" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" gradientTransform="matrix(1, 0, 0, 1, -8.258718, -17.580379)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-0-44" gradientUnits="userSpaceOnUse" x1="3.236" y1="2.11" x2="3.236" y2="2.513" gradientTransform="matrix(1, 0, 0, 1, 0.863067, 10.941895)" xlink:href="#gradient-0"/>
+    <linearGradient id="gradient-5-0" gradientUnits="userSpaceOnUse" x1="5.599" y1="5.582" x2="5.599" y2="14.628" xlink:href="#gradient-5"/>
+    <linearGradient id="gradient-5-1" gradientUnits="userSpaceOnUse" x1="5.599" y1="5.582" x2="5.599" y2="14.628" xlink:href="#gradient-5"/>
+    <bx:guide x="0" y="0" angle="0"/>
+    <bx:guide x="0" y="0" angle="90"/>
+    <bx:guide x="18.06" y="24.61" angle="90"/>
+    <bx:guide x="1.462" y="1.7" angle="180"/>
+    <bx:guide x="16.519" y="1.7" angle="180"/>
+    <bx:guide x="0" y="3.238" angle="90"/>
+    <bx:guide x="0" y="5.793" angle="90"/>
+    <bx:guide x="0" y="8.371" angle="90"/>
+    <bx:guide x="0" y="10.916" angle="90"/>
+    <bx:guide x="0" y="13.494" angle="90"/>
+    <bx:guide x="0" y="16.072" angle="90"/>
+    <bx:guide x="0" y="18.634" angle="90"/>
+    <bx:guide x="0" y="21.222" angle="90"/>
+    <bx:guide x="3.121" y="7.022" angle="0"/>
+    <bx:guide x="13.599" y="12.885" angle="0"/>
+  </defs>
+  <g style="" transform="matrix(1, 0, 0, 1, 0, 0.281368)">
+    <title>ESP32-C3 Super Mini</title>
+    <g transform="matrix(1.004103, 0, 0, 1.004103, -2.132715, -0.000359)" style="">
+      <title>PCB</title>
+      <path d="M 2.125 1.427 L 20.05 1.427 L 20.05 2.006 L 18.578 2.006 C 18.076 2.017 17.672 2.427 17.672 2.932 C 17.672 3.437 18.076 3.847 18.578 3.858 L 18.578 3.861 L 20.05 3.861 L 20.05 4.559 L 18.578 4.559 C 18.076 4.57 17.672 4.98 17.672 5.485 C 17.672 5.99 18.076 6.4 18.578 6.411 L 18.578 6.414 L 20.05 6.414 L 20.05 7.122 L 18.578 7.122 C 18.076 7.133 17.672 7.543 17.672 8.048 C 17.672 8.553 18.076 8.963 18.578 8.974 L 18.578 8.977 L 20.05 8.977 L 20.05 9.675 L 18.578 9.675 C 18.076 9.686 17.672 10.096 17.672 10.601 C 17.672 11.106 18.076 11.516 18.578 11.527 L 18.578 11.53 L 20.05 11.53 L 20.05 12.22 L 18.578 12.22 C 18.076 12.231 17.672 12.641 17.672 13.146 C 17.672 13.651 18.076 14.061 18.578 14.072 L 18.578 14.075 L 20.05 14.075 L 20.05 14.773 L 18.578 14.773 C 18.076 14.784 17.672 15.194 17.672 15.699 C 17.672 16.204 18.076 16.614 18.578 16.625 L 18.578 16.628 L 20.05 16.628 L 20.05 17.336 L 18.578 17.336 C 18.076 17.347 17.672 17.757 17.672 18.262 C 17.672 18.767 18.076 19.177 18.578 19.188 L 18.578 19.191 L 20.05 19.191 L 20.05 19.889 L 18.578 19.889 C 18.076 19.9 17.672 20.31 17.672 20.815 C 17.672 21.32 18.076 21.73 18.578 21.741 L 18.578 21.744 L 20.05 21.744 L 20.05 24.229 L 2.125 24.229 L 2.125 21.744 L 3.596 21.744 C 4.098 21.733 4.502 21.323 4.502 20.818 C 4.502 20.313 4.098 19.903 3.596 19.892 L 3.596 19.889 L 2.125 19.889 L 2.125 19.191 L 3.596 19.191 C 4.098 19.18 4.502 18.77 4.502 18.265 C 4.502 17.76 4.098 17.35 3.596 17.339 L 3.596 17.336 L 2.125 17.336 L 2.125 16.628 L 3.596 16.628 C 4.098 16.617 4.502 16.207 4.502 15.702 C 4.502 15.197 4.098 14.787 3.596 14.776 L 3.596 14.773 L 2.125 14.773 L 2.125 14.075 L 3.596 14.075 C 4.098 14.064 4.502 13.654 4.502 13.149 C 4.502 12.644 4.098 12.234 3.596 12.223 L 3.596 12.22 L 2.125 12.22 L 2.125 11.53 L 3.596 11.53 C 4.098 11.519 4.502 11.109 4.502 10.604 C 4.502 10.099 4.098 9.689 3.596 9.678 L 3.596 9.675 L 2.125 9.675 L 2.125 8.977 L 3.596 8.977 C 4.098 8.966 4.502 8.556 4.502 8.051 C 4.502 7.546 4.098 7.136 3.596 7.125 L 3.596 7.122 L 2.125 7.122 L 2.125 6.414 L 3.596 6.414 C 4.098 6.403 4.502 5.993 4.502 5.488 C 4.502 4.983 4.098 4.573 3.596 4.562 L 3.596 4.559 L 2.125 4.559 L 2.125 3.861 L 3.596 3.861 C 4.098 3.85 4.502 3.44 4.502 2.935 C 4.502 2.43 4.098 2.02 3.596 2.009 L 3.596 2.006 L 2.125 2.006 Z M 2.125 2.006 L 2.125 3.861 L 2.124 3.861 L 2.124 2.006 Z M 2.125 4.559 L 2.125 6.414 L 2.124 6.414 L 2.124 4.559 Z M 2.125 7.122 L 2.125 8.977 L 2.124 8.977 L 2.124 7.122 Z M 2.125 9.675 L 2.125 11.53 L 2.124 11.53 L 2.124 9.675 Z M 2.125 12.22 L 2.125 14.075 L 2.124 14.075 L 2.124 12.22 Z M 2.125 14.773 L 2.125 16.628 L 2.124 16.628 L 2.124 14.773 Z M 2.125 17.336 L 2.125 19.191 L 2.124 19.191 L 2.124 17.336 Z M 2.125 19.889 L 2.125 21.744 L 2.124 21.744 L 2.124 19.889 Z" style="fill: url('#color-0');">
+        <title>PCB</title>
+      </path>
+      <g style="">
+        <title>PCB Solder Pads</title>
+        <g style="">
+          <title>Pins</title>
+          <g style="">
+            <title>Left</title>
+            <path d="M 4.502 2.935 C 4.502 3.44 4.098 3.85 3.596 3.861 L 2.124 3.861 L 2.124 3.551 C 2.45 3.524 2.706 3.251 2.706 2.918 C 2.706 2.585 2.45 2.312 2.124 2.285 L 2.124 2.006 L 3.596 2.006 L 3.596 2.009 C 4.098 2.02 4.502 2.43 4.502 2.935 Z M 4.502 5.488 C 4.502 5.993 4.098 6.403 3.596 6.414 L 2.124 6.414 L 2.124 6.107 C 2.45 6.08 2.706 5.807 2.706 5.474 C 2.706 5.141 2.45 4.868 2.124 4.841 L 2.124 4.559 L 3.596 4.559 L 3.596 4.562 C 4.098 4.573 4.502 4.983 4.502 5.488 Z M 4.502 8.051 C 4.502 8.556 4.098 8.966 3.596 8.977 L 2.124 8.977 L 2.124 8.663 C 2.45 8.636 2.706 8.363 2.706 8.03 C 2.706 7.697 2.45 7.424 2.124 7.397 L 2.124 7.122 L 3.596 7.122 L 3.596 7.125 C 4.098 7.136 4.502 7.546 4.502 8.051 Z M 4.502 10.604 C 4.502 11.109 4.098 11.519 3.596 11.53 L 2.124 11.53 L 2.124 11.219 C 2.45 11.192 2.706 10.919 2.706 10.586 C 2.706 10.253 2.45 9.98 2.124 9.953 L 2.124 9.675 L 3.596 9.675 L 3.596 9.678 C 4.098 9.689 4.502 10.099 4.502 10.604 Z M 4.502 13.149 C 4.502 13.654 4.098 14.064 3.596 14.075 L 2.124 14.075 L 2.124 13.775 C 2.45 13.748 2.706 13.475 2.706 13.142 C 2.706 12.809 2.45 12.536 2.124 12.509 L 2.124 12.22 L 3.596 12.22 L 3.596 12.223 C 4.098 12.234 4.502 12.644 4.502 13.149 Z M 4.502 15.702 C 4.502 16.207 4.098 16.617 3.596 16.628 L 2.124 16.628 L 2.124 16.33 C 2.45 16.303 2.706 16.03 2.706 15.697 C 2.706 15.364 2.45 15.091 2.124 15.064 L 2.124 14.773 L 3.596 14.773 L 3.596 14.776 C 4.098 14.787 4.502 15.197 4.502 15.702 Z M 4.502 18.265 C 4.502 18.77 4.098 19.18 3.596 19.191 L 2.124 19.191 L 2.124 18.886 C 2.45 18.859 2.706 18.586 2.706 18.253 C 2.706 17.92 2.45 17.647 2.124 17.62 L 2.124 17.336 L 3.596 17.336 L 3.596 17.339 C 4.098 17.35 4.502 17.76 4.502 18.265 Z M 4.502 20.818 C 4.502 21.323 4.098 21.733 3.596 21.744 L 2.124 21.744 L 2.124 21.442 C 2.45 21.415 2.706 21.142 2.706 20.809 C 2.706 20.476 2.45 20.203 2.124 20.176 L 2.124 19.889 L 3.596 19.889 L 3.596 19.892 C 4.098 19.903 4.502 20.313 4.502 20.818 Z M 4.217 20.816 C 4.217 20.465 3.933 20.181 3.582 20.181 C 3.231 20.181 2.947 20.465 2.947 20.816 C 2.947 21.167 3.231 21.451 3.582 21.451 C 3.933 21.451 4.217 21.167 4.217 20.816 Z M 4.217 18.26 C 4.217 17.909 3.933 17.625 3.582 17.625 C 3.231 17.625 2.947 17.909 2.947 18.26 C 2.947 18.611 3.231 18.895 3.582 18.895 C 3.933 18.895 4.217 18.611 4.217 18.26 Z M 4.217 15.704 C 4.217 15.353 3.933 15.069 3.582 15.069 C 3.231 15.069 2.947 15.353 2.947 15.704 C 2.947 16.055 3.231 16.339 3.582 16.339 C 3.933 16.339 4.217 16.055 4.217 15.704 Z M 4.217 13.149 C 4.217 12.798 3.933 12.514 3.582 12.514 C 3.231 12.514 2.947 12.798 2.947 13.149 C 2.947 13.5 3.231 13.784 3.582 13.784 C 3.933 13.784 4.217 13.5 4.217 13.149 Z M 4.217 10.593 C 4.217 10.242 3.933 9.958 3.582 9.958 C 3.231 9.958 2.947 10.242 2.947 10.593 C 2.947 10.944 3.231 11.228 3.582 11.228 C 3.933 11.228 4.217 10.944 4.217 10.593 Z M 4.217 8.037 C 4.217 7.686 3.933 7.402 3.582 7.402 C 3.231 7.402 2.947 7.686 2.947 8.037 C 2.947 8.388 3.231 8.672 3.582 8.672 C 3.933 8.672 4.217 8.388 4.217 8.037 Z M 4.217 5.481 C 4.217 5.13 3.933 4.846 3.582 4.846 C 3.231 4.846 2.947 5.13 2.947 5.481 C 2.947 5.832 3.231 6.116 3.582 6.116 C 3.933 6.116 4.217 5.832 4.217 5.481 Z M 4.217 2.925 C 4.217 2.574 3.933 2.29 3.582 2.29 C 3.231 2.29 2.947 2.574 2.947 2.925 C 2.947 3.276 3.231 3.56 3.582 3.56 C 3.933 3.56 4.217 3.276 4.217 2.925 Z" style="fill: url('#color-7');"/>
+          </g>
+          <g style="transform-origin: 3.313px 11.875px;" transform="matrix(-1, 0, 0, -1, 15.548447, -0.000002)">
+            <title>Right</title>
+            <path d="M 4.502 2.935 C 4.502 3.44 4.098 3.85 3.596 3.861 L 2.124 3.861 L 2.124 3.575 C 2.462 3.561 2.732 3.283 2.732 2.941 C 2.732 2.599 2.462 2.321 2.124 2.307 L 2.124 2.006 L 3.596 2.006 L 3.596 2.009 C 4.098 2.02 4.502 2.43 4.502 2.935 Z M 4.502 5.488 C 4.502 5.993 4.098 6.403 3.596 6.414 L 2.124 6.414 L 2.124 6.131 C 2.462 6.117 2.732 5.839 2.732 5.497 C 2.732 5.155 2.462 4.877 2.124 4.863 L 2.124 4.559 L 3.596 4.559 L 3.596 4.562 C 4.098 4.573 4.502 4.983 4.502 5.488 Z M 4.502 8.051 C 4.502 8.556 4.098 8.966 3.596 8.977 L 2.124 8.977 L 2.124 8.687 C 2.462 8.673 2.732 8.395 2.732 8.053 C 2.732 7.711 2.462 7.433 2.124 7.419 L 2.124 7.122 L 3.596 7.122 L 3.596 7.125 C 4.098 7.136 4.502 7.546 4.502 8.051 Z M 4.502 10.604 C 4.502 11.109 4.098 11.519 3.596 11.53 L 2.124 11.53 L 2.124 11.243 C 2.462 11.229 2.732 10.951 2.732 10.609 C 2.732 10.267 2.462 9.989 2.124 9.975 L 2.124 9.675 L 3.596 9.675 L 3.596 9.678 C 4.098 9.689 4.502 10.099 4.502 10.604 Z M 4.502 13.149 C 4.502 13.654 4.098 14.064 3.596 14.075 L 2.124 14.075 L 2.124 13.799 C 2.462 13.785 2.732 13.507 2.732 13.165 C 2.732 12.823 2.462 12.545 2.124 12.531 L 2.124 12.22 L 3.596 12.22 L 3.596 12.223 C 4.098 12.234 4.502 12.644 4.502 13.149 Z M 4.502 15.702 C 4.502 16.207 4.098 16.617 3.596 16.628 L 2.124 16.628 L 2.124 16.355 C 2.462 16.341 2.732 16.063 2.732 15.721 C 2.732 15.379 2.462 15.101 2.124 15.087 L 2.124 14.773 L 3.596 14.773 L 3.596 14.776 C 4.098 14.787 4.502 15.197 4.502 15.702 Z M 4.502 18.265 C 4.502 18.77 4.098 19.18 3.596 19.191 L 2.124 19.191 L 2.124 18.91 C 2.462 18.896 2.732 18.618 2.732 18.276 C 2.732 17.934 2.462 17.656 2.124 17.642 L 2.124 17.336 L 3.596 17.336 L 3.596 17.339 C 4.098 17.35 4.502 17.76 4.502 18.265 Z M 4.502 20.818 C 4.502 21.323 4.098 21.733 3.596 21.744 L 2.124 21.744 L 2.124 21.466 C 2.462 21.452 2.732 21.174 2.732 20.832 C 2.732 20.49 2.462 20.212 2.124 20.198 L 2.124 19.889 L 3.596 19.889 L 3.596 19.892 C 4.098 19.903 4.502 20.313 4.502 20.818 Z M 2.958 20.832 C 2.958 21.183 3.242 21.467 3.593 21.467 C 3.943 21.467 4.228 21.183 4.228 20.832 C 4.228 20.481 3.943 20.197 3.593 20.197 C 3.242 20.197 2.958 20.481 2.958 20.832 Z M 2.958 18.276 C 2.958 18.627 3.242 18.911 3.593 18.911 C 3.943 18.911 4.228 18.627 4.228 18.276 C 4.228 17.925 3.943 17.641 3.593 17.641 C 3.242 17.641 2.958 17.925 2.958 18.276 Z M 2.958 15.721 C 2.958 16.072 3.242 16.356 3.593 16.356 C 3.943 16.356 4.228 16.072 4.228 15.721 C 4.228 15.37 3.943 15.086 3.593 15.086 C 3.242 15.086 2.958 15.37 2.958 15.721 Z M 2.958 13.165 C 2.958 13.516 3.242 13.8 3.593 13.8 C 3.943 13.8 4.228 13.516 4.228 13.165 C 4.228 12.814 3.943 12.53 3.593 12.53 C 3.242 12.53 2.958 12.814 2.958 13.165 Z M 2.958 10.609 C 2.958 10.96 3.242 11.244 3.593 11.244 C 3.943 11.244 4.228 10.96 4.228 10.609 C 4.228 10.258 3.943 9.974 3.593 9.974 C 3.242 9.974 2.958 10.258 2.958 10.609 Z M 2.958 8.053 C 2.958 8.404 3.242 8.688 3.593 8.688 C 3.943 8.688 4.228 8.404 4.228 8.053 C 4.228 7.702 3.943 7.418 3.593 7.418 C 3.242 7.418 2.958 7.702 2.958 8.053 Z M 2.958 5.497 C 2.958 5.848 3.242 6.132 3.593 6.132 C 3.943 6.132 4.228 5.848 4.228 5.497 C 4.228 5.146 3.943 4.862 3.593 4.862 C 3.242 4.862 2.958 5.146 2.958 5.497 Z M 2.958 2.941 C 2.958 3.292 3.242 3.576 3.593 3.576 C 3.943 3.576 4.228 3.292 4.228 2.941 C 4.228 2.59 3.943 2.306 3.593 2.306 C 3.242 2.306 2.958 2.59 2.958 2.941 Z" style="fill: url('#color-7');"/>
+          </g>
+        </g>
+        <g style="">
+          <title>Antenna</title>
+          <rect x="7.301" y="21.982" width="1.327" height="2.101" style="stroke-width: 0.1px; stroke: url('#color-4'); fill: url('#color-7'); pointer-events: none;">
+            <title>Left Solder Pad</title>
+          </rect>
+          <rect x="12.973" y="21.982" width="1.327" height="2.101" style="stroke-width: 0.1px; stroke: url('#color-4'); fill: url('#color-7'); pointer-events: none;">
+            <title>Right Solder Pad</title>
+          </rect>
+        </g>
+        <g style="">
+          <title>Crystal</title>
+          <rect x="5.169" y="17.728" width="1.089" height="0.783" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.1px; stroke-linejoin: round;">
+            <title>Left Top</title>
+          </rect>
+          <rect x="7.44" y="17.728" width="1.089" height="0.783" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.1px; stroke-linejoin: round;">
+            <title>Right Top</title>
+          </rect>
+          <rect x="5.169" y="19.339" width="1.089" height="0.783" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.1px; stroke-linejoin: round;">
+            <title>Left Bottom</title>
+          </rect>
+          <rect x="7.44" y="19.339" width="1.089" height="0.783" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.1px; stroke-linejoin: round;">
+            <title>Right Bottom</title>
+          </rect>
+        </g>
+        <g style="">
+          <title>IC ESP32-C3</title>
+          <g style="pointer-events: none;">
+            <title>Top Right</title>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.763672, -1.675198)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.408595, -1.314948)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.08043, -0.957613)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.265966, -0.611216)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.619655, -0.268468)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.984281, 0.088869)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.341616, 0.446202)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.684366, 0.774368)"/>
+          </g>
+          <g transform="matrix(0, 1, -1, 0, -3.68114, 0.007134)" style="transform-origin: 13.7267px 14.0263px; pointer-events: none;">
+            <title>Top Left</title>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.763672, -1.675198)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.408595, -1.314948)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.08043, -0.957613)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.265966, -0.611216)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.619655, -0.268468)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.984281, 0.088869)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.341616, 0.446202)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.684366, 0.774368)"/>
+          </g>
+          <g transform="matrix(-1, 0, 0, -1, 23.692581, 31.819611)" style="pointer-events: none;">
+            <title>Bottom Left</title>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.763672, -1.675198)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.408595, -1.314948)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.08043, -0.957613)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.265966, -0.611216)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.619655, -0.268468)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.984281, 0.088869)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.341616, 0.446202)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.684366, 0.774368)"/>
+          </g>
+          <g transform="matrix(0, -1, 1, 0, -0.011217, 3.710247)" style="transform-origin: 13.727px 14.026px; pointer-events: none;">
+            <title>Bottom Right</title>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.763672, -1.675198)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.408595, -1.314948)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -0.08043, -0.957613)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.265966, -0.611216)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.619655, -0.268468)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 0.984281, 0.088869)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.341616, 0.446202)"/>
+            <rect x="13.061" y="14.304" width="0.411" height="0.345" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-width: 0.025px; transform-origin: 13.267px 14.477px;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, 1.684366, 0.774368)"/>
+          </g>
+        </g>
+        <g style="">
+          <title>SOT23-5</title>
+          <rect x="4.803" y="12.565" width="0.693" height="1.096" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Left Top</title>
+          </rect>
+          <rect x="5.737" y="12.565" width="0.693" height="1.096" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Middel Top</title>
+          </rect>
+          <rect x="6.673" y="12.565" width="0.693" height="1.096" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Right Top</title>
+          </rect>
+          <rect x="4.803" y="14.721" width="0.693" height="1.096" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Bottom Left</title>
+          </rect>
+          <rect x="5.98" y="14.721" width="1.386" height="1.096" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Bottom Right</title>
+          </rect>
+        </g>
+        <g style="">
+          <title>SOD-323</title>
+          <rect x="4.745" y="1.802" width="1.02" height="1.032" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Top</title>
+          </rect>
+          <rect x="4.745" y="4.301" width="1.02" height="0.801" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>Bottom</title>
+          </rect>
+        </g>
+        <g style="">
+          <title>USB-C</title>
+          <g>
+            <title>GND</title>
+            <rect x="6.168" y="2.033" width="1.02" height="1.449" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Top Left GND</title>
+            </rect>
+            <rect x="15.005" y="2.033" width="1.02" height="1.449" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Top Right GND</title>
+            </rect>
+            <rect x="6.168" y="5.818" width="1.333" height="2.098" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Bottom Left GND</title>
+            </rect>
+            <rect x="14.692" y="5.818" width="1.333" height="2.098" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Bottom Right GND</title>
+            </rect>
+          </g>
+          <g>
+            <title>Data</title>
+            <g>
+              <title>Left PWR</title>
+              <rect x="7.606" y="7.267" width="0.655" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+                <title>1</title>
+              </rect>
+              <rect x="8.354" y="7.267" width="0.655" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+                <title>2</title>
+              </rect>
+            </g>
+            <g transform="matrix(1, 0, 0, 1, 5.586016, 0)">
+              <title>Right PWR</title>
+              <rect x="7.606" y="7.267" width="0.655" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+                <title>1</title>
+              </rect>
+              <rect x="8.354" y="7.267" width="0.655" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+                <title>2</title>
+              </rect>
+            </g>
+            <rect x="9.152" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="9.648" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="10.143" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="10.639" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="11.136" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="11.632" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="12.127" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+            <rect x="12.623" y="7.267" width="0.434" height="1.282" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+              <title>Data</title>
+            </rect>
+          </g>
+        </g>
+        <g style="transform-origin: 15.658px 12.534px;" transform="matrix(0, -1, 1, 0, -10.413752, -5.832143)">
+          <title>PWR LED</title>
+          <rect x="14.819" y="12.168" width="0.65" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>GND</title>
+          </rect>
+          <rect x="15.847" y="12.168" width="0.65" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>PWR</title>
+          </rect>
+        </g>
+        <g style="transform-origin: 15.658px 12.534px;" transform="matrix(1, 0, 0, 1, 0.015608, 0.002561)">
+          <title>IO8 LED</title>
+          <rect x="14.819" y="12.168" width="0.65" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>GND</title>
+          </rect>
+          <rect x="15.847" y="12.168" width="0.65" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;">
+            <title>PWR</title>
+          </rect>
+        </g>
+        <g style="">
+          <title>Buttons</title>
+          <g transform="matrix(1, 0, 0, 1, -0.014202, 0)">
+            <title>Left</title>
+            <rect x="11.272" y="13.157" width="1.772" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;" transform="matrix(0, -1, 1, 0, -7.289752, 22.359858)">
+              <title>Digital Pin In</title>
+            </rect>
+            <rect x="11.272" y="17.526" width="1.772" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;" transform="matrix(0, -1, 1, 0, -7.289752, 22.359858)">
+              <title>Digital Pin Out</title>
+            </rect>
+          </g>
+          <g transform="matrix(1, 0, 0, 1, 5.408988, 0)">
+            <title>Right</title>
+            <rect x="11.272" y="13.157" width="1.772" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;" transform="matrix(0, -1, 1, 0, -7.289752, 22.359858)">
+              <title>Digital Pin In</title>
+            </rect>
+            <rect x="11.272" y="17.526" width="1.772" height="0.732" style="fill: url('#color-7'); stroke: rgb(255, 255, 255); stroke-linejoin: round; stroke-width: 0.05px;" transform="matrix(0, -1, 1, 0, -7.289752, 22.359858)">
+              <title>Digital Pin Out</title>
+            </rect>
+          </g>
+        </g>
+      </g>
+      <g style="">
+        <title>Text</title>
+        <text style="fill: url('#color-2'); font-size: 1.2px; font-weight: 700; white-space: pre; transform-origin: 3.199px 22.294px;" x="2.432" y="22.695"><title>21</title>21</text>
+        <text style="fill: url('#color-2'); font-size: 1.2px; font-weight: 700; white-space: pre; transform-origin: 19.758px 22.256px;" x="18.991" y="22.657"><title>0</title>0</text>
+        <text style="fill: url('#color-2'); font-size: 1.2px; font-weight: 700; white-space: pre; transform-origin: 16.906px 3.098px;" x="16.139" y="3.499"><title>5V</title>5V</text>
+        <text style="fill: url('#color-2'); font-size: 1.2px; font-weight: 700; white-space: pre; transform-origin: 17.183px 5.618px;" x="16.416" y="6.019"><title>G</title>G</text>
+        <text style="fill: url('#color-2'); font-size: 1.2px; font-weight: 700; white-space: pre; transform-origin: 16.792px 8.148px;" x="16.025" y="8.549"><title>3.3</title>3.3</text>
+        <text style="fill: url('#color-2'); font-size: 0.9px; font-weight: 700; white-space: pre; transform-origin: 12.742px 7.691px;" x="12.168" y="7.991" transform="matrix(0, -1, 1, 0, 4.408222, 2.860641)"><title>RST</title>RST</text>
+        <text style="fill: url('#color-2'); font-size: 0.9px; font-weight: 700; white-space: pre; transform-origin: 12.742px 7.691px;" x="12.168" y="7.991" transform="matrix(0, -1, 1, 0, -7.567893, 3.264766)"><title>BOOT</title>BOOT</text>
+        <text style="fill: url('#color-2'); font-size: 0.7px; font-weight: 700; white-space: pre; transform-origin: 5.107px 7.964px;" x="4.526" y="8.269"><title>PWR</title>PWR</text>
+        <text style="fill: url('#color-2'); font-size: 0.7px; font-weight: 700; white-space: pre; transform-origin: 15.397px 13.325px;" x="14.816" y="13.63" transform="matrix(1.081395, 0, 0, 1.081395, 0.320116, -0.00972)"><title>IO8</title>IO8<tspan x="14.815999984741211" dy="1em">​</tspan></text>
+        <rect x="19.587" y="19.311" width="0.543" height="0.551" style="fill: url('#color-2'); transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0.707107, -0.707107, 0.707107, 0.707107, -4.720115, -3.69247)">
+          <title>ESP32 IC Corner Marking</title>
+        </rect>
+      </g>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>IC ESP32-C3</title>
+      <g style="">
+        <title>Pins</title>
+        <g>
+          <title>Top Right</title>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-2'); transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.034878, 0.117721)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-3'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.387771, 0.463235)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-4'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.741649, 0.806849)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-5'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.09473, 1.151843)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-6'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.435681, 1.510313)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-7'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.799542, 1.84722)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-8'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.144535, 2.208385)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="fill: url('#gradient-0-9'); transform-origin: 10.442px 12.712px;" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.490877, 2.570899)"/>
+        </g>
+        <g transform="matrix(0, -1, 1, 0, -3.655388, -0.001764)" style="transform-origin: 11.7046px 14.0557px;">
+          <title>Top Left</title>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-box: fill-box; transform-origin: 50% 50%; fill: url('#gradient-0-10');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.034878, 0.117721)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-11');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.387771, 0.463235)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-12');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.741649, 0.806849)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-13');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.09473, 1.151843)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-14');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.435681, 1.510313)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-15');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.799542, 1.84722)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-16');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.144535, 2.208385)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-17');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.490877, 2.570899)"/>
+        </g>
+        <g transform="matrix(-1, 0, 0, -1, 19.687658, 31.826273)">
+          <title>Top Right</title>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-box: fill-box; transform-origin: 50% 50%; fill: url('#gradient-0-18');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.034878, 0.117721)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-19');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.387771, 0.463235)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-20');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.741649, 0.806849)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-21');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.09473, 1.151843)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-22');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.435681, 1.510313)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-23');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.799542, 1.84722)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-24');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.144535, 2.208385)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-25');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.490877, 2.570899)"/>
+        </g>
+        <g transform="matrix(0, 1, -1, 0, 0.001099, 3.667635)" style="transform-origin: 11.705px 14.056px;">
+          <title>Top Left</title>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-box: fill-box; transform-origin: 50% 50%; fill: url('#gradient-0-26');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.034878, 0.117721)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-27');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.387771, 0.463235)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-28');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 0.741649, 0.806849)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-29');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.09473, 1.151843)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-30');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.435681, 1.510313)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-31');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 1.799542, 1.84722)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-32');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.144535, 2.208385)"/>
+          <rect x="10.324" y="12.546" width="0.235" height="0.331" style="transform-origin: 10.442px 12.712px; fill: url('#gradient-0-33');" transform="matrix(0.707107, 0.707107, -0.707107, 0.707107, 2.490877, 2.570899)"/>
+        </g>
+      </g>
+      <path d="M 6.269 15.957 L 9.877 12.35 L 13.259 15.732 L 13.259 16.06 L 9.816 19.503 L 6.269 15.957 Z" style="fill: url('#color-3'); stroke: url('#color-3'); stroke-linejoin: round; stroke-width: 0px;">
+        <title>Casing</title>
+      </path>
+      <text style="fill: url('#color-2'); font-size: 0.1px; transform-box: fill-box; transform-origin: 0.258461px 0.0559894px; white-space: pre;" transform="matrix(4.471112, -4.471112, 4.471112, 4.471112, -0.837881, 1.647207)"><title>QFN32 5x5</title><tspan x="10.398" y="14.384">QFN32 5x5</tspan><tspan x="10.398" dy="1em">​</tspan></text>
+      <ellipse style="fill: url('#color-2');" cx="9.814" cy="18.773" rx="0.253" ry="0.253">
+        <title>Circle Marking on IC</title>
+      </ellipse>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>USB-C</title>
+      <rect x="1.886" width="7.426" height="9.046" style="stroke-width: 0.5px; stroke-linejoin: round; fill-rule: nonzero; transform-box: fill-box; transform-origin: 50% 50%; fill: url('#gradient-5-0'); stroke: url('#gradient-5-1');" y="5.582" transform="matrix(0, 1, -1, 0, 3.490573, -6.391641)">
+        <title>Socket</title>
+      </rect>
+      <g style="">
+        <title>Data Pins</title>
+        <g style="">
+          <title>PWR</title>
+          <rect x="5.703" y="7.674" width="0.374" height="0.307" style="fill: rgb(253, 216, 100);"/>
+          <rect x="6.511" y="7.674" width="0.374" height="0.307" style="fill: rgb(253, 216, 100);"/>
+          <rect x="11.345" y="7.674" width="0.374" height="0.307" style="fill: rgb(253, 216, 100);"/>
+          <rect x="12.114" y="7.674" width="0.374" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        </g>
+        <rect x="7.28" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="7.767" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="8.259" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="8.761" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="9.258" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="9.735" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="10.258" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+        <rect x="10.725" y="7.674" width="0.21" height="0.307" style="fill: rgb(253, 216, 100);"/>
+      </g>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>SOD-323</title>
+      <g style="">
+        <title>Legs</title>
+        <rect x="3.042" y="2.11" width="0.387" height="0.403" style="fill: url('#gradient-0-38');">
+          <title>Top Leg</title>
+        </rect>
+        <rect x="-3.429" y="-4.721" width="0.387" height="0.403" style="fill: url('#gradient-0-39'); transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(-1, 0, 0, -1, 6.471, 9.039)">
+          <title>Bottom Leg</title>
+        </rect>
+      </g>
+      <rect x="2.63" y="2.513" width="1.212" height="1.805" style="fill: url('#color-3');">
+        <title>Case</title>
+      </rect>
+      <g style="">
+        <title>Text</title>
+        <text style="fill: url('#color-2'); font-size: 0.2px; transform-box: fill-box; transform-origin: 50% 50%; white-space: pre;" transform="matrix(0, -1, 1, 0, -8.060798, -25.584431)" x="10.904" y="28.824">SOD-323</text>
+        <rect x="2.63" y="3.748" width="1.212" height="0.057" style="fill: url('#color-2');">
+          <title>Marking Top</title>
+        </rect>
+        <rect x="2.63" y="3.851" width="1.212" height="0.057" style="fill: url('#color-2');">
+          <title>Marking Middle</title>
+        </rect>
+        <rect x="2.63" y="3.953" width="1.212" height="0.057" style="fill: url('#color-2');">
+          <title>Marking Bottom</title>
+        </rect>
+      </g>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>PWR LED</title>
+      <rect x="2.975" y="6.242" width="0.517" height="0.958" style="fill: url('#color-4');">
+        <title>Case</title>
+      </rect>
+      <rect x="3.104" y="6.471" width="0.249" height="0.482" style="fill: url('#color-5');">
+        <title>Emitter</title>
+      </rect>
+      <rect x="3.017" y="7.032" width="0.095" height="0.142" style="fill: url('#color-6');">
+        <title>Emitter Pin  1</title>
+      </rect>
+      <rect x="3.353" y="7.032" width="0.095" height="0.142" style="fill: url('#color-6');">
+        <title>Emitter Pin  2</title>
+      </rect>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>Buttons</title>
+      <g style="">
+        <title>BOOT Button</title>
+        <rect x="8.405" y="9.722" width="0.962" height="0.42" style="fill: url('#gradient-0-35'); transform-origin: 8.886px 9.932px;" transform="matrix(0, 1, -1, 0, -4.692935, 0.276384)">
+          <title>Left Leg</title>
+        </rect>
+        <rect x="8.405" y="9.722" width="0.962" height="0.42" style="fill: url('#gradient-0-34'); transform-box: fill-box; transform-origin: 50% 50%;" transform="matrix(0, -1, 1, 0, -0.281504, 0.276383)">
+          <title>Right Leg</title>
+        </rect>
+        <rect x="4.567" y="8.844" width="3.664" height="2.729" style="stroke-linejoin: round; stroke-width: 0.35px; fill: url('#color-1'); stroke: rgb(165, 165, 165);">
+          <title>Case</title>
+        </rect>
+        <ellipse style="fill: url('#color-3'); stroke-width: 0.1px; stroke: rgb(89, 86, 86);" cx="6.414" cy="10.163" rx="0.687" ry="0.687">
+          <title>Button</title>
+        </ellipse>
+      </g>
+      <g transform="matrix(1, 0, 0, 1, 5.448209, 0)" style="">
+        <title>RST Button</title>
+        <rect x="8.405" y="9.722" width="0.962" height="0.42" style="transform-origin: 8.886px 9.932px; fill: url('#gradient-0-36');" transform="matrix(0, 1, -1, 0, -4.692935, 0.276384)">
+          <title>Left Leg</title>
+        </rect>
+        <rect x="8.405" y="9.722" width="0.962" height="0.42" style="transform-box: fill-box; transform-origin: 50% 50%; fill: url('#gradient-0-37');" transform="matrix(0, -1, 1, 0, -0.281504, 0.276383)">
+          <title>Right Leg</title>
+        </rect>
+        <rect x="4.567" y="8.844" width="3.664" height="2.729" style="stroke-linejoin: round; stroke-width: 0.35px; fill: url('#color-1'); stroke: rgb(165, 165, 165);">
+          <title>Case</title>
+        </rect>
+        <ellipse style="fill: url('#color-3'); stroke-width: 0.1px; stroke: rgb(89, 86, 86);" cx="6.414" cy="10.163" rx="0.687" ry="0.687">
+          <title>Button</title>
+        </ellipse>
+      </g>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>SOT23-5</title>
+      <g style="">
+        <title>Legs</title>
+        <rect x="2.929" y="13.052" width="0.387" height="0.403" style="fill: url('#gradient-0-40');">
+          <title>Top Leg 1</title>
+        </rect>
+        <rect x="3.904" y="13.052" width="0.387" height="0.403" style="fill: url('#gradient-0-44');">
+          <title>Top Leg 2</title>
+        </rect>
+        <rect x="4.83" y="13.052" width="0.387" height="0.403" style="fill: url('#gradient-0-42');">
+          <title>Top Leg 3</title>
+        </rect>
+        <rect x="-3.316" y="-15.469" width="0.387" height="0.403" style="fill: url('#gradient-0-41'); transform-origin: -3.122px -15.267px;" transform="matrix(-1, 0, 0, -1, 6.244, 30.533503)">
+          <title>Bottom Leg 1</title>
+        </rect>
+        <rect x="-5.218" y="-15.469" width="0.387" height="0.403" style="fill: url('#gradient-0-43'); transform-origin: -5.024px -15.267px;" transform="matrix(-1, 0, 0, -1, 10.048786, 30.533003)">
+          <title>Bottom Leg 2</title>
+        </rect>
+      </g>
+      <rect x="2.622" y="13.5" width="2.88" height="1.514" style="fill: url('#color-3'); stroke-linejoin: round; stroke: url('#color-3'); stroke-width: 0.1px;">
+        <title>Casing</title>
+      </rect>
+      <text style="fill: url('#color-2'); font-size: 0.5px; transform-box: fill-box; transform-origin: 50% 50%; white-space: pre;" x="-5.104" y="-14.118" transform="matrix(-1, 0, 0, -1, 8.179505, 28.583115)"><title>SOT23-5</title>SOT23-5</text>
+      <circle cx="5.034" cy="13.749" r="0.133" style="fill: url('#color-2');">
+        <title>Marking Dot</title>
+      </circle>
+    </g>
+    <g transform="matrix(0, 1.004103, -1.004103, 0, 10.366454, 5.891338)" style="transform-origin: 3.2335px 6.721px;">
+      <title>IO8 LED</title>
+      <rect x="2.975" y="6.242" width="0.517" height="0.958" style="fill: url('#color-4');">
+        <title>Case</title>
+      </rect>
+      <rect x="3.104" y="6.471" width="0.249" height="0.482" style="fill: url('#color-9');">
+        <title>Emitter</title>
+      </rect>
+      <rect x="3.017" y="7.032" width="0.095" height="0.142" style="fill: url('#color-6');">
+        <title>Emitter Pin  1</title>
+      </rect>
+      <rect x="3.353" y="7.032" width="0.095" height="0.142" style="fill: url('#color-6');">
+        <title>Emitter Pin  1</title>
+      </rect>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>Crystal</title>
+      <rect x="3.387" y="17.976" width="2.882" height="1.818" style="stroke-width: 0.1px; stroke-linejoin: round; fill: url('#color-1'); stroke: rgb(255, 212, 84);">
+        <title>Crystal</title>
+      </rect>
+    </g>
+    <g style="" transform="matrix(1.004103, 0, 0, 1.004103, -0.124509, -0.000359)">
+      <title>Antenna</title>
+      <rect x="5.482" y="22.32" width="0.418" height="1.4" style="fill: url('#gradient-0-1');">
+        <title>Left Leg</title>
+      </rect>
+      <rect x="11.603" y="22.32" width="0.485" height="1.4" style="fill: url('#gradient-0-0');">
+        <title>Right Leg</title>
+      </rect>
+      <path id="path-1" d="M 5.953 22.031 L 11.553 22.031 L 11.553 24.031 L 5.953 24.031 L 5.953 22.031 Z" style="stroke-miterlimit: 4; stroke-dasharray: none; stroke-linecap: square; fill-opacity: 1; fill-rule: evenodd; stroke-width: 0.1px; fill: url('#color-8'); stroke: rgb(129, 38, 38);">
+        <title>Antenna</title>
+      </path>
+      <rect x="10.569" y="22.144" width="0.73" height="1.787" style="fill: url('#color-4'); fill-opacity: 0.76;">
+        <title>White Square Marker</title>
+      </rect>
+      <text style="fill: url('#color-2'); font-size: 1.2px; font-weight: 700; transform-box: fill-box; transform-origin: 0.766964px 0.676008px; white-space: pre;" transform="matrix(-1, 0, 0, -1, 17.257778, 45.982661)" x="-9.396" y="-22.582"><title>C3</title>C3</text>
+    </g>
+  </g>
+</svg>

@@ -90,11 +90,13 @@ export function buildNetlist(input: BuildNetlistInput): BuildNetlistResult {
 
   // ── 2. Canonicalize ground / VCC pins ────────────────────────────────────
   for (const board of boards) {
-    for (const pinName of board.groundPinNames ?? []) {
-      uf.setCanonical(pinKey(board.id, pinName), '0');
-    }
-    for (const pinName of board.vccPinNames ?? []) {
-      uf.setCanonical(pinKey(board.id, pinName), 'vcc_rail');
+    for (const [pinName, target] of Object.entries(board.pinTargets)) {
+      const key = pinKey(board.id, pinName);
+      if (target.toUpperCase() === 'GND') {
+        uf.setCanonical(key, '0');
+      } else if (target.toLowerCase().startsWith('power')) {
+        uf.setCanonical(key, 'vcc_rail');
+      }
     }
     // Fallback: any board pin a wire references whose name looks like a
     // ground pin (GND, GND.1, GND.9, etc.) is canonicalized to "0" even if
@@ -403,8 +405,11 @@ export function buildWireNetMap(
   }
 
   for (const board of boards) {
-    for (const pName of board.groundPinNames ?? []) uf.setCanonical(pin(board.id, pName), '0');
-    for (const pName of board.vccPinNames ?? []) uf.setCanonical(pin(board.id, pName), 'vcc_rail');
+    for (const [pName, target] of Object.entries(board.pinTargets)) {
+      const k = pin(board.id, pName);
+      if (target.toUpperCase() === 'GND') uf.setCanonical(k, '0');
+      else if (target.toLowerCase().startsWith('power')) uf.setCanonical(k, 'vcc_rail');
+    }
   }
   for (const comp of components) {
     if (comp.metadataId.startsWith('instr-')) continue;
@@ -451,15 +456,14 @@ export function buildBoardPinNetMap(
 
   // Canonicalize board ground/vcc pins (from boardPinGroups metadata)
   for (const board of boards) {
-    for (const pName of board.groundPinNames ?? []) {
-      const k = pin(board.id, pName);
-      uf.add(k);
-      uf.setCanonical(k, '0');
-    }
-    for (const pName of board.vccPinNames ?? []) {
-      const k = pin(board.id, pName);
-      uf.add(k);
-      uf.setCanonical(k, 'vcc_rail');
+    for (const [pName, target] of Object.entries(board.pinTargets)) {
+      const isGnd = target.toUpperCase() === 'GND';
+      const isVcc = target.toLowerCase().startsWith('power');
+      if (isGnd || isVcc) {
+        const k = pin(board.id, pName);
+        uf.add(k);
+        uf.setCanonical(k, isGnd ? '0' : 'vcc_rail');
+      }
     }
   }
   // Canonicalize non-board component GND/VCC pins referenced by wires
@@ -476,12 +480,11 @@ export function buildBoardPinNetMap(
   const result = new Map<string, string>();
 
   // For each board, collect ALL pins that appear in wires (via wire endpoints)
-  // plus the explicit groundPinNames/vccPinNames/pins lists.
+  // plus the explicit pinTargets/pins lists.
   for (const board of boards) {
     const wireReferencedPins = pinsReferencedByWires(board.id, wires);
     const allPins = new Set([
-      ...(board.groundPinNames ?? []),
-      ...(board.vccPinNames ?? []),
+      ...Object.keys(board.pinTargets ?? {}),
       ...Object.keys(board.pins ?? {}),
       ...wireReferencedPins, // ← the pins that actually exist in the UF
     ]);

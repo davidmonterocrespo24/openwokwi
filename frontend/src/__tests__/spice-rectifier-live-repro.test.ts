@@ -121,8 +121,7 @@ describe('Half-Wave Rectifier — layer-by-layer reproduction', () => {
       id: input.boards[0].id,
       vcc: input.boards[0].vcc,
       pins: input.boards[0].pins,
-      gnd: input.boards[0].groundPinNames,
-      vccPins: input.boards[0].vccPinNames,
+      targets: input.boards[0].pinTargets,
     });
     expect(input.analysis.kind).toBe('tran');
     expect(input.components.some((c) => c.metadataId === 'signal-generator')).toBe(true);

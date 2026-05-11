@@ -615,8 +615,8 @@ export const EditorToolbar = ({
           for (const pinName of wiredPinNames) {
             // Skip GND / power-rail pin names — they belong to the rail
             // groups and don't need to be re-asserted as digital sources.
-            if (group.gnd.includes(pinName)) continue;
-            if (group.vcc_pins.includes(pinName)) continue;
+            const target = group.pinTargets[pinName]?.toUpperCase() ?? '';
+            if (target === 'GND' || target.startsWith('POWER')) continue;
             const arduinoPin = Number.parseInt(pinName, 10);
             // Skip pins we can't identify as a digital GPIO (e.g.
             // 'AREF', 'RESET', 'TX', 'RX' on some boards). Those are
