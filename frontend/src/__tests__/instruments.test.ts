@@ -43,7 +43,7 @@ describe('Voltmeter (instr-voltmeter)', () => {
           end: { componentId: 'uno', pinName: 'GND' },
         },
       ],
-      boards: [{ id: 'uno', vcc: 5, pins: {}, groundPinNames: ['GND'], vccPinNames: ['5V'] }],
+      boards: [{ id: 'uno', vcc: 5, pins: {}, pinTargets: { 'GND': 'GND', '5V': 'power(5)' } }],
       analysis: { kind: 'op' },
     });
 
@@ -90,7 +90,7 @@ describe('Ammeter (instr-ammeter)', () => {
           end: { componentId: 'uno', pinName: 'GND' },
         },
       ],
-      boards: [{ id: 'uno', vcc: 5, pins: {}, groundPinNames: ['GND'], vccPinNames: ['5V'] }],
+      boards: [{ id: 'uno', vcc: 5, pins: {}, pinTargets: { 'GND': 'GND', '5V': 'power(5)' } }],
       analysis: { kind: 'op' },
     });
 

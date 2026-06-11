@@ -286,8 +286,7 @@ describe('componentToSpice — ngspice accepts every card', () => {
         id: 'brd',
         vcc: 5,
         pins: {},
-        groundPinNames: ['GND'],
-        vccPinNames: ['VCC'],
+        pinTargets: { 'GND': 'GND', 'VCC': 'power(5)' },
       };
 
       // Decide where each pin goes: explicit topology override wins; otherwise
