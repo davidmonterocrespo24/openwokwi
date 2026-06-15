@@ -23,6 +23,7 @@ const xiaoEsp32S3SvgUrl = '/boards/xiao-esp32-s3.svg';
 const arduinoNanoEsp32SvgUrl = '/boards/arduino-nano-esp32.svg';
 const xiaoEsp32C3SvgUrl = '/boards/xiao-esp32-c3.svg';
 const aitewinC3SvgUrl = '/boards/esp32c3-supermini.svg';
+const cyd2424SvgUrl = '/boards/cyd-esp32-2424s012.svg';
 
 // ─── Pin positions (mm × 5 px/mm, from board.json) ───────────────────────────
 
@@ -325,6 +326,26 @@ const PINS_AITEWIN_C3 = [
   { name: '0', x: 84, y: 105 },
 ];
 
+// CYD ESP32-2424S012: 37.0 mm × 38.5 mm → 185 × 193 px
+// 12 header pins in a single bottom row at 2.54 mm pitch, centered on 37 mm board.
+// Internal connections: GPIO2=TFT_DC, GPIO3=TFT_BL, GPIO6=TFT_SCK, GPIO7=TFT_MOSI,
+// GPIO10=TFT_CS (GC9A01 display); GPIO4/5=CST816D touch I2C; GPIO8/9=touch INT/RST.
+// Row center y = 35.2 mm → 176 px  |  first pin x = 4.53 mm → 23 px  |  pitch = 2.54 mm → 13 px
+const PINS_CYD_2424S012 = [
+  { name: '3V3', x: 23, y: 176 },
+  { name: 'GND', x: 36, y: 176 },
+  { name: '5V',  x: 48, y: 176 },
+  { name: '1',   x: 61, y: 176 },
+  { name: '2',   x: 74, y: 176 },
+  { name: '3',   x: 86, y: 176 },
+  { name: '16',  x: 99, y: 176 },
+  { name: '17',  x: 112, y: 176 },
+  { name: '18',  x: 124, y: 176 },
+  { name: '19',  x: 137, y: 176 },
+  { name: 'TX',  x: 150, y: 176 },
+  { name: 'RX',  x: 162, y: 176 },
+];
+
 // ─── ADC pin map: GPIO → { adc bank, channel within bank, qemu chn index } ──────
 // chn is the index passed to qemu_picsimlab_set_apin():
 //   0-7  → ADC1 channels 0-7  (GPIO 36,37,38,39,32,33,34,35)
@@ -384,6 +405,12 @@ const BOARD_CONFIGS: Record<string, BoardConfig> = {
     w: 90,
     h: 123,
     pins: PINS_AITEWIN_C3,
+  },
+  'cyd-esp32-2424s012': {
+    svgUrl: cyd2424SvgUrl,
+    w: 185,
+    h: 193,
+    pins: PINS_CYD_2424S012,
   },
 };
 
