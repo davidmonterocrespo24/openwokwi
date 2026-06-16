@@ -330,10 +330,10 @@ const PINS_AITEWIN_C3 = [
 // No external GPIO header — USB-C only. Wirable points are the two edge buttons.
 // Internal: GPIO2=TFT_DC, GPIO3=TFT_BL, GPIO6=TFT_SCK, GPIO7=TFT_MOSI,
 // GPIO10=TFT_CS (GC9A01); GPIO4/5=CST816D I2C SDA/SCL; GPIO1=touch RST.
-// BOOT/side button: GPIO0, left edge  x=1.3mm→7px  y=16.75mm→84px
-// RST button: right edge              x=35.7mm→178px y=16.75mm→84px
+// Side button: GPIO18, left edge  x=1.3mm→7px   y=16.75mm→84px
+// RST button:  right edge         x=35.7mm→178px y=16.75mm→84px
 const PINS_CYD_2424S012 = [
-  { name: '0',   x: 7,   y: 84 },
+  { name: '18',  x: 7,   y: 84 },
   { name: 'RST', x: 178, y: 84 },
 ];
 
