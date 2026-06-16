@@ -327,23 +327,14 @@ const PINS_AITEWIN_C3 = [
 ];
 
 // CYD ESP32-2424S012: 37.0 mm × 38.5 mm → 185 × 193 px
-// 12 header pins in a single bottom row at 2.54 mm pitch, centered on 37 mm board.
-// Internal connections: GPIO2=TFT_DC, GPIO3=TFT_BL, GPIO6=TFT_SCK, GPIO7=TFT_MOSI,
-// GPIO10=TFT_CS (GC9A01 display); GPIO4/5=CST816D touch I2C; GPIO8/9=touch INT/RST.
-// Row center y = 35.2 mm → 176 px  |  first pin x = 4.53 mm → 23 px  |  pitch = 2.54 mm → 13 px
+// No external GPIO header — USB-C only. Wirable points are the two edge buttons.
+// Internal: GPIO2=TFT_DC, GPIO3=TFT_BL, GPIO6=TFT_SCK, GPIO7=TFT_MOSI,
+// GPIO10=TFT_CS (GC9A01); GPIO4/5=CST816D I2C SDA/SCL; GPIO1=touch RST.
+// BOOT/side button: GPIO0, left edge  x=1.3mm→7px  y=16.75mm→84px
+// RST button: right edge              x=35.7mm→178px y=16.75mm→84px
 const PINS_CYD_2424S012 = [
-  { name: '3V3', x: 23, y: 176 },
-  { name: 'GND', x: 36, y: 176 },
-  { name: '5V',  x: 48, y: 176 },
-  { name: '1',   x: 61, y: 176 },
-  { name: '2',   x: 74, y: 176 },
-  { name: '3',   x: 86, y: 176 },
-  { name: '16',  x: 99, y: 176 },
-  { name: '17',  x: 112, y: 176 },
-  { name: '18',  x: 124, y: 176 },
-  { name: '19',  x: 137, y: 176 },
-  { name: 'TX',  x: 150, y: 176 },
-  { name: 'RX',  x: 162, y: 176 },
+  { name: '0',   x: 7,   y: 84 },
+  { name: 'RST', x: 178, y: 84 },
 ];
 
 // ─── ADC pin map: GPIO → { adc bank, channel within bank, qemu chn index } ──────

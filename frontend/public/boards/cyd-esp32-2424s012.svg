@@ -1,59 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <svg width="37mm" height="38.5mm" version="1.1" viewBox="0 0 37 38.5" xmlns="http://www.w3.org/2000/svg">
   <title>CYD ESP32-2424S012</title>
-  <desc>Cheap Yellow Display ESP32-2424S012 — ESP32-C3 with 1.28" GC9A01 round display (240x240)</desc>
+  <desc>Cheap Yellow Display ESP32-2424S012 — ESP32-C3, 1.28" GC9A01 240x240 round display, CST816D touch. No external headers; USB-C only. BOOT/side button on left edge (GPIO0), RST on right edge.</desc>
 
-  <!-- PCB board outline -->
+  <!-- PCB board -->
   <rect x="0.2" y="0.2" width="36.6" height="38.1" rx="1.2" ry="1.2" fill="#1b4d3e" stroke="#0f3328" stroke-width="0.3"/>
 
-  <!-- Display module PCB (square footprint) -->
-  <rect x="1.5" y="0.8" width="34" height="33" rx="0.5" fill="#0e0e0e" stroke="#1a1a1a" stroke-width="0.2"/>
+  <!-- Display module square footprint -->
+  <rect x="1.5" y="1.0" width="34" height="31.5" rx="0.5" fill="#0e0e0e" stroke="#1a1a1a" stroke-width="0.2"/>
 
-  <!-- GC9A01 display bezel ring -->
-  <circle cx="18.5" cy="17.3" r="13.8" fill="#060606"/>
+  <!-- GC9A01 bezel ring -->
+  <circle cx="18.5" cy="16.75" r="13.8" fill="#060606"/>
 
-  <!-- GC9A01 display screen -->
-  <circle cx="18.5" cy="17.3" r="12.2" fill="#080c18"/>
+  <!-- GC9A01 screen -->
+  <circle cx="18.5" cy="16.75" r="12.2" fill="#080c18"/>
 
   <!-- Screen inner ring highlight -->
-  <circle cx="18.5" cy="17.3" r="11.7" fill="none" stroke="#162850" stroke-width="0.9" opacity="0.7"/>
+  <circle cx="18.5" cy="16.75" r="11.7" fill="none" stroke="#162850" stroke-width="0.9" opacity="0.7"/>
 
   <!-- Display label -->
-  <text x="18.5" y="16.8" font-family="monospace" font-size="2" fill="#3a7ab8" text-anchor="middle" opacity="0.85">GC9A01</text>
-  <text x="18.5" y="19.5" font-family="monospace" font-size="1.5" fill="#28578a" text-anchor="middle" opacity="0.75">240x240</text>
+  <text x="18.5" y="16.3"  font-family="monospace" font-size="2"   fill="#3a7ab8" text-anchor="middle" opacity="0.85">GC9A01</text>
+  <text x="18.5" y="18.9"  font-family="monospace" font-size="1.5" fill="#28578a" text-anchor="middle" opacity="0.75">240x240</text>
 
-  <!-- ESP32-C3 chip label (bottom area) -->
-  <text x="18.5" y="36.8" font-family="monospace" font-size="1.1" fill="#80cc80" text-anchor="middle" opacity="0.65">ESP32-C3</text>
+  <!-- Ribbon connector (bottom of display module, small gold strip) -->
+  <rect x="12" y="32.0" width="13" height="1.2" rx="0.2" fill="#c8a000" opacity="0.7"/>
+  <text x="18.5" y="34.2" font-family="monospace" font-size="1.0" fill="#999" text-anchor="middle">ribbon</text>
 
-  <!-- USB-C connector outline -->
-  <rect x="15.8" y="36.8" width="5.4" height="1.5" rx="0.7" fill="#888" stroke="#666" stroke-width="0.15"/>
+  <!-- USB-C connector -->
+  <rect x="14.8" y="35.8" width="7.4" height="2.4" rx="0.8" fill="#aaaaaa" stroke="#888" stroke-width="0.2"/>
+  <rect x="16.0" y="36.2" width="5.0" height="1.4" rx="0.5" fill="#555"/>
+  <text x="18.5" y="38.1" font-family="monospace" font-size="1.0" fill="#aaa" text-anchor="middle">USB-C</text>
 
-  <!-- Pin header pads (12 pins, 2.54mm pitch, centered on 37mm board) -->
-  <!-- First center: x=4.53mm  pitch: 2.54mm  pad: 1.2mm wide x 2mm tall  y-center: 35.2mm -->
-  <rect x="3.93" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="6.47" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="9.01" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="11.55" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="14.09" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="16.63" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="19.17" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="21.71" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="24.25" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="26.79" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="29.33" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
-  <rect x="31.87" y="34.2" width="1.2" height="2" rx="0.2" fill="#c8a000"/>
+  <!-- BOOT / side button (left edge, GPIO0) -->
+  <rect x="0.2" y="14.5" width="2.2" height="4.5" rx="0.6" fill="#444" stroke="#666" stroke-width="0.2"/>
+  <rect x="0.5" y="15.2" width="1.6" height="3.1" rx="0.4" fill="#333"/>
+  <text x="3.2" y="16.5" font-family="monospace" font-size="1.0" fill="#88cc88">BOOT</text>
+  <text x="3.2" y="17.8" font-family="monospace" font-size="0.9" fill="#669966">GPIO0</text>
 
-  <!-- Pin labels (above pads) -->
-  <text x="4.53"  y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">3V3</text>
-  <text x="7.07"  y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">GND</text>
-  <text x="9.61"  y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">5V</text>
-  <text x="12.15" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">1</text>
-  <text x="14.69" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">2</text>
-  <text x="17.23" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">3</text>
-  <text x="19.77" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">16</text>
-  <text x="22.31" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">17</text>
-  <text x="24.85" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">18</text>
-  <text x="27.39" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">19</text>
-  <text x="29.93" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">TX</text>
-  <text x="32.47" y="34.0" font-family="monospace" font-size="0.85" fill="#dddddd" text-anchor="middle">RX</text>
+  <!-- RST button (right edge) -->
+  <rect x="34.6" y="14.5" width="2.2" height="4.5" rx="0.6" fill="#444" stroke="#666" stroke-width="0.2"/>
+  <rect x="34.9" y="15.2" width="1.6" height="3.1" rx="0.4" fill="#333"/>
+  <text x="27.5" y="16.5" font-family="monospace" font-size="1.0" fill="#cc8888" text-anchor="end">RST</text>
+  <text x="27.5" y="17.8" font-family="monospace" font-size="0.9" fill="#996666" text-anchor="end">EN</text>
+
+  <!-- ESP32-C3 chip label -->
+  <text x="18.5" y="35.2" font-family="monospace" font-size="1.1" fill="#80cc80" text-anchor="middle" opacity="0.6">ESP32-C3</text>
 </svg>
