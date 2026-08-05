@@ -3,6 +3,45 @@
 All notable changes to Velxio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.2] - 2026-08-05
+
+### Added
+- Added a pure ESP-IDF language mode for the ESP32 family.
+- Added support for the DS3231 RTC module and the GPS NEO-6M NMEA talker.
+- Added library manifest auto-migration, name-affinity ranking, and install declarations.
+- Added Wokwi-style parts-on-breadboard workflow: hole snapping, invisible seating wires, hover-gated labels, full-footprint seating solver, green connection dots, one-hole-one-wire selection rules, and jumper colors.
+- Added Wokwi-style wire routing: first-time auto-routing around components, avoidance of existing wires, and live routed preview.
+- Added pre-flight verification checks for unpowered nets, open source loops, and relay coil voltage mismatch.
+- Added a running weather-station demo GIF to the landing page hero.
+
+### Changed
+- Made resistors default to vertical orientation when added on the canvas.
+- Updated wire styling and editing to use Wokwi-style rounded bends, fuse sub-pixel jogs, snap segment drags to the wire's own runs, and clean up degenerate paths.
+- Updated Docker images to include the ESP32-S3 ROM.
+
+### Fixed
+- Fixed ESP-IDF library resolution so generic platform headers are never resolved against user libraries and foreign libraries no longer leak into user_libs_all.
+- Fixed the ESP-IDF architecture guard skipping usable libraries.
+- Fixed ESP32-S3 ADC channel mapping in setAdcVoltage/setAdcWaveform.
+- Fixed STM32 output pins in SPICE by stamping them as voltage sources and unifying silkscreen-to-GPIO mapping; this also fixes nano-ESP32 buttons and ESP32-family SPICE analog.
+- Initialized INPUT_PULLUP pins to their resting level when pull is enabled.
+- Fixed frozen LEDs on QEMU-based boards after resubscription.
+- Fixed run-after-agent restarts by forcing a clean ESP32 bridge reconnect and a clean restart on Run.
+- Fixed display bodies occluding crossing wires.
+- Fixed 7-segment displays rebuilding per-element simulation state when digit count changes.
+- Fixed brand-prefixed metadata IDs (e.g., wokwi-lcd2004) resolving to their base part.
+- Fixed Raspberry Pi component cards and Pi 4/5 board thumbnails to show full illustrations and clearer PRO badges.
+- Fixed router corner cases for endpoints inside obstacles and checked-elbow parity.
+- Fixed pin tracing to recognise runtime boards and same-hole junctions.
+- Fixed breadboard seating edge cases: run-before-seating race and agent-seated parts landing under rotation.
+- Fixed component property handling to type-coerce strings and reseat on pininfo changes.
+- Fixed editor URL sync after New workspace and clearing project identity on .vlx import.
+- Fixed ESP32 GFX examples to declare the Adafruit BusIO dependency.
+- Fixed autosave not starting for already-mounted hooks.
+
+### Performance
+- Improved editor responsiveness during fast-toggling simulations by unfreezing the ESP32 clock update path.
+
 ## [3.0.1] - 2026-07-18
 
 ### Added
@@ -232,3 +271,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 [3.0.0]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.0
 [3.0.1]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.1
+[3.0.2]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.2
