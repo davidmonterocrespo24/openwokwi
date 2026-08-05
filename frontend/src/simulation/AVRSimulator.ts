@@ -373,6 +373,19 @@ export class AVRSimulator {
     // register devices BEFORE the firmware loads.  The real AVRTWI
     // takes over via `i2cBus.attachMaster(twi)` inside loadHex.
     this.i2cBus = new I2CBusManager(nullI2CMaster());
+    // Seed the input register to the pull's resting level the instant the
+    // firmware enables it (INPUT_PULLUP -> HIGH). Real silicon does this in
+    // nanoseconds; without the seed, digitalRead returned 0 from pinMode
+    // until the first SPICE solve (~400 ms) — long enough for setup()-time
+    // button checks and emergency-stop latches to fire spuriously (2026-07
+    // audit, reproduced deterministically). The SPICE connector overrides
+    // with the solved level on sourced nets right after, so a button held
+    // at boot still reads pressed within one solve.
+    pinManager.onPullChange = (pin, pull) => {
+      if (pull === 0) return;
+      if (pinManager.getOutputPins().has(pin)) return;
+      this.setPinState(pin, pull === 1);
+    };
   }
 
   private get pwmPins() {
@@ -1060,6 +1073,23 @@ export class AVRSimulator {
       this.serialRxQueue.push(text.charCodeAt(i));
     }
     this.drainSerialRxQueue();
+  }
+
+  /**
+   * Feed bytes into a hardware UART's RX from an external part (GPS module,
+   * a wired peer board via Interconnect, …). Uniform seam across simulators
+   * (`sim.feedUart(uart, data)`) — Interconnect already probes for it.
+   *
+   * The AVR core only emulates USART0 (Uno/Nano pins 0/1; Mega RX0). Mega
+   * USART1-3 are not modelled by avr8js, so `uart > 0` reports false and the
+   * caller can fall back to bit-level transport (e.g. SoftwareSerial).
+   *
+   * @returns true when the bytes were queued for delivery.
+   */
+  feedUart(uart: number, data: string): boolean {
+    if (uart !== 0 || !this.usart) return false;
+    this.serialWrite(data);
+    return true;
   }
 
   /**

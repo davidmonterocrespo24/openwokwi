@@ -26,9 +26,24 @@ import { PROPERTY_CHANGE_EVENT, type PropertyChangeDetail } from '../../simulati
 import { mountDigitalGateEngine } from '../../simulation/digital/digitalGateController';
 import { isSpiceMapped } from '../../simulation/spice/componentToSpice';
 import { PinOverlay } from './PinOverlay';
+import { SeatedPinMarkers } from './SeatedPinMarkers';
 import { calculatePinPosition } from '../../utils/pinPositionCalculator';
 import { isBoardComponent, boardPinToNumber } from '../../utils/boardPinMapping';
-import { autoWireColor, WIRE_KEY_COLORS } from '../../utils/wireUtils';
+import { isBreadboard } from '../../utils/breadboardNets';
+import {
+  autoWireColor,
+  railWireColor,
+  WIRE_JUMPER_PALETTE,
+  WIRE_KEY_COLORS,
+  expandOrthogonalPoints,
+} from '../../utils/wireUtils';
+import { findWireAtHole, resolveFreeHole } from '../../utils/breadboardOccupancy';
+import {
+  isAutoVerticalPart,
+  isOverBreadboard,
+  seatOnDrop,
+  snapPositionToBreadboard,
+} from '../../utils/breadboardSnap';
 import {
   findWireNearPoint,
   findSegmentNearPoint,
@@ -40,6 +55,7 @@ import {
   simplifyOrthogonalPath,
   insertWaypointAtSegment,
   collectAlignmentTargets,
+  addOwnWireAlignmentTargets,
   snapToNearest,
 } from '../../utils/wireHitDetection';
 import { useIsCoarsePointer } from '../../utils/useTouchDevice';
@@ -66,6 +82,16 @@ import './SimulatorCanvas.css';
 
 /** World-units of tolerance for alignment snap (scales with zoom). */
 const ALIGN_SNAP_PX = 6;
+
+/**
+ * Large-bodied display parts whose face should occlude wires when the part is
+ * seated on a breadboard — the flat canvas has no depth, so bridge wires
+ * routed to holes UNDER the body would otherwise paint over the readout.
+ * Matches both the metadata ids (`7segment`, `ssd1306`, …) and the `wokwi-`/
+ * `velxio-` element-name variants. Thin two-pin parts are deliberately absent.
+ */
+const DISPLAY_BODY_METADATA_RE =
+  /(7segment|led-matrix|max7219|neopixel-matrix|ssd1306|oled|ili9341|lcd1602|lcd2004|led-ring)/i;
 
 /** Long-press duration for touch context menu (ms). */
 const LONG_PRESS_MS = 500;
@@ -311,6 +337,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     }
   }, [interactionRunning, setSelectedWire]);
 
+  // Lets the touch handlers (defined in an earlier effect closure) reach the
+  // drop-time breadboard seating declared further down.
+  const seatDroppedComponentRef = useRef<(componentId: string) => void>(() => {});
+
   const componentsRef = useRef(components);
   componentsRef.current = components;
   const boardPositionRef = useRef(boardPosition);
@@ -345,6 +375,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   /** Set to true during mouseup if a segment/waypoint drag committed, so onClick can skip selection. */
   const segmentDragJustCommittedRef = useRef(false);
+  // Set when the mouse-up handler already resolved this click into a wire
+  // selection (click on the breadboard body over a wire) — the bubbled
+  // canvas onClick must not re-toggle that selection.
+  const wireSelectJustHandledRef = useRef(false);
   const wiresRef = useRef(wires);
   wiresRef.current = wires;
 
@@ -818,9 +852,35 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             y: world.y - touchDragOffsetRef.current.y,
           });
         } else {
+          let nx = world.x - touchDragOffsetRef.current.x;
+          let ny = world.y - touchDragOffsetRef.current.y;
+          const simState = useSimulatorStore.getState();
+          const dragged = simState.components.find(
+            (c) => c.id === touchDraggedComponentIdRef.current,
+          );
+          if (dragged) {
+            if (
+              isAutoVerticalPart(dragged.metadataId) &&
+              (Number(dragged.properties?.rotation) || 0) === 0 &&
+              isOverBreadboard(dragged, nx, ny, simState.components)
+            ) {
+              updateComponent(touchDraggedComponentIdRef.current!, {
+                properties: { ...dragged.properties, rotation: 90 },
+              } as any);
+            }
+            const cur = useSimulatorStore
+              .getState()
+              .components.find((c) => c.id === touchDraggedComponentIdRef.current);
+            const snapped =
+              cur && snapPositionToBreadboard(cur, nx, ny, simState.components);
+            if (snapped) {
+              nx = snapped.x;
+              ny = snapped.y;
+            }
+          }
           updateComponent(touchDraggedComponentIdRef.current!, {
-            x: world.x - touchDragOffsetRef.current.x,
-            y: world.y - touchDragOffsetRef.current.y,
+            x: nx,
+            y: ny,
           } as any);
         }
       }
@@ -871,7 +931,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             const world = toWorld(changed.clientX, changed.clientY);
             const newValue = sd.axis === 'horizontal' ? world.y : world.x;
             const newPts = moveSegment(sd.renderedPts, sd.segIndex, sd.axis, newValue);
-            updateWire(sd.wireId, { waypoints: renderedToWaypoints(newPts) });
+            updateWire(sd.wireId, { waypoints: renderedToWaypoints(newPts), autoRouted: false });
           }
         }
         segmentDragRef.current = null;
@@ -940,6 +1000,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               }
             }
           }
+        } else if (touchId !== '__board__' && !touchId.startsWith('__board__:')) {
+          // Real touch drag (not a tap) — seat it properly on release,
+          // same as the mouse path.
+          seatDroppedComponentRef.current(touchId);
         }
 
         recalculateAllWirePositions();
@@ -991,7 +1055,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               world.x,
               world.y,
             );
-            useSimulatorStore.getState().updateWire(wire.id, { waypoints: newWaypoints });
+            useSimulatorStore.getState().updateWire(wire.id, { waypoints: newWaypoints, autoRouted: false });
             useSimulatorStore.getState().setSelectedWire(wire.id);
           }
           lastTapTimeRef.current = 0;
@@ -1070,7 +1134,13 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       // current and future SPICE mapper immune to that feedback loop.
       const logic = PartSimulationRegistry.get(component.metadataId);
       const spiceOwned = isSpiceMapped(component.metadataId);
-      const hasSelfManagedVisuals = !!(logic && logic.attachEvents) || spiceOwned;
+      // Breadboards have no visual on/off state, but they ARE direct-wired to
+      // many board pins (one wire per strip → GPIO). Writing properties.state
+      // per edge minted a new components array thousands of times per second
+      // on multiplexed sketches — pure churn that re-rendered the whole
+      // editor. Treat them as self-managed: skip the generic state echo.
+      const hasSelfManagedVisuals =
+        !!(logic && logic.attachEvents) || spiceOwned || isBreadboard(component.metadataId);
 
       // Generic GND check: for wire-connected output components that don't manage
       // their own state, require at least one GND wire before activating.
@@ -1111,11 +1181,15 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
           const selfEndpoint = isStartSelf ? wire.start : wire.end;
           const otherEndpoint = isStartSelf ? wire.end : wire.start;
 
-          if (isBoardComponent(otherEndpoint.componentId)) {
+          // Recognise board endpoints from the LIVE boards list first —
+          // isBoardComponent only matches static id prefixes, so every
+          // runtime-added board (agent-minted UUID ids) failed it and its
+          // directly-wired components were never subscribed.
+          const boardInstance = boards.find((b) => b.id === otherEndpoint.componentId);
+          if (boardInstance || isBoardComponent(otherEndpoint.componentId)) {
             // Use the board's actual boardKind (not just its instance ID) so that
             // a board whose ID is 'arduino-uno' but whose kind is 'esp32' gets the
             // correct GPIO mapping ('GPIO4' → 4, not null).
-            const boardInstance = boards.find((b) => b.id === otherEndpoint.componentId);
             const lookupKey = boardInstance ? boardInstance.boardKind : otherEndpoint.componentId;
             const pin = boardPinToNumber(lookupKey, otherEndpoint.pinName);
             if (pin !== null && pin >= 0) {
@@ -1384,10 +1458,33 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         // legacy fallback
         setBoardPosition({ x: world.x - dragOffset.x, y: world.y - dragOffset.y });
       } else {
-        updateComponent(draggedComponentId, {
-          x: world.x - dragOffset.x,
-          y: world.y - dragOffset.y,
-        } as any);
+        let nx = world.x - dragOffset.x;
+        let ny = world.y - dragOffset.y;
+        const simState = useSimulatorStore.getState();
+        const dragged = simState.components.find((c) => c.id === draggedComponentId);
+        if (dragged) {
+          // Axial parts entering a breadboard flip to vertical so they
+          // bridge the trench columns like on a real board.
+          if (
+            isAutoVerticalPart(dragged.metadataId) &&
+            (Number(dragged.properties?.rotation) || 0) === 0 &&
+            isOverBreadboard(dragged, nx, ny, simState.components)
+          ) {
+            updateComponent(draggedComponentId, {
+              properties: { ...dragged.properties, rotation: 90 },
+            } as any);
+          }
+          const cur = useSimulatorStore
+            .getState()
+            .components.find((c) => c.id === draggedComponentId);
+          const snapped =
+            cur && snapPositionToBreadboard(cur, nx, ny, simState.components);
+          if (snapped) {
+            nx = snapped.x;
+            ny = snapped.y;
+          }
+        }
+        updateComponent(draggedComponentId, { x: nx, y: ny } as any);
       }
     }
 
@@ -1405,6 +1502,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       sd.isDragging = true;
       const threshold = ALIGN_SNAP_PX / zoomRef.current;
       const targets = collectAlignmentTargets(wiresRef.current, sd.wireId);
+      // Snap against the wire's own runs too, so a dragged segment can
+      // line up with (and fuse into) its neighbours instead of ending
+      // up millimetres off.
+      addOwnWireAlignmentTargets(targets, sd.renderedPts, [sd.segIndex, sd.segIndex + 1]);
       const guides: AlignmentGuide[] = [];
       let newValue = sd.axis === 'horizontal' ? world.y : world.x;
       const snap = snapToNearest(
@@ -1432,6 +1533,17 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       if (wire) {
         const threshold = ALIGN_SNAP_PX / zoomRef.current;
         const targets = collectAlignmentTargets(wiresRef.current, wd.wireId);
+        // Own-wire targets (start, end, other bends) minus the dragged
+        // bend itself, so it can fuse back onto its own wire's lines.
+        addOwnWireAlignmentTargets(
+          targets,
+          [
+            { x: wire.start.x, y: wire.start.y },
+            ...wd.originalWaypoints,
+            { x: wire.end.x, y: wire.end.y },
+          ],
+          [wd.waypointIndex + 1],
+        );
         const guides: AlignmentGuide[] = [];
         let snappedX = world.x;
         let snappedY = world.y;
@@ -1451,20 +1563,11 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         );
         setWaypointDragPreview({ wireId: wd.wireId, waypoints: newWaypoints });
         // Reflect the moved bend point in the rendered path live
-        const stored = [
+        const expanded = expandOrthogonalPoints([
           { x: wire.start.x, y: wire.start.y },
           ...newWaypoints,
           { x: wire.end.x, y: wire.end.y },
-        ];
-        const expanded: { x: number; y: number }[] = [stored[0]];
-        for (let i = 1; i < stored.length; i++) {
-          const prev = stored[i - 1];
-          const curr = stored[i];
-          if (prev.x !== curr.x && prev.y !== curr.y) {
-            expanded.push({ x: curr.x, y: prev.y });
-          }
-          expanded.push(curr);
-        }
+        ]);
         const overridePath = renderedPointsToPath(simplifyOrthogonalPath(expanded));
         setSegmentDragPreview({ wireId: wd.wireId, overridePath });
       }
@@ -1480,6 +1583,24 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       setHoveredWireId(wire ? wire.id : null);
     }
   };
+
+  /**
+   * Drop-time breadboard seating. The drag-time magnet only aligns the
+   * anchor pin, which is how parts ended up HALF-seated (some pins in
+   * holes, the rest dead in the air). On release we re-solve properly:
+   * nearest position where every pin is in a free hole, sliding past
+   * occupied columns if needed. Leaves the part untouched when it is not
+   * over a board or genuinely does not fit.
+   */
+  const seatDroppedComponent = (componentId: string) => {
+    const state = useSimulatorStore.getState();
+    const comp = state.components.find((c) => c.id === componentId);
+    if (!comp) return;
+    const placement = seatOnDrop(comp, comp.x, comp.y, state.components);
+    if (!placement || placement.moved < 0.01) return;
+    updateComponent(componentId, { x: placement.x, y: placement.y } as any);
+  };
+  seatDroppedComponentRef.current = seatDroppedComponent;
 
   const handleCanvasMouseUp = (e: React.MouseEvent) => {
     // Finish panning — commit ref value to state so React knows the final pan
@@ -1497,6 +1618,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         const world = toWorld(e.clientX, e.clientY);
         const threshold = ALIGN_SNAP_PX / zoomRef.current;
         const targets = collectAlignmentTargets(wiresRef.current, sd.wireId);
+        addOwnWireAlignmentTargets(targets, sd.renderedPts, [sd.segIndex, sd.segIndex + 1]);
         let newValue = sd.axis === 'horizontal' ? world.y : world.x;
         const snap = snapToNearest(
           newValue,
@@ -1505,7 +1627,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         );
         if (snap) newValue = snap.snapped;
         const newPts = moveSegment(sd.renderedPts, sd.segIndex, sd.axis, newValue);
-        updateWire(sd.wireId, { waypoints: renderedToWaypoints(newPts) });
+        updateWire(sd.wireId, { waypoints: renderedToWaypoints(newPts), autoRouted: false });
       }
       segmentDragRef.current = null;
       setSegmentDragPreview(null);
@@ -1523,6 +1645,15 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         if (wire) {
           const threshold = ALIGN_SNAP_PX / zoomRef.current;
           const targets = collectAlignmentTargets(wiresRef.current, wd.wireId);
+          addOwnWireAlignmentTargets(
+            targets,
+            [
+              { x: wire.start.x, y: wire.start.y },
+              ...wd.originalWaypoints,
+              { x: wire.end.x, y: wire.end.y },
+            ],
+            [wd.waypointIndex + 1],
+          );
           let snappedX = world.x;
           let snappedY = world.y;
           const snapX = snapToNearest(world.x, targets.xs, threshold);
@@ -1533,21 +1664,12 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             i === wd.waypointIndex ? { x: snappedX, y: snappedY } : { ...wp },
           );
           // Run through expand → simplify so collinear waypoints get cleaned up
-          const stored = [
+          const expanded = expandOrthogonalPoints([
             { x: wire.start.x, y: wire.start.y },
             ...newWaypoints,
             { x: wire.end.x, y: wire.end.y },
-          ];
-          const expanded: { x: number; y: number }[] = [stored[0]];
-          for (let i = 1; i < stored.length; i++) {
-            const prev = stored[i - 1];
-            const curr = stored[i];
-            if (prev.x !== curr.x && prev.y !== curr.y) {
-              expanded.push({ x: curr.x, y: prev.y });
-            }
-            expanded.push(curr);
-          }
-          updateWire(wd.wireId, { waypoints: renderedToWaypoints(expanded) });
+          ]);
+          updateWire(wd.wireId, { waypoints: renderedToWaypoints(expanded), autoRouted: false });
         }
       }
       waypointDragRef.current = null;
@@ -1585,6 +1707,32 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             } else if (component.metadataId === 'custom-chip') {
               // Custom Chips have their own designer (C editor + chip.json + Compile).
               setCustomChipComponentId(draggedComponentId);
+            } else if (
+              isBreadboard(component.metadataId) &&
+              (() => {
+                // A wire crossing the breadboard body sits visually ON TOP of
+                // it — clicking the wire must select the wire, not bury it
+                // under the breadboard's full-pin-list property dialog
+                // (reported: bb→bb wires were unselectable, the hole list
+                // popped over everything instead).
+                const world = toWorld(e.clientX, e.clientY);
+                const nearWire = findWireNearPoint(
+                  wiresRef.current,
+                  world.x,
+                  world.y,
+                  8 / zoomRef.current,
+                );
+                if (nearWire) {
+                  setSelectedWire(nearWire.id);
+                  // The subsequent canvas onClick would re-hit the same wire
+                  // and toggle it back OFF — suppress that one click.
+                  wireSelectJustHandledRef.current = true;
+                  return true;
+                }
+                return false;
+              })()
+            ) {
+              // handled — wire selected instead of opening the dialog
             } else {
               setPropertyDialogComponentId(draggedComponentId);
               setPropertyDialogPosition({
@@ -1609,7 +1757,14 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         draggedComponentId &&
         !draggedComponentId.startsWith('__board__')
       ) {
-        const moved = components.find((c) => c.id === draggedComponentId);
+        // Seat BEFORE recording the move, so undo restores the pre-drag
+        // position in one step instead of leaving the part mid-seat.
+        seatDroppedComponent(draggedComponentId);
+        // Re-read from the store: `components` is the render-time closure
+        // and does not include the seating correction just applied.
+        const moved = useSimulatorStore
+          .getState()
+          .components.find((c) => c.id === draggedComponentId);
         if (moved && (moved.x !== start.x || moved.y !== start.y)) {
           recordMove(draggedComponentId, start, { x: moved.x, y: moved.y });
         }
@@ -1772,6 +1927,46 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
       setShowPropertyDialog(false);
     }
 
+    // ── Breadboard hole rules: one hole, one wire ──────────────────────
+    // A hole already holding a visible wire end can't start another wire —
+    // clicking it SELECTS that wire instead. (Without this, a wire whose
+    // endpoints sit in holes is impossible to select: the hole overlays
+    // swallow every click and silently start a new wire.) When a new end
+    // does land in an occupied hole (seated leg or another wire), it
+    // shifts to the nearest free hole of the same 5-hole strip / rail —
+    // electrically identical, visually untangled.
+    const bbComp = componentsRef.current.find((c) => c.id === componentId);
+    const isBBHole = !!bbComp && isBreadboard(bbComp.metadataId);
+    if (isBBHole) {
+      if (!wireInProgress) {
+        const occupying = findWireAtHole(wiresRef.current, componentId, pinName);
+        if (occupying) {
+          setSelectedWire(occupying.id);
+          return;
+        }
+      }
+      const el = document.getElementById(componentId) as
+        | (HTMLElement & { pinInfo?: Array<{ name: string }> })
+        | null;
+      const allNames = (el?.pinInfo ?? []).map((p) => p.name);
+      const free = resolveFreeHole(
+        bbComp.metadataId,
+        componentId,
+        pinName,
+        wiresRef.current,
+        allNames,
+      );
+      if (free !== pinName) {
+        const rot = Number(bbComp.properties?.rotation) || 0;
+        const pos = calculatePinPosition(componentId, free, bbComp.x + 6, bbComp.y + 6, rot);
+        if (pos) {
+          pinName = free;
+          x = pos.x;
+          y = pos.y;
+        }
+      }
+    }
+
     if (wireInProgress) {
       // Finish wire: the store atomically appends the new wire and clears
       // `wireInProgress`. Once that's done, we look up the wire it just
@@ -1792,8 +1987,15 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         );
       }
     } else {
-      // Start wire: auto-detect color from pin name
-      startWireCreation({ componentId, pinName, x, y }, autoWireColor(pinName));
+      // Start wire: rails mandate red (+) / black (−); other breadboard
+      // holes pick a random jumper color (like a real jumper kit — a board
+      // full of identical green wires is unreadable); component pins keep
+      // the name-based auto color (GND → black, VCC → red, else green).
+      const color = isBBHole
+        ? (railWireColor(pinName) ??
+          WIRE_JUMPER_PALETTE[Math.floor(Math.random() * WIRE_JUMPER_PALETTE.length)])
+        : autoWireColor(pinName);
+      startWireCreation({ componentId, pinName, x, y }, color);
     }
   };
 
@@ -1948,6 +2150,20 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     return () => clearTimeout(timer);
   }, [components.length]);
 
+  // Which pins of each component are plugged into a breadboard hole. Seating
+  // is an invisible `bb` wire (component pin = start, hole = end), so one pass
+  // over the wires gives every part its seated-pin names for the green markers.
+  const seatedPinsByComponent = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const w of wires) {
+      if (!w.bb) continue;
+      const arr = map.get(w.start.componentId);
+      if (arr) arr.push(w.start.pinName);
+      else map.set(w.start.componentId, [w.start.pinName]);
+    }
+    return map;
+  }, [wires]);
+
   // Render component using dynamic renderer
   const renderComponent = (component: any) => {
     // SPICE probes are React components, not web components — render them
@@ -2034,7 +2250,26 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     // them — so they always sit at the very back: below boards (z 0), other
     // components (z 1/2) and wires (z 35). Selection doesn't raise them.
     const isBreadboard = String(component.metadataId).startsWith('breadboard');
-    const groupZIndex = isBreadboard ? -1 : isSelected ? 2 : 1;
+    // A large-bodied display seated on a breadboard physically sits ON the
+    // board, so wires routed to holes UNDERNEATH it pass behind its body in
+    // real life. On the flat canvas those bridge wires (segment strips whose
+    // holes are literally under the display) otherwise paint OVER the digits
+    // — the reported "los cables se ven superpuestos y casi ni se ven los
+    // dígitos". Raise a seated display above the wire layer (z 35) so its
+    // face occludes the wires crossing it, exactly as the real part would.
+    // Scoped to occluding display bodies + only when actually seated, so
+    // thin parts (resistors, LEDs) and free-floating displays are untouched.
+    const isSeated = (seatedPinsByComponent.get(component.id)?.length ?? 0) > 0;
+    const occludesWhenSeated = DISPLAY_BODY_METADATA_RE.test(String(component.metadataId));
+    const groupZIndex = isBreadboard
+      ? -1
+      : isSeated && occludesWhenSeated
+        ? isSelected
+          ? 37
+          : 36
+        : isSelected
+          ? 2
+          : 1;
 
     return (
       <React.Fragment key={component.id}>
@@ -2066,9 +2301,20 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             x={component.x}
             y={component.y}
             isSelected={isSelected}
+            isHovered={isHovered}
             onMouseDown={(e) => {
               handleComponentMouseDown(component.id, e);
             }}
+          />
+
+          {/* Green dots on pins plugged into a breadboard — always visible so
+              "seated & connected" is legible without hovering. */}
+          <SeatedPinMarkers
+            componentId={component.id}
+            componentX={component.x}
+            componentY={component.y}
+            seatedPins={seatedPinsByComponent.get(component.id) ?? []}
+            rotation={Number(component.properties?.rotation) || 0}
           />
 
           {/* Pin overlay for wire creation - hide while interacting/running */}
@@ -2504,6 +2750,12 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               segmentDragJustCommittedRef.current = false;
               return;
             }
+            // Mouse-up already selected a wire under this click (breadboard
+            // body case) — don't let this bubbled click toggle it back off.
+            if (wireSelectJustHandledRef.current) {
+              wireSelectJustHandledRef.current = false;
+              return;
+            }
             // While the simulation runs the canvas is interact-only: a click on
             // a button must press it (its own handler), not select the wire
             // underneath it for editing.
@@ -2535,7 +2787,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               world.x,
               world.y,
             );
-            updateWire(wire.id, { waypoints: newWaypoints });
+            updateWire(wire.id, { waypoints: newWaypoints, autoRouted: false });
             setSelectedWire(wire.id);
           }}
           style={{
@@ -2642,8 +2894,13 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               {registryLoaded && components.map(renderComponent)}
             </div>
 
-            {/* Electrical simulation overlay (voltages / warnings) */}
-            <ElectricalOverlay />
+            {/* Electrical simulation overlay (voltages / warnings).
+                Voltage pills are hover-gated — see ElectricalOverlay. */}
+            <ElectricalOverlay
+              hoveredWireId={hoveredWireId}
+              hoveredComponentId={hoveredComponentId}
+              hoveredBoardId={hoveredBoardId}
+            />
           </div>
 
           {/* Wire creation mode banner — visible on both desktop and mobile */}

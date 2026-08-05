@@ -50,6 +50,31 @@ while True:
     time.sleep(1)
 `;
 
+// Pure ESP-IDF mode (issue #139): the user's own app_main(), compiled by the
+// backend's ESP-IDF toolchain WITHOUT the arduino-esp32 component. GPIO 2 is
+// the built-in LED on most ESP32 dev boards.
+const DEFAULT_ESPIDF_CONTENT = `// ESP-IDF Blink Example
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+
+#define LED_PIN GPIO_NUM_2
+
+void app_main(void)
+{
+    gpio_reset_pin(LED_PIN);
+    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+
+    while (1) {
+        gpio_set_level(LED_PIN, 1);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        gpio_set_level(LED_PIN, 0);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+`;
+
 const DEFAULT_PY_CONTENT = `import RPi.GPIO as GPIO
 import time
 
@@ -369,7 +394,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         let fileName: string;
         let content: string;
         const isEsp32 = groupId.includes('esp32');
-        if (isMicroPython && isEsp32) {
+        if (languageMode === 'espidf') {
+          fileName = 'main.c';
+          content = DEFAULT_ESPIDF_CONTENT;
+        } else if (isMicroPython && isEsp32) {
           fileName = 'main.py';
           content = DEFAULT_ESP32_MICROPYTHON_CONTENT;
         } else if (isMicroPython) {

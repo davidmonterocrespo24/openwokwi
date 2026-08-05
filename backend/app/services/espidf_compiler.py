@@ -339,6 +339,36 @@ class ESPIDFCompiler:
         """Check if sketch uses WiFi."""
         return bool(re.search(r'#include\s*[<"]WiFi\.h[">]|WiFi\.begin\(', code))
 
+    def _detect_idf_wifi_usage(self, code: str) -> bool:
+        """Pure ESP-IDF mode: does the project use the esp_wifi stack?"""
+        return bool(re.search(r'#include\s*[<"]esp_wifi\.h[">]|esp_wifi_init\s*\(', code))
+
+    def _normalize_wifi_for_qemu_idf(self, code: str) -> str:
+        """
+        Pure ESP-IDF variant of _normalize_wifi_for_qemu. IDF projects set
+        credentials via `#define WIFI_SSID "..."` or wifi_config_t designated
+        initializers (`.ssid = "..."`, `.password = "..."`). Rewrite the
+        common literal forms so the firmware associates with the open AP the
+        QEMU fork broadcasts (_QEMU_WIFI_SSID); anything more dynamic
+        (strcpy into the struct at runtime) is left alone and simply won't
+        connect.
+        """
+        code = re.sub(
+            r'(#define\s+\w*SSID\w*\s+)"[^"]*"',
+            rf'\1"{_QEMU_WIFI_SSID}"',
+            code,
+            flags=re.IGNORECASE,
+        )
+        code = re.sub(
+            r'(#define\s+\w*(?:PASS|PASSWORD|PSK)\w*\s+)"[^"]*"',
+            r'\1""',
+            code,
+            flags=re.IGNORECASE,
+        )
+        code = re.sub(r'(\.ssid\s*=\s*)"[^"]*"', rf'\1"{_QEMU_WIFI_SSID}"', code)
+        code = re.sub(r'(\.password\s*=\s*)"[^"]*"', r'\1""', code)
+        return code
+
     def _detect_webserver_usage(self, code: str) -> bool:
         """Check if sketch uses WebServer."""
         return bool(re.search(
@@ -663,6 +693,20 @@ class ESPIDFCompiler:
         'Udp.h', 'IPAddress.h', 'Client.h', 'Server.h', 'Stream.h',
         'Print.h', 'Printable.h', 'WiFiUdp.h', 'WiFiClient.h',
         'WiFiServer.h', 'WiFiType.h', 'esp_wifi.h',
+        # Platform headers that do NOT exist in the arduino-esp32 core, so
+        # the core-tree scan can't discover them, yet carry names generic
+        # enough that some random installed library owns a file by that
+        # name. Resolving one drags that whole library into user_libs_all
+        # and its sources then fail on THEIR own missing includes.
+        #
+        # Reported 2026-08-03 (nikas79): ESPAsyncWebServer includes <Hash.h>
+        # (an ESP8266-core header, guarded for that platform) and the global
+        # scan resolved it to `stemihexapod/src/Hash.h` — a hexapod-robot
+        # library — whose Serial.cpp / Hash.cpp / Server.cpp /
+        # BluetoothLowEnergy.cpp / ExpansionDriver.cpp then broke every
+        # ESP32 build with errors naming libraries the user never installed.
+        'Hash.h', 'Serial.h', 'HardwareSerial.h', 'WString.h',
+        'WCharacter.h', 'binary.h', 'pins_arduino.h', 'Esp.h',
     })
 
     # arduino-esp32 uses a single library architecture id ("esp32") across
@@ -736,7 +780,10 @@ class ESPIDFCompiler:
         if not arch:
             return True
         arches = {a.strip().lower() for a in arch.split(',') if a.strip()}
-        return '*' in arches or self._ESP32_LIB_ARCH in arches
+        # 'all' is a common non-spec synonym for '*' (e.g. LiquidCrystal_I2C
+        # 2.0.0 declares architectures=all) — treating it as unknown skipped
+        # the most popular I2C LCD library on every ESP32 build (issue #257).
+        return '*' in arches or 'all' in arches or self._ESP32_LIB_ARCH in arches
 
     @staticmethod
     def _norm_lib_name(name: str) -> str:
@@ -847,6 +894,7 @@ class ESPIDFCompiler:
         arduino_comp_name: str,
         user_libs_dir: Path,
         allowed_libraries: set[str] | None = None,
+        merged_libs: dict[str, str] | None = None,
     ) -> tuple[list[str], dict[str, str]]:
         """
         BFS over ext_headers (and transitive includes) to discover all external
@@ -898,6 +946,14 @@ class ESPIDFCompiler:
         found_any = False
 
         headers_to_resolve: list[str] = list(ext_headers)
+        # Headers the SKETCH itself includes (vs transitive pulls found by
+        # re-scanning copied library headers). The architecture guard is
+        # advisory for these: the user explicitly asked for the library, and
+        # many AVR-declared libs are pure Wire/SPI code that compiles fine on
+        # ESP32 — skipping them produced a bare "No such file or directory"
+        # (issue #257). Transitive pulls keep the HARD guard: that is the
+        # path that dragged SAMD-only Adafruit_ZeroDMA into ESP32 builds.
+        direct_headers: set[str] = set(ext_headers)
         resolved_headers: set[str] = set()
 
         while headers_to_resolve:
@@ -944,11 +1000,20 @@ class ESPIDFCompiler:
             if src_root is not None:
                 _lib_root = src_root.parent if src_root.name == 'src' else src_root
                 if not self._library_supports_esp32(_lib_root):
-                    logger.warning(
-                        f'[espidf] <{header}> resolved to "{_lib_root.name}" but its '
-                        f'library.properties architectures exclude esp32 — skipping'
-                    )
-                    src_root = None
+                    if header in direct_headers:
+                        logger.warning(
+                            f'[espidf] <{header}> resolved to "{_lib_root.name}" whose '
+                            f'library.properties architectures exclude esp32 — merging '
+                            f'anyway because the sketch includes it directly (a real '
+                            f'compile error beats "No such file")'
+                        )
+                    else:
+                        logger.warning(
+                            f'[espidf] <{header}> resolved to "{_lib_root.name}" but its '
+                            f'library.properties architectures exclude esp32 — skipping '
+                            f'(transitive pull, not included by the sketch)'
+                        )
+                        src_root = None
 
             # Tracks the "resolved to a core lib that's already compiled into
             # the arduino-esp32 component" case, so we don't fall through to
@@ -975,6 +1040,14 @@ class ESPIDFCompiler:
                 logger.info(f'[espidf] Merging "{lib_dir_name}" into user_libs_all for <{header}>')
                 found_any = True
                 header_to_comp[header] = 'user_libs_all'
+                if merged_libs is not None:
+                    # Report the DISPLAY name (library.properties name=, the
+                    # one the Library Manager shows) so the frontend can
+                    # auto-declare it in the project manifest. Cache folder
+                    # names carry a @version-hash suffix — strip it.
+                    _lib_root = src_root.parent if src_root.name == 'src' else src_root
+                    _props_name = self._parse_library_properties(_lib_root).get('name', '')
+                    merged_libs[header] = _props_name or lib_dir_name.split('@', 1)[0]
 
                 # Preserve directory structure while merging libraries.
                 # Skip non-buildable directories like examples, tests, docs.
@@ -1073,10 +1146,104 @@ class ESPIDFCompiler:
         )
         return ['user_libs_all'], header_to_comp
 
+    # Platform macros we can decide with certainty when scanning a source
+    # for #include directives. Everything NOT listed here is unknown, and an
+    # expression mentioning an unknown identifier is treated as LIVE — the
+    # scanner must never hide a header the compiler will really need.
+    _PP_TRUE = frozenset({
+        'ESP32', 'ESP_PLATFORM', 'ARDUINO_ARCH_ESP32',
+    })
+    _PP_FALSE = frozenset({
+        'ESP8266', 'ARDUINO_ARCH_ESP8266', '__AVR__', 'ARDUINO_ARCH_AVR',
+        'ARDUINO_ARCH_SAMD', 'ARDUINO_ARCH_SAM', 'ARDUINO_ARCH_STM32',
+        'ARDUINO_ARCH_RENESAS', 'ARDUINO_ARCH_RP2040', 'ARDUINO_ARCH_MBED',
+        'TARGET_RP2040', 'TARGET_RP2350', 'PICO_RP2040', 'PICO_RP2350',
+        'CORE_TEENSY', '__MBED__', '__SAMD51__', '__SAM3X8E__',
+        'ARDUINO_ARCH_NRF52', 'NRF52', 'TARGET_ESP8266',
+    })
+    _PP_IDENT_RE = re.compile(r'[A-Za-z_][A-Za-z_0-9]*')
+    _PP_COMMENT_BLOCK_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
+    _PP_COMMENT_LINE_RE = re.compile(r'//[^\n]*')
+
+    def _pp_branch_is_live(self, expr: str) -> bool:
+        """Best-effort evaluation of a #if / #elif condition.
+
+        Returns False ONLY when every identifier in the expression is a
+        platform macro we know is undefined on ESP32 (so the branch is
+        provably dead here). Anything else — unknown macros, arithmetic,
+        version checks — is reported LIVE. Being wrong in the LIVE
+        direction only costs us the old behaviour; being wrong the other
+        way would hide a genuinely needed library.
+        """
+        idents = [
+            i for i in self._PP_IDENT_RE.findall(expr)
+            if i not in ('defined', 'ifdef', 'ifndef')
+        ]
+        if not idents:
+            return True
+        if any(i in self._PP_TRUE for i in idents):
+            return True
+        # Dead only when we recognise EVERY identifier as false-on-ESP32.
+        return not all(i in self._PP_FALSE for i in idents)
+
     def _detect_external_includes(self, code: str) -> list[str]:
-        """Return library header names that are likely from external libraries."""
-        headers = []
-        for m in re.finditer(r'#\s*include\s*<([^>]+)>', code):
+        """Library header names an ESP32 build could really need.
+
+        Preprocessor-aware: includes that only exist inside a branch which
+        is provably dead on ESP32 are skipped. Without this, the scanner
+        reported headers the compiler never sees, and each one was resolved
+        against the ~1000 installed libraries — dragging an unrelated
+        library (and ALL of its sources) into user_libs_all.
+
+        The canonical break, reported 2026-08-03: ESPAsyncWebServer has
+        `#if defined(ESP8266) ... #include <Hash.h> ... #endif`. Hash.h was
+        resolved to stemi-hexapod's src/Hash.h (a hexapod-robot library),
+        whose Serial.cpp / Server.cpp / BluetoothLowEnergy.cpp then failed
+        on their own missing includes, breaking every ESP32 build in that
+        project with errors naming libraries the user never installed.
+        """
+        # Comments first: a commented-out include is not an include.
+        code = self._PP_COMMENT_BLOCK_RE.sub(' ', code)
+        code = self._PP_COMMENT_LINE_RE.sub(' ', code)
+
+        headers: list[str] = []
+        # Stack of (this_branch_live, any_branch_taken_yet) per #if nesting.
+        stack: list[tuple[bool, bool]] = []
+        for raw in code.splitlines():
+            line = raw.strip()
+            if line.startswith('#'):
+                dtv = line[1:].lstrip()
+                if dtv.startswith(('ifdef', 'ifndef', 'if ', 'if(')):
+                    if dtv.startswith('ifdef'):
+                        live = self._pp_branch_is_live(dtv[5:])
+                    elif dtv.startswith('ifndef'):
+                        # #ifndef X is live unless X is known-defined here.
+                        idents = self._PP_IDENT_RE.findall(dtv[6:])
+                        live = not any(i in self._PP_TRUE for i in idents)
+                    else:
+                        live = self._pp_branch_is_live(dtv[2:])
+                    stack.append((live, live))
+                    continue
+                if dtv.startswith('elif'):
+                    if stack:
+                        _cur, taken = stack[-1]
+                        live = (not taken) and self._pp_branch_is_live(dtv[4:])
+                        stack[-1] = (live, taken or live)
+                    continue
+                if dtv.startswith('else'):
+                    if stack:
+                        _cur, taken = stack[-1]
+                        stack[-1] = (not taken, True)
+                    continue
+                if dtv.startswith('endif'):
+                    if stack:
+                        stack.pop()
+                    continue
+            if not all(live for live, _ in stack):
+                continue  # inside a branch that is dead on ESP32
+            m = re.search(r'#\s*include\s*<([^>]+)>', line)
+            if not m:
+                continue
             h = m.group(1)
             if h in self._BUILTIN_HEADERS:
                 continue
@@ -1091,16 +1258,56 @@ class ESPIDFCompiler:
 
     def _find_library_for_header(self, header: str, libs_dir: Path) -> Path | None:
         """
-        Search libs_dir for a library that provides `header`.
-        Returns the source root of the library (root or src/ subdirectory).
+        Search libs_dir for a library that provides `header`, preferring the
+        best-named candidate instead of the first alphabetical one.
+
+        First-alphabetical was how <Servo.h> (6 providers in the live cache)
+        could resolve to a random lib that merely ships a same-named file,
+        and how generic headers landed on unrelated libraries. Scoring:
+
+          +100  normalized library name == normalized header stem
+                ("Servo.h" -> the lib actually named Servo/ESP32Servo...)
+           +40  library.properties architectures lists esp32 explicitly
+                (purpose-built beats a wildcard/absent declaration)
+           +20  library name CONTAINS the header stem, minus a length
+                penalty so "servo" outranks "simpleservoesp32"
+
+        Alphabetical remains the final tie-break so resolution stays
+        deterministic. Libraries with score 0 still resolve (legacy
+        behaviour) — this only changes WHICH provider wins when several
+        exist.
         """
+        stem = self._norm_lib_name(Path(header).stem)
+        best: tuple[float, str, Path] | None = None
         for lib_dir in sorted(libs_dir.iterdir()):
             if not lib_dir.is_dir():
                 continue
-            for src_root in [lib_dir, lib_dir / 'src']:
-                if (src_root / header).exists():
-                    return src_root
-        return None
+            src_root = None
+            for cand in (lib_dir, lib_dir / 'src'):
+                if (cand / header).exists():
+                    src_root = cand
+                    break
+            if src_root is None:
+                continue
+            # Folder names in the shared cache look like "esp32servo@3.2.1-<hash>"
+            # — strip the version suffix before comparing.
+            folder = lib_dir.name.split('@', 1)[0]
+            props = self._parse_library_properties(lib_dir)
+            names = {self._norm_lib_name(folder)}
+            if props.get('name'):
+                names.add(self._norm_lib_name(props['name']))
+            score = 0.0
+            if stem and stem in names:
+                score += 100
+            arch = {a.strip().lower() for a in props.get('architectures', '').split(',') if a.strip()}
+            if self._ESP32_LIB_ARCH in arch:
+                score += 40
+            if stem and score < 100 and any(stem in n for n in names if n):
+                shortest = min((len(n) for n in names if stem in n), default=0)
+                score += max(5.0, 20.0 - (shortest - len(stem)) * 0.5)
+            if best is None or score > best[0]:
+                best = (score, lib_dir.name, src_root)
+        return best[2] if best else None
 
     def _create_idf_component(
         self,
@@ -1211,13 +1418,22 @@ class ESPIDFCompiler:
         )
         return safe_name
 
-    def _build_env(self, idf_target: str) -> dict:
-        """Build environment dict for ESP-IDF subprocess."""
+    def _build_env(self, idf_target: str, pure_idf: bool = False) -> dict:
+        """Build environment dict for ESP-IDF subprocess.
+
+        pure_idf: omit ARDUINO_ESP32_PATH (the template CMake only pulls the
+        arduino-esp32 component when that var is set) and raise
+        VELXIO_PURE_SKETCH so main/CMakeLists.txt compiles the user's own
+        app_main() sources instead of the Arduino sketch wrapper.
+        """
         env = os.environ.copy()
         env['IDF_PATH'] = self.idf_path
         env['IDF_TARGET'] = idf_target
 
-        if self.has_arduino:
+        if pure_idf:
+            env.pop('ARDUINO_ESP32_PATH', None)
+            env['VELXIO_PURE_SKETCH'] = '1'
+        elif self.has_arduino:
             env['ARDUINO_ESP32_PATH'] = self.arduino_path
 
         # On Windows, ESP-IDF uses its own Python venv
@@ -1745,6 +1961,7 @@ class ESPIDFCompiler:
         spiffs_files: list[dict] | None = None,
         allowed_libraries: set[str] | None = None,
         owner_id: str | None = None,
+        pure_idf: bool = False,
     ) -> dict:
         """
         Compile Arduino sketch using ESP-IDF.
@@ -1777,6 +1994,12 @@ class ESPIDFCompiler:
         only sdkconfig-affecting options are — because the SPIFFS image is
         rebuilt on every compile anyway and folding it in would burn the
         C/C++ ninja cache on every file edit.
+
+        pure_idf: pure ESP-IDF language mode (issue #139). The user's files
+        ARE the IDF main component sources (they provide app_main()); the
+        arduino-esp32 component is left out of the build entirely and
+        Arduino library resolution is skipped. Gets its own persistent
+        build-dir variant via the eff_hash fold below.
         """
         if not self.available:
             return {
@@ -1842,8 +2065,12 @@ class ESPIDFCompiler:
                 ('m:' + ','.join(sorted(allowed)) + ('|s:' + scope_token if scope_token else ''))
                 if allowed is not None else 'scanall'
             )
+            # Pure ESP-IDF mode gets its own build-dir variant: same bytes
+            # compiled with vs without the arduino-esp32 component produce
+            # entirely different cmake graphs + objects.
+            _lang_token = '|lang:pure' if pure_idf else ''
             eff_hash = hashlib.sha256(
-                (options_hash + '|' + _libs_token + '|i:' + _ext_inc_token).encode()
+                (options_hash + '|' + _libs_token + '|i:' + _ext_inc_token + _lang_token).encode()
             ).hexdigest()[:12]
             try:
                 if _USE_PERSISTENT_DIR:
@@ -1853,6 +2080,7 @@ class ESPIDFCompiler:
                         project_dir, files, idf_target, is_c3,
                         progress_callback, normalized_opts, spiffs_files,
                         allowed_libraries=allowed, libraries_dir=scope_dir,
+                        pure_idf=pure_idf,
                     )
                 with tempfile.TemporaryDirectory(prefix='espidf_') as temp_dir:
                     project_dir = Path(temp_dir) / 'project'
@@ -1862,6 +2090,7 @@ class ESPIDFCompiler:
                         project_dir, files, idf_target, is_c3,
                         progress_callback, normalized_opts, spiffs_files,
                         allowed_libraries=allowed, libraries_dir=scope_dir,
+                        pure_idf=pure_idf,
                     )
             finally:
                 if scope_dir is not None:
@@ -1882,7 +2111,10 @@ class ESPIDFCompiler:
                     return r2
             return r
 
-        result = await _attempt_safe(allowed_libraries)
+        # Pure ESP-IDF mode never resolves Arduino libraries — force the
+        # no-manifest path (the manifest names Arduino libs, which don't
+        # exist in a pure IDF build).
+        result = await _attempt_safe(None if pure_idf else allowed_libraries)
 
         # Graceful fallback (P2). A manifest-scoped compile that fails because a
         # header isn't in the manifest (an undeclared / transitive dependency)
@@ -1891,7 +2123,7 @@ class ESPIDFCompiler:
         # manifest can be auto-completed (P2.4) or the user prompted to add the
         # missing library. The caller holds the per-target lock for this whole
         # method, so the retry safely reuses the same build dir.
-        if allowed_libraries is not None and not result.get('success'):
+        if allowed_libraries is not None and not pure_idf and not result.get('success'):
             missing = self._missing_library_headers(result)
             if missing:
                 logger.warning(
@@ -1919,11 +2151,17 @@ class ESPIDFCompiler:
         spiffs_files: list[dict] | None = None,
         allowed_libraries: set[str] | None = None,
         libraries_dir: Path | None = None,
+        pure_idf: bool = False,
     ) -> dict:
         """Inner compile body: writes sketch + libs into `project_dir`,
         runs cmake + ninja, merges binaries. Caller is responsible for
         creating `project_dir` (with the template tree already copied in)
         and for managing its lifecycle (persistent vs tempfile).
+
+        pure_idf: the user's files are the IDF main component sources
+        (app_main entry point) — no Arduino wrap, no Arduino libraries.
+        The template's main/CMakeLists.txt picks its pure branch via the
+        VELXIO_PURE_SKETCH env var set in _build_env.
         """
         # board_options is already normalised by compile() — defensive in
         # case _compile_in_dir is called directly from a test path.
@@ -1935,6 +2173,15 @@ class ESPIDFCompiler:
         # template tree. Doing this BEFORE cmake configure means the new
         # CONFIG_* lines reach kconfig on its first read.
         rendered_sdkconfig = self._render_sdkconfig(board_options, _TEMPLATE_DIR)
+        if pure_idf:
+            # Without the arduino-esp32 component the CONFIG_ARDUINO_* /
+            # CONFIG_AUTOSTART_ARDUINO symbols don't exist. kconfig only
+            # warns on unknown symbols, but strip them so the generated
+            # sdkconfig stays honest about what the build contains.
+            rendered_sdkconfig = '\n'.join(
+                line for line in rendered_sdkconfig.splitlines()
+                if not line.startswith(('CONFIG_ARDUINO', 'CONFIG_AUTOSTART_ARDUINO'))
+            ) + '\n'
         defaults_path = project_dir / 'sdkconfig.defaults'
         prev_defaults = (
             defaults_path.read_text(encoding='utf-8') if defaults_path.exists() else None
@@ -1969,10 +2216,50 @@ class ESPIDFCompiler:
         # We normalize ANY user SSID → "Velxio-GUEST", enforce channel 6,
         # and use open auth (empty password) so the connection always works.
         # Detect WiFi BEFORE normalization so the flag reflects the original sketch.
-        has_wifi = self._detect_wifi_usage(main_content)
-        main_content = self._normalize_wifi_for_qemu(main_content)
+        # header -> display name of the library the resolver merged for it.
+        # Declared at function scope: the success return reads it for EVERY
+        # build mode, but only the Arduino-sketch branch fills it. Declaring
+        # it inside that branch broke pure ESP-IDF compiles with
+        # UnboundLocalError at the result step (2026-08-05 regression).
+        merged_libs_report: dict[str, str] = {}
+        if pure_idf:
+            _all_text = '\n'.join(f.get('content', '') for f in files)
+            has_wifi = self._detect_idf_wifi_usage(_all_text)
+        else:
+            has_wifi = self._detect_wifi_usage(main_content)
+            main_content = self._normalize_wifi_for_qemu(main_content)
 
-        if self.has_arduino:
+        if pure_idf:
+            # Pure ESP-IDF mode (issue #139): the user's files ARE the main
+            # component sources — app_main() entry point, IDF APIs, compiled
+            # by the template CMake's VELXIO_PURE_SKETCH glob branch. No
+            # Arduino wrap, no velxio_compat.h, no Arduino libraries.
+            main_dir = project_dir / 'main'
+            # Template / other-mode leftovers must not reach the pure glob
+            # (main.cpp would drag in setup()/loop() references; a stale
+            # sketch.ino.cpp would redefine symbols). Deleted BEFORE writing
+            # so a user file with the same name wins.
+            for leftover in ('main.c', 'main.cpp', 'sketch.ino.cpp', 'sketch_translated.c'):
+                (main_dir / leftover).unlink(missing_ok=True)
+            wrote_any = False
+            for f in files:
+                # basename() the client-supplied name so it can't escape main/
+                name = PurePosixPath(str(f.get('name') or '').replace('\\', '/')).name
+                if not name:
+                    continue
+                content = f.get('content', '')
+                if has_wifi:
+                    content = self._normalize_wifi_for_qemu_idf(content)
+                (main_dir / name).write_text(content, encoding='utf-8')
+                wrote_any = True
+            if not wrote_any:
+                return {
+                    'success': False,
+                    'error': 'No source files provided.',
+                    'stdout': '',
+                    'stderr': '',
+                }
+        elif self.has_arduino:
             # Arduino-as-component mode: copy sketch as .cpp
             sketch_cpp = project_dir / 'main' / 'sketch.ino.cpp'
             # Prepend Arduino.h + velxio_compat.h if not already included.
@@ -2031,6 +2318,10 @@ class ESPIDFCompiler:
                     )
             ext_headers = list(ext_headers_set)
             component_names: list[str] = []
+            # merged_libs_report (function scope) is fed back to the client
+            # on scan-all success so the project manifest can be
+            # auto-completed (79% of projects compile with an empty manifest
+            # today; this migrates them one green build at a time).
             # arduino-esp32 component name (directory basename of ARDUINO_ESP32_PATH)
             arduino_comp_name = Path(self.arduino_path).name if self.arduino_path else 'arduino-esp32'
 
@@ -2050,6 +2341,7 @@ class ESPIDFCompiler:
                     ext_headers, arduino_libs, esp32_libs,
                     arduino_comp_name, user_libs_dir,
                     allowed_libraries=allowed_libraries,
+                    merged_libs=merged_libs_report,
                 )
 
             # Patch main/CMakeLists.txt — REQUIRES and INCLUDE_DIRS for user_libs_all.
@@ -2088,7 +2380,7 @@ class ESPIDFCompiler:
         build_dir = project_dir / 'build'
         build_dir.mkdir(exist_ok=True)
 
-        env = self._build_env(idf_target)
+        env = self._build_env(idf_target, pure_idf=pure_idf)
 
         # Step 1: cmake configure
         cmake_cmd = [
@@ -2290,7 +2582,7 @@ class ESPIDFCompiler:
         binary_b64 = base64.b64encode(merged_path.read_bytes()).decode('ascii')
         logger.info(f'[espidf] Compilation successful — {len(binary_b64) // 1024} KB (base64), has_wifi={has_wifi}')
 
-        return {
+        result_ok: dict = {
             'success': True,
             'hex_content': None,
             'binary_content': binary_b64,
@@ -2299,6 +2591,16 @@ class ESPIDFCompiler:
             'stdout': all_stdout,
             'stderr': all_stderr,
         }
+        # Scan-all build (no manifest): tell the client exactly which
+        # libraries the build really used, shaped like the existing
+        # manifest_suggested_libraries ({header: [candidates]}) so one
+        # consumer handles both this and the incomplete-manifest retry.
+        if allowed_libraries is None and merged_libs_report:
+            result_ok['manifest_incomplete'] = True
+            result_ok['manifest_suggested_libraries'] = {
+                h: [name] for h, name in merged_libs_report.items()
+            }
+        return result_ok
 
 
 # Singleton instance

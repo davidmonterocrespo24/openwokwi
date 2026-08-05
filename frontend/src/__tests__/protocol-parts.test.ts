@@ -874,6 +874,48 @@ describe('ds3231 — ESP32 path', () => {
   });
 });
 
+// ─── ds3231 — AVR / RP2040 path ───────────────────────────────────────────────
+
+describe('ds3231 — AVR/RP2040 path', () => {
+  it('adds an I2C device at 0x68 seeded with element.temperature', () => {
+    const sim = makeI2CSim();
+    const logic = PartSimulationRegistry.get('ds3231')!;
+    logic.attachEvents!(makeElement({ temperature: '31.25' }), sim as any, noPins, 'ds3231-avr-1');
+    expect(sim.addI2CDevice).toHaveBeenCalledOnce();
+    const dev = sim.addI2CDevice.mock.calls[0][0];
+    expect(dev.address).toBe(0x68);
+    expect(dev.temperatureC).toBeCloseTo(31.25);
+  });
+
+  it('SensorControlPanel updates reach the virtual device live', () => {
+    const sim = makeI2CSim();
+    const logic = PartSimulationRegistry.get('ds3231')!;
+    const cleanup = logic.attachEvents!(makeElement(), sim as any, noPins, 'ds3231-avr-2');
+    const dev = sim.addI2CDevice.mock.calls[0][0];
+    expect(dev.temperatureC).toBeCloseTo(25.0);
+
+    dispatchSensorUpdate('ds3231-avr-2', { temperature: -7.5 });
+    expect(dev.temperatureC).toBeCloseTo(-7.5);
+
+    // After cleanup the registry entry is gone — updates no longer land.
+    cleanup();
+    dispatchSensorUpdate('ds3231-avr-2', { temperature: 60 });
+    expect(dev.temperatureC).toBeCloseTo(-7.5);
+  });
+
+  it('temperature registers 0x11/0x12 encode integer + quarter-degree fraction', () => {
+    const sim = makeI2CSim();
+    const logic = PartSimulationRegistry.get('ds3231')!;
+    logic.attachEvents!(makeElement({ temperature: '25.75' }), sim as any, noPins, 'ds3231-avr-3');
+    const dev = sim.addI2CDevice.mock.calls[0][0];
+    // Point at 0x11 and read MSB + LSB like RTClib's getTemperature().
+    dev.writeByte(0x11);
+    dev.stop();
+    expect(dev.readByte()).toBe(25); // integer °C
+    expect(dev.readByte()).toBe(0b11 << 6); // 0.75 °C = 3 quarter-steps in bits 7:6
+  });
+});
+
 // ─── pcf8574 — ESP32 relay path ───────────────────────────────────────────────
 
 describe('pcf8574 — ESP32 relay path', () => {

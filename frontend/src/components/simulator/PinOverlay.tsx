@@ -10,6 +10,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useIsCoarsePointer } from '../../utils/useTouchDevice';
+import { rotatePinLocal } from '../../utils/pinPositionCalculator';
 
 /** Minimum visual pin size in *world* pixels at zoom 1 */
 const PIN_VISUAL = 12;
@@ -147,22 +148,14 @@ export const PinOverlay: React.FC<PinOverlayProps> = ({
         // The wrapper itself sits at (componentX, componentY), so its
         // top-left in container-local coords is (-wrapperOffsetX,
         // -wrapperOffsetY). CSS rotates around the wrapper's centre.
-        let pinX = pin.x;
-        let pinY = pin.y;
-        const angle = ((rotation % 360) + 360) % 360;
-        if (angle !== 0 && wrapperBox) {
-          const wrapperLeftLocal = -wrapperOffsetX;
-          const wrapperTopLocal = -wrapperOffsetY;
-          const pivotX = wrapperLeftLocal + wrapperBox.w / 2;
-          const pivotY = wrapperTopLocal + wrapperBox.h / 2;
-          const theta = (angle * Math.PI) / 180;
-          const cos = Math.cos(theta);
-          const sin = Math.sin(theta);
-          const dx = pin.x - pivotX;
-          const dy = pin.y - pivotY;
-          pinX = pivotX + dx * cos - dy * sin;
-          pinY = pivotY + dx * sin + dy * cos;
-        }
+        const { x: pinX, y: pinY } = rotatePinLocal(
+          pin.x,
+          pin.y,
+          rotation,
+          wrapperBox,
+          wrapperOffsetX,
+          wrapperOffsetY,
+        );
 
         return (
           <div

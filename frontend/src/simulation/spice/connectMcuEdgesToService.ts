@@ -27,8 +27,12 @@ import {
   useSimulatorStore,
   getBoardPinManager,
 } from '../../store/useSimulatorStore';
+import { stm32LinearToPinName, stm32PinNameToLinear } from '../Stm32Bridge';
+import { isStm32BoardKind, isPiBoardKind } from '../../types/board';
+import type { BoardKind } from '../../types/board';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { BOARD_PIN_GROUPS } from './boardPinGroups';
+import { pinNameToArduinoPin } from './collectPinStates';
 import type { CircuitSimulationService } from './CircuitSimulationService';
 
 /** How long edges per pin coalesce.  16 ms ≈ 60 fps, well below any
@@ -84,6 +88,19 @@ export function connectMcuEdgesToService(service: CircuitSimulationService): () 
     if (boardKind.startsWith('esp32')) {
       return `GPIO${arduinoPin}`;
     }
+    // STM32 wires reference port-style names (PA0 / PC13); its PinManager is
+    // keyed on the linear pin index. Without this reverse mapping the MCU-edge
+    // listener never attaches ("13" ≠ "PC13") — previously masked because
+    // PinManager requested a full re-solve on EVERY mcu edge; now that the
+    // full tick only fires on first classification, this fine-grained path
+    // must actually cover STM32.
+    if (isStm32BoardKind(boardKind)) {
+      return stm32LinearToPinName(arduinoPin);
+    }
+    // Raspberry Pi (Linux boards) wires use GPIO-style names like ESP32.
+    if (isPiBoardKind(boardKind)) {
+      return `GPIO${arduinoPin}`;
+    }
     // ATtiny85 wires reference port-style names (PB0..PB5), matching the
     // netlist pin names from collectPinStates. Without this, the reverse
     // mapping returns "1" instead of "PB1", so the MCU-edge listener is
@@ -128,14 +145,41 @@ export function connectMcuEdgesToService(service: CircuitSimulationService): () 
 
     const wanted = pinsInCircuit(boardId);
 
-    // Sweep 0..63 but only attach a listener when the pin name maps
-    // to one of the wires in the current netlist.  Re-subscription
-    // when the canvas changes happens via `syncBoardSubscriptions` on
-    // store-level board diffs and on `pinNetMap` updates below.
-    for (let pin = 0; pin < 64; pin++) {
-      const pinName = arduinoPinToName(pin, boardKind);
-      if (!pinName) continue;
-      if (wanted.size > 0 && !wanted.has(pinName)) continue;
+    // Resolve which (pin number, pin name) pairs to listen on.
+    //
+    // When the netlist has been solved at least once, `wanted` holds the
+    // EXACT pin names the wires reference ('2', 'A0', 'GP4', 'PC13', …) —
+    // the same names collectPinStates keyed the V-sources on. Map each of
+    // those through the SAME name→number function so the listener fires
+    // on the right PinManager pin AND `handleMcuEdge` receives the name
+    // whose `v_<board>_<name>` source actually exists (fast alterSource
+    // path, no per-edge rebuild). The previous approach reversed pin
+    // NUMBERS to names instead ('GPIO2' on ESP32) which never matched the
+    // wire names, so every resubscription after a mid-run pinNetMap
+    // change (e.g. a gpio_pull reported by pure ESP-IDF's gpio_reset_pin)
+    // silently detached all MCU-edge listeners and froze LEDs.
+    //
+    // Before the first solve (`wanted` empty) fall back to the historical
+    // 0..63 sweep with the reverse-mapped names.
+    const listenPins: Array<{ pin: number; pinName: string }> = [];
+    if (wanted.size > 0) {
+      const isStm32 = isStm32BoardKind(boardKind);
+      for (const pinName of wanted) {
+        const pin = isStm32
+          ? stm32PinNameToLinear(pinName)
+          : pinNameToArduinoPin(pinName, boardKind as BoardKind);
+        if (pin < 0) continue;
+        listenPins.push({ pin, pinName });
+      }
+    } else {
+      for (let pin = 0; pin < 64; pin++) {
+        const pinName = arduinoPinToName(pin, boardKind);
+        if (!pinName) continue;
+        listenPins.push({ pin, pinName });
+      }
+    }
+
+    for (const { pin, pinName } of listenPins) {
       const unsub = pm.onPinChange(pin, (_p, state) => {
         // Suppress digital edges when the pin has active PWM. The OCR-based
         // PWM duty is converted to a DC-averaged voltage in NetlistBuilder

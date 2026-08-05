@@ -79,6 +79,8 @@ interface SevenSegState {
   segments: number[];          // length 8
   digitValues: number[][];     // [digit][seg]; flattened into element.values
   digitEnabled: boolean[];     // length = digits
+  lastFlushMs: number;         // wall-clock of the last element.values write
+  flushTimer: ReturnType<typeof setTimeout> | null; // trailing write when throttled
 }
 
 const sevenSegState = new WeakMap<HTMLElement, SevenSegState>();
@@ -92,24 +94,62 @@ function getDigitsCount(element: HTMLElement): number {
 
 function get7SegState(element: HTMLElement): SevenSegState {
   let s = sevenSegState.get(element);
+  const digits = getDigitsCount(element);
+  // Rebuild when the digit count CHANGED since the state was created. The
+  // agent adds the display with the default digits=1 and only then sets
+  // digits=4 — the stale 1-digit state made every later attachEvents
+  // subscribe COM.1/COM.2 (which don't exist on a 4-digit part) instead of
+  // DIG1..DIG4, and since those resolvers "attached", the all-digits-on
+  // fallback never kicked in either: the display stayed permanently blank
+  // in-session and only a page reload (fresh element, digits already 4)
+  // fixed it.
+  if (s && s.digits !== digits) {
+    if (s.flushTimer !== null) clearTimeout(s.flushTimer);
+    s = undefined;
+  }
   if (!s) {
-    const digits = getDigitsCount(element);
     s = {
       digits,
       segments: [0, 0, 0, 0, 0, 0, 0, 0],
       digitValues: Array.from({ length: digits }, () => [0, 0, 0, 0, 0, 0, 0, 0]),
       digitEnabled: Array(digits).fill(false),
+      lastFlushMs: 0,
+      flushTimer: null,
     };
     sevenSegState.set(element, s);
   }
   return s;
 }
 
-function flush7SegValues(element: HTMLElement) {
-  const s = get7SegState(element);
+/** Minimum gap between element.values writes.  Each write re-renders the
+ *  wokwi SVG (lit template with up to 32 segment shapes); a multiplexed
+ *  clock over QEMU produces 1500-3000 segment edges per second, and writing
+ *  per edge saturated the main thread for minutes after Run.  8 ms (~125 Hz)
+ *  is far above both the display refresh a human can perceive and the 60 Hz
+ *  the canvas paints at; the trailing timer guarantees the final state is
+ *  never dropped. */
+const SEVEN_SEG_FLUSH_GAP_MS = 8;
+
+function write7SegValues(element: HTMLElement, s: SevenSegState) {
   const flat: number[] = [];
   for (let d = 0; d < s.digits; d++) flat.push(...s.digitValues[d]);
   (element as unknown as { values: number[] }).values = flat;
+}
+
+function flush7SegValues(element: HTMLElement) {
+  const s = get7SegState(element);
+  const now = Date.now();
+  if (now - s.lastFlushMs >= SEVEN_SEG_FLUSH_GAP_MS) {
+    s.lastFlushMs = now;
+    write7SegValues(element, s);
+    return;
+  }
+  if (s.flushTimer !== null) return; // trailing write already scheduled
+  s.flushTimer = setTimeout(() => {
+    s.flushTimer = null;
+    s.lastFlushMs = Date.now();
+    write7SegValues(element, s);
+  }, SEVEN_SEG_FLUSH_GAP_MS - (now - s.lastFlushMs));
 }
 
 function handle7SegSegment(element: HTMLElement, segIdx: number, state: boolean) {
@@ -396,6 +436,32 @@ PartSimulationRegistry.register('7segment', {
       }
     }
 
+    // CLN (colon, clock-style displays): drives the element's colonValue.
+    // Also flip `colon` on so the two dots render at all — wokwi-7segment
+    // hides them unless clock mode is enabled, and a wired CLN pin is the
+    // clearest signal the user wants a clock face.
+    {
+      const setColon = (state: boolean) => {
+        const el = element as unknown as { colon: boolean; colonValue: boolean };
+        el.colon = true;
+        el.colonValue = state;
+      };
+      if (useResolver) {
+        const resolver = getPinResolver!('CLN');
+        if (resolver) {
+          setColon(resolver.getCurrentState() === 'HIGH');
+          unsubscribers.push(resolver.onChange((state) => setColon(state === 'HIGH')));
+        }
+      } else {
+        const arduinoPin = getArduinoPinHelper('CLN');
+        if (arduinoPin !== null) {
+          unsubscribers.push(
+            pinManager.onPinChange(arduinoPin, (_: number, state: boolean) => setColon(state)),
+          );
+        }
+      }
+    }
+
     return () => unsubscribers.forEach((u) => u());
   },
   // Called by SimulatorCanvas for boards without a local simulator (e.g.
@@ -413,6 +479,12 @@ PartSimulationRegistry.register('7segment', {
     }
     if (upper === 'COM.1' || upper === 'COM.2') {
       handle7SegDigit(element, 0, state);
+      return;
+    }
+    if (upper === 'CLN') {
+      const el = element as unknown as { colon: boolean; colonValue: boolean };
+      el.colon = true;
+      el.colonValue = state;
       return;
     }
     const dm = upper.match(/^DIG(\d+)$/);

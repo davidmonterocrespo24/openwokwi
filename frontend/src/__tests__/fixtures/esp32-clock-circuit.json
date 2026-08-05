@@ -1,0 +1,700 @@
+{
+ "boardId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+ "components": [
+  {
+   "id": "breadboard_1",
+   "metadataId": "breadboard",
+   "properties": {}
+  },
+  {
+   "id": "7segment_1",
+   "metadataId": "7segment",
+   "properties": {
+    "digits": 4,
+    "colon": true
+   }
+  },
+  {
+   "id": "resistor_220_1",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_2",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_3",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_4",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_5",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_6",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_7",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  },
+  {
+   "id": "resistor_220_8",
+   "metadataId": "resistor-220",
+   "properties": {
+    "rotation": 90
+   }
+  }
+ ],
+ "wires": [
+  {
+   "id": "699bda65-cc5a-40",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "21t.d"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "35t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "ded18cb8-6804-4e",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "25t.d"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "37t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "210ac86a-dd84-42",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "23b.h"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "39t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "828e06ff-3b51-47",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "21b.h"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "41t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "020ff259-c6ad-47",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "20b.h"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "43t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "3d57ce29-1844-49",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "22t.d"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "45t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "c24471d2-8acf-42",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "24b.h"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "47t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "09dff781-b2a2-4c",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "22b.h"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "49t.b"
+   },
+   "bb": false
+  },
+  {
+   "id": "6c11a4bf-4271-4b",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "35b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "32"
+   },
+   "bb": false
+  },
+  {
+   "id": "56becf80-4217-49",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "37b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "33"
+   },
+   "bb": false
+  },
+  {
+   "id": "35148f93-0dfb-47",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "39b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "25"
+   },
+   "bb": false
+  },
+  {
+   "id": "8e68b903-6bc1-41",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "41b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "26"
+   },
+   "bb": false
+  },
+  {
+   "id": "74a77153-c2c4-4d",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "43b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "27"
+   },
+   "bb": false
+  },
+  {
+   "id": "2a0eb2fd-d583-4d",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "45b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "14"
+   },
+   "bb": false
+  },
+  {
+   "id": "b526bda1-01aa-47",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "47b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "12"
+   },
+   "bb": false
+  },
+  {
+   "id": "966f0a6e-bf67-4e",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "49b.g"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "13"
+   },
+   "bb": false
+  },
+  {
+   "id": "96d6e3a9-6ca0-44",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "20t.d"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "15"
+   },
+   "bb": false
+  },
+  {
+   "id": "7ebaeaa1-38ca-47",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "23t.d"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "2"
+   },
+   "bb": false
+  },
+  {
+   "id": "2fe1ff73-a9bd-49",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "24t.d"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "4"
+   },
+   "bb": false
+  },
+  {
+   "id": "88cad420-25f5-4a",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "25b.h"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "5"
+   },
+   "bb": false
+  },
+  {
+   "id": "26f601ef-fb7d-4d",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "26b.h"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "bn.1"
+   },
+   "bb": false
+  },
+  {
+   "id": "a86f8a48-6cca-4d",
+   "start": {
+    "componentId": "breadboard_1",
+    "pinName": "bn.1"
+   },
+   "end": {
+    "componentId": "56b16fd2-8904-4a5e-b269-5c6071ec285c",
+    "pinName": "GND"
+   },
+   "bb": false
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "A"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "21t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "B"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "25t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "C"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "23b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "D"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "21b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "E"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "20b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "F"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "22t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "G"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "24b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "DP"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "22b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "DIG1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "20t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "DIG2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "23t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "DIG3"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "24t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "DIG4"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "25b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "COM"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "26b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-7segment_",
+   "start": {
+    "componentId": "7segment_1",
+    "pinName": "CLN"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "26t.a"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_1",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "35t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_1",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "35b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_2",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "37t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_2",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "37b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_3",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "39t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_3",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "39b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_4",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "41t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_4",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "41b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_5",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "43t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_5",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "43b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_6",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "45t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_6",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "45b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_7",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "47t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_7",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "47b.f"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_8",
+    "pinName": "1"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "49t.b"
+   },
+   "bb": true
+  },
+  {
+   "id": "bbwire-resistor_",
+   "start": {
+    "componentId": "resistor_220_8",
+    "pinName": "2"
+   },
+   "end": {
+    "componentId": "breadboard_1",
+    "pinName": "49b.f"
+   },
+   "bb": true
+  }
+ ]
+}

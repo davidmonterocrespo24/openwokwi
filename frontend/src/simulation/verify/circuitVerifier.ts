@@ -23,6 +23,9 @@
  */
 import { buildNetlist } from '../spice/NetlistBuilder';
 import { runNetlist as runSpice } from '../spice/runNetlist';
+import { UnionFind } from '../spice/unionFind';
+import { BOARD_PIN_GROUPS } from '../spice/boardPinGroups';
+import { isBreadboard } from '../../utils/breadboardNets';
 import type { BuildNetlistInput, ElectricalSolveResult } from '../spice/types';
 import { COMPONENT_RATINGS } from './componentRatings';
 
@@ -39,7 +42,10 @@ export type WarningCode =
   | 'power-short'
   | 'shorted-component'
   | 'resistor-overpower'
-  | 'led-no-current';
+  | 'led-no-current'
+  | 'unpowered-net'
+  | 'no-return-path'
+  | 'voltage-mismatch';
 
 export interface CircuitWarning {
   severity: WarningSeverity;
@@ -249,6 +255,355 @@ export async function verifyCircuit(
         componentId: comp.id,
         message: `${comp.metadataId} ${comp.id} has both terminals on the same node — it is shorted out and has no effect on the circuit.`,
       });
+    }
+  }
+
+  // ── Audit rules (2026-07): unpowered nets / missing return path / relay
+  //    coil voltage mismatch ────────────────────────────────────────────────
+  // Graph-based, no solve — they fire even on circuits ngspice cannot solve.
+  // All three are non-blocking warnings: the goal is that the user (and the
+  // agent's pre-flight) SEE the fault, not a hard stop. Motivated by real
+  // audited circuits the verifier previously blessed with zero findings:
+  // a battery with only one pole wired, a MOSFET switching a rail nothing
+  // powers, a 12 V-coil relay fed from 5 V, and "power" nets with no source.
+  {
+    const boardIds = new Set(input.boards.map((b) => b.id));
+    const compById = new Map(input.components.map((c) => [c.id, c] as const));
+    // Board kinds double as component metadataIds in some flows (gallery
+    // sweeps, tests pass boards inside `components`): treat those components
+    // as self-powered boards. Keyed by kind → logic voltage.
+    const boardVccByKind = new Map<string, number>(
+      Object.entries(BOARD_PIN_GROUPS)
+        .filter(([kind]) => kind !== 'default')
+        .map(([kind, group]) => [kind, group.vcc] as const),
+    );
+    // Canvas element type of the esp32 board — appears as a component
+    // metadataId in the gallery flows.
+    if (!boardVccByKind.has('esp32-devkit-v1')) {
+      boardVccByKind.set('esp32-devkit-v1', boardVccByKind.get('esp32') ?? 3.3);
+    }
+    // Programmable custom chips are active, self-powered parts (their pins
+    // drive) — never report them or their nets as unpowered.
+    const isActiveChip = (metadataId: string): boolean => metadataId === 'custom-chip';
+    const dcSourceIds = new Set(
+      input.components.filter((c) => sourceInfo(c) !== null).map((c) => c.id),
+    );
+
+    const netOf = (entityId: string, pinName: string): string | undefined =>
+      pinNetMap.get(`${entityId}:${pinName}`) ??
+      (pinName === '−'
+        ? pinNetMap.get(`${entityId}:-`)
+        : pinName === '-'
+          ? pinNetMap.get(`${entityId}:−`)
+          : undefined);
+
+    // Return-side nets: the canonical ground plus every net a discrete
+    // source's negative terminal sits on. Everything in a circuit rides its
+    // return net, so treating it as a conductor would merge unrelated
+    // sub-circuits and mask dead branches — for POWER reachability these are
+    // barriers, for RETURN reachability they are the highway.
+    const NEG_PIN_NAMES = ['−', '-', 'GND'];
+    const returnNets = new Set<string>(['0']);
+    for (const src of input.components) {
+      if (!dcSourceIds.has(src.id)) continue;
+      for (const pinName of wiredPins.get(src.id) ?? []) {
+        if (!NEG_PIN_NAMES.includes(pinName)) continue;
+        const net = netOf(src.id, pinName);
+        if (net) returnNets.add(net);
+      }
+    }
+
+    // Which pins of a part conduct to each other internally. Most parts join
+    // all their wired pins (over-approximating conduction keeps false
+    // positives down); transistors only conduct through their channel (a
+    // MOSFET gate does not power its drain), and a relay's coil is
+    // galvanically isolated from its contacts.
+    const conductionGroups = (metadataId: string, pins: string[]): string[][] => {
+      if (/^mosfet-/.test(metadataId)) return [['D', 'S']];
+      if (/^bjt-/.test(metadataId)) return [['C', 'E']];
+      if (metadataId === 'relay') return [['COIL+', 'COIL-'], ['COM', 'NO', 'NC']];
+      return [pins];
+    };
+
+    // Region analysis: nets are nodes, entities join the nets their pins sit
+    // on. `power: true` asks "which nets can a power source actually reach?"
+    // (return nets don't bridge, sources don't conduct internally);
+    // `power: false` asks "are these nets connected at all?" (everything
+    // conducts — used for the return-path check).
+    const buildRegions = (opts: { excludeId?: string; power: boolean }): UnionFind => {
+      const uf2 = new UnionFind();
+      const usable = (net: string | undefined): net is string =>
+        net !== undefined && !(opts.power && returnNets.has(net));
+      for (const [entityId, pins] of wiredPins) {
+        if (entityId === opts.excludeId) continue;
+        if (opts.power && dcSourceIds.has(entityId)) continue;
+        const comp = compById.get(entityId);
+        // Breadboard internal connectivity is already folded into the nets.
+        if (comp && isBreadboard(comp.metadataId)) continue;
+        // Channel-only conduction applies to POWER reachability (a MOSFET
+        // gate cannot power the drain rail). For RETURN reachability every
+        // pin joins: voltage-driven inputs (BJT base, MOSFET gate) are
+        // legitimate signal sinks and must not read as broken loops.
+        const groups = comp && opts.power
+          ? conductionGroups(comp.metadataId, [...pins])
+          : [[...pins]]; // boards and unknown entities conduct across all pins
+        for (const group of groups) {
+          let anchor: string | undefined;
+          for (const pinName of group) {
+            const net = netOf(entityId, pinName);
+            if (!usable(net)) continue;
+            uf2.add(net);
+            if (anchor === undefined) anchor = net;
+            else uf2.union(anchor, net);
+          }
+        }
+      }
+      // Wires join their endpoint nets (only length-modelled wires actually
+      // split endpoints into two nets; for the rest this is a no-op union).
+      for (const wire of input.wires) {
+        const a = netOf(wire.start.componentId, wire.start.pinName);
+        const b = netOf(wire.end.componentId, wire.end.pinName);
+        if (usable(a) && usable(b)) {
+          uf2.add(a);
+          uf2.add(b);
+          uf2.union(a, b);
+        }
+      }
+      return uf2;
+    };
+
+    // Nets that genuinely inject power: discrete sources' positive terminals,
+    // every non-ground board pin (GPIOs drive, supply pins supply), and the
+    // shared VCC rail — but the rail only when a board actually defines it.
+    // VCC-named component pins wired together WITHOUT any board form a
+    // phantom rail that nothing powers (the audited "power net, no source").
+    const positiveSourceNets = new Set<string>();
+    const addEntitySourceNets = (entityId: string) => {
+      for (const pinName of wiredPins.get(entityId) ?? []) {
+        const net = netOf(entityId, pinName);
+        if (net && !returnNets.has(net)) positiveSourceNets.add(net);
+      }
+    };
+    for (const b of input.boards) addEntitySourceNets(b.id);
+    for (const entityId of wiredPins.keys()) {
+      // Endpoints belonging to no known component/board: be conservative and
+      // treat them as power-capable rather than invent findings about them.
+      if (!compById.has(entityId) && !boardIds.has(entityId)) addEntitySourceNets(entityId);
+    }
+    for (const c of input.components) {
+      if (boardVccByKind.has(c.metadataId) || isActiveChip(c.metadataId)) {
+        addEntitySourceNets(c.id);
+      }
+      const info = sourceInfo(c);
+      if (!info) continue;
+      for (const pinName of wiredPins.get(c.id) ?? []) {
+        if (!info.posPins.includes(pinName)) continue;
+        const net = netOf(c.id, pinName);
+        if (net && !returnNets.has(net)) positiveSourceNets.add(net);
+      }
+    }
+    const railDriven =
+      input.boards.length > 0 || input.components.some((c) => boardVccByKind.has(c.metadataId));
+    if (railDriven) positiveSourceNets.add('vcc_rail');
+
+    const skipForAudit = (c: BuildNetlistInput['components'][number]): boolean =>
+      dcSourceIds.has(c.id) ||
+      boardVccByKind.has(c.metadataId) ||
+      isActiveChip(c.metadataId) ||
+      isBreadboard(c.metadataId) ||
+      c.metadataId.startsWith('instr-');
+
+    const powerRegions = buildRegions({ power: true });
+    const poweredRoots = new Set<string>();
+    for (const net of positiveSourceNets) poweredRoots.add(powerRegions.find(net));
+
+    // ── Rule A1: a power-input pin on a net no source reaches ─────────────
+    // The part's own body must not bridge power onto its supply pin (a
+    // sensor's VCC is not powered by its SDA), so each part is checked
+    // against a region map built WITHOUT itself.
+    const POWER_INPUT_PIN_RE = /^(vcc\d*|vdd|vin|v\+|avcc|coil\+)$/i;
+    const flaggedUnpowered = new Set<string>();
+    for (const comp of input.components) {
+      if (skipForAudit(comp)) continue;
+      const rated = new Set(COMPONENT_RATINGS[comp.metadataId]?.supplyPins.map((p) => p.name) ?? []);
+      const pins = wiredPins.get(comp.id);
+      if (!pins) continue;
+      for (const pinName of pins) {
+        if (!rated.has(pinName) && !POWER_INPUT_PIN_RE.test(pinName)) continue;
+        const net = netOf(comp.id, pinName);
+        if (!net || returnNets.has(net)) continue;
+        const solo = buildRegions({ excludeId: comp.id, power: true });
+        const root = solo.find(net);
+        if ([...positiveSourceNets].some((s) => solo.find(s) === root)) continue;
+        flaggedUnpowered.add(comp.id);
+        warnings.push({
+          severity: 'warning',
+          code: 'unpowered-net',
+          componentId: comp.id,
+          message: `${comp.metadataId} ${comp.id} has its ${pinName} pin on a net with no power source — no battery, power supply, or board supply pin reaches that net, so the part stays unpowered. Wire the net to a real supply.`,
+        });
+        break; // one unpowered warning per part
+      }
+    }
+
+    // ── Rule A2: whole sub-circuits no power source reaches ───────────────
+    // Judged per conduction group so a relay whose contacts are fine still
+    // reports its dead coil. One warning per stranded region, naming the
+    // parts on it.
+    const strandedByRoot = new Map<string, string[]>();
+    for (const comp of input.components) {
+      if (flaggedUnpowered.has(comp.id) || skipForAudit(comp)) continue;
+      const pins = wiredPins.get(comp.id);
+      if (!pins) continue;
+      for (const group of conductionGroups(comp.metadataId, [...pins])) {
+        const roots = new Set<string>();
+        for (const pinName of group) {
+          const net = netOf(comp.id, pinName);
+          if (!net || returnNets.has(net)) continue; // ground pins don't count
+          roots.add(powerRegions.find(net));
+        }
+        if (roots.size === 0) continue;
+        if ([...roots].some((r) => poweredRoots.has(r))) continue;
+        const anchor = [...roots][0]!;
+        const list = strandedByRoot.get(anchor) ?? [];
+        if (!list.includes(comp.id)) list.push(comp.id);
+        strandedByRoot.set(anchor, list);
+      }
+    }
+    for (const ids of strandedByRoot.values()) {
+      const shown = ids
+        .slice(0, 3)
+        .map((id) => `${compById.get(id)?.metadataId ?? 'component'} ${id}`)
+        .join(', ');
+      const suffix = ids.length > 3 ? ` (+${ids.length - 3} more)` : '';
+      warnings.push({
+        severity: 'warning',
+        code: 'unpowered-net',
+        componentId: ids[0],
+        message: `No power source reaches ${shown}${suffix} — that part of the circuit never connects to a battery, power supply, or board pin, so no current can flow through it.`,
+      });
+    }
+
+    // ── Rule B: source without a return path ──────────────────────────────
+    // Current needs a closed loop. A battery with a single pole wired, or a
+    // source whose + side never reconnects to its − side, drives nothing —
+    // the audited "floating battery" circuit ran with zero findings.
+    for (const src of input.components) {
+      const info = sourceInfo(src);
+      if (!info) continue;
+      const set = wiredPins.get(src.id);
+      if (!set || set.size === 0) continue; // fully unwired — not a mistake yet
+      const posPin = [...set].find((p) => info.posPins.includes(p));
+      const negPin = [...set].find((p) => NEG_PIN_NAMES.includes(p));
+      if (!posPin !== !negPin) {
+        const wired = posPin ? 'positive (+)' : 'negative (−)';
+        const missing = posPin ? 'negative (−)' : 'positive (+)';
+        warnings.push({
+          severity: 'warning',
+          code: 'no-return-path',
+          componentId: src.id,
+          message: `${src.metadataId} ${src.id} has only its ${wired} terminal wired. Current needs a closed loop back into the ${missing} terminal — with it floating, no current can flow anywhere in this circuit.`,
+        });
+        continue;
+      }
+      if (!posPin || !negPin) continue;
+      const posNet = netOf(src.id, posPin);
+      const negNet = netOf(src.id, negPin);
+      if (!posNet || !negNet || posNet === negNet) continue; // short: other rules
+      const returnRegions = buildRegions({ excludeId: src.id, power: false });
+      if (returnRegions.find(posNet) !== returnRegions.find(negNet)) {
+        warnings.push({
+          severity: 'warning',
+          code: 'no-return-path',
+          componentId: src.id,
+          message: `Current leaving ${src.metadataId} ${src.id}'s ${posPin} terminal has no path back to its ${negPin} terminal — the loop never closes, so no current can flow. Check the return (GND) side of the circuit for a missing wire.`,
+        });
+      }
+    }
+
+    // ── Rule C: relay coil voltage vs the supply actually feeding it ──────
+    // A 12 V-coil relay on a 5 V rail sits far below its ~60% pull-in
+    // threshold and never actuates (audited case); the reverse overdrives
+    // and burns the coil. Compare coil_voltage against the nominal voltage
+    // of the supply on the coil nets (falling back to the coil's power
+    // region for coils fed through a switch or transistor).
+    const dominantVcc =
+      input.boards[0]?.vcc ??
+      (() => {
+        const bk = input.components.find((c) => boardVccByKind.has(c.metadataId));
+        return bk ? boardVccByKind.get(bk.metadataId)! : 5;
+      })();
+    const nominalOnNets = (nets: ReadonlySet<string>): number | undefined => {
+      let best: number | undefined;
+      const consider = (v: number) => {
+        if (Number.isFinite(v) && v > 0 && (best === undefined || v > best)) best = v;
+      };
+      if (nets.has('vcc_rail') && railDriven) consider(dominantVcc);
+      for (const c of input.components) {
+        const info = sourceInfo(c);
+        if (info) {
+          for (const pinName of wiredPins.get(c.id) ?? []) {
+            if (!info.posPins.includes(pinName)) continue;
+            const net = netOf(c.id, pinName);
+            if (net && !returnNets.has(net) && nets.has(net)) consider(info.volts);
+          }
+        }
+        if (boardVccByKind.has(c.metadataId)) {
+          for (const pinName of wiredPins.get(c.id) ?? []) {
+            const net = netOf(c.id, pinName);
+            if (net && !returnNets.has(net) && net !== 'vcc_rail' && nets.has(net)) {
+              consider(boardVccByKind.get(c.metadataId)!);
+            }
+          }
+        }
+      }
+      for (const b of input.boards) {
+        for (const pinName of wiredPins.get(b.id) ?? []) {
+          const net = netOf(b.id, pinName);
+          if (!net || returnNets.has(net) || !nets.has(net)) continue;
+          const state = b.pins[pinName];
+          consider(state?.type === 'digital' ? state.v : b.vcc);
+        }
+      }
+      return best;
+    };
+    for (const comp of input.components) {
+      if (comp.metadataId !== 'relay') continue;
+      const coilV = Number(comp.properties.coil_voltage ?? 5);
+      if (!Number.isFinite(coilV) || coilV <= 0) continue;
+      const coilNets = new Set<string>();
+      for (const pinName of ['COIL+', 'COIL-']) {
+        const net = netOf(comp.id, pinName);
+        if (net && !returnNets.has(net)) coilNets.add(net);
+      }
+      if (coilNets.size === 0) continue;
+      let supplyV = nominalOnNets(coilNets);
+      if (supplyV === undefined) {
+        const roots = new Set([...coilNets].map((n) => powerRegions.find(n)));
+        const reachable = new Set<string>();
+        for (const net of new Set(pinNetMap.values())) {
+          if (!returnNets.has(net) && roots.has(powerRegions.find(net))) reachable.add(net);
+        }
+        supplyV = nominalOnNets(reachable);
+      }
+      if (supplyV === undefined) continue; // unpowered coil — Rule A covers it
+      if (supplyV < coilV * 0.6) {
+        warnings.push({
+          severity: 'warning',
+          code: 'voltage-mismatch',
+          componentId: comp.id,
+          metric: supplyV,
+          message: `Relay ${comp.id} has a ${formatVolts(coilV)} coil (coil_voltage = ${coilV}) but its coil is fed from a ${formatVolts(supplyV)} supply — below the ~60% pull-in threshold, so the relay will never energise. Use a relay with a ${formatVolts(supplyV)} coil, or feed the coil ${formatVolts(coilV)}.`,
+        });
+      } else if (supplyV > coilV * 1.5) {
+        warnings.push({
+          severity: 'warning',
+          code: 'voltage-mismatch',
+          componentId: comp.id,
+          metric: supplyV,
+          message: `Relay ${comp.id} has a ${formatVolts(coilV)} coil (coil_voltage = ${coilV}) but its coil is fed from ${formatVolts(supplyV)} — far above its rating. A real coil would overheat and burn out; use a ${formatVolts(supplyV)}-rated coil or the matching ${formatVolts(coilV)} supply.`,
+        });
+      }
     }
   }
 

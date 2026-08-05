@@ -224,6 +224,22 @@ function newProject(): void {
 
   // Clear the compile output panel so old build logs don't carry over.
   compileLogs.clear();
+
+  // Leave whatever project URL we were on: staying there would reload the
+  // OLD project over this fresh workspace on refresh. replaceState (not
+  // navigateTo's pushState) so the back button can't pop to the stale
+  // project URL either; the popstate dispatch lets React Router render
+  // the plain editor route.
+  const cur = window.location.pathname;
+  const localeMatch = cur.match(/^\/([a-z]{2}(?:-[a-z]{2})?)\b/);
+  const prefix = localeMatch && LOCALES.includes(localeMatch[1] as Locale)
+    ? `/${localeMatch[1]}`
+    : '';
+  const editorPath = `${prefix}/editor`;
+  if (cur !== editorPath) {
+    window.history.replaceState(null, '', editorPath);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
 }
 
 async function checkForUpdates(): Promise<void> {

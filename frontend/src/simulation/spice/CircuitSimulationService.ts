@@ -141,6 +141,35 @@ export class CircuitSimulationService {
    *  keep re-scheduling solves against a disposed scheduler. */
   private stopped = false;
 
+  /** Trailing timer for draining `pendingMcuEdges`. Replaying queued
+   *  edges IMMEDIATELY after a solve creates a back-to-back solve loop
+   *  under sustained toggling (a multiplexed display keeps 8-13 pins
+   *  hot, so the queue never empties) — the solver runs at 100% duty
+   *  and the UI starves. One drain per gap keeps last-state-wins per
+   *  pin while bounding total solve rate. */
+  private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly EDGE_DRAIN_GAP_MS = 33;
+
+  /** Drain pendingMcuEdges after a short gap (coalescing: one timer). */
+  private scheduleEdgeDrain(): void {
+    if (this.stopped || this.drainTimer !== null) return;
+    this.drainTimer = setTimeout(() => {
+      this.drainTimer = null;
+      if (this.stopped) return;
+      const edges = Array.from(this.pendingMcuEdges.values());
+      this.pendingMcuEdges.clear();
+      const ctx = this.loadedContext;
+      for (const edge of edges) {
+        const expected = `v_${sanitizeSpiceId(edge.boardId)}_${sanitizeSpiceId(edge.pinName)}`.toLowerCase();
+        const hasSource = ctx?.voltageSources.some(
+          (vs) => vs.toLowerCase() === expected,
+        );
+        if (!hasSource) continue;
+        void this.handleMcuEdge(edge.boardId, edge.pinName, edge.state, edge.vcc);
+      }
+    }, CircuitSimulationService.EDGE_DRAIN_GAP_MS);
+  }
+
   constructor(
     private readonly simStore: SimulatorStorePort,
     private readonly electricalStore: ElectricalStorePort,
@@ -169,6 +198,10 @@ export class CircuitSimulationService {
     this.stopped = true;
     this.pending = false;
     this.pendingMcuEdges.clear();
+    if (this.drainTimer !== null) {
+      clearTimeout(this.drainTimer);
+      this.drainTimer = null;
+    }
   }
 
   /** Run one solve cycle, coalescing concurrent triggers. */
@@ -200,23 +233,11 @@ export class CircuitSimulationService {
         this.pending = false;
         void this.tick();
       } else if (this.pendingMcuEdges.size > 0) {
-        const edges = Array.from(this.pendingMcuEdges.values());
-        this.pendingMcuEdges.clear();
-        const ctx = this.loadedContext;
-        for (const edge of edges) {
-          // If the rebuild we just completed still didn't emit a
-          // V-source for this pin (e.g. the pin isn't wired into
-          // any net), replaying via handleMcuEdge would self-heal
-          // again → re-tick → loop forever. Drop the edge instead;
-          // a future canvas change (e.g. user adds the wire) will
-          // pick it up via the normal subscription tick.
-          const expected = `v_${sanitizeSpiceId(edge.boardId)}_${sanitizeSpiceId(edge.pinName)}`.toLowerCase();
-          const hasSource = ctx?.voltageSources.some(
-            (vs) => vs.toLowerCase() === expected,
-          );
-          if (!hasSource) continue;
-          void this.handleMcuEdge(edge.boardId, edge.pinName, edge.state, edge.vcc);
-        }
+        // Deferred drain (not an immediate replay): the drain itself
+        // re-checks each pin against the freshly-rebuilt V-source list,
+        // dropping edges for pins that still aren't wired into any net —
+        // replaying those would self-heal again → re-tick → loop forever.
+        this.scheduleEdgeDrain();
       }
     }
   }
@@ -236,7 +257,12 @@ export class CircuitSimulationService {
   async handleMcuEdge(boardId: string, pinName: string, state: boolean, vcc: number): Promise<void> {
     if (this.stopped) return;
     const pinKey = `${boardId}|${pinName}`;
-    if (this.inFlight) {
+    // Queue while a solve is in flight OR while the drain gap timer is
+    // armed. Without the second condition, every edge landing in the gap
+    // between solves would start an immediate solve of its own and the
+    // gap would only apply to the queued leftovers — under a sustained
+    // storm that's still ~1 solve per 2 edges instead of 1 per gap.
+    if (this.inFlight || this.drainTimer !== null) {
       this.pendingMcuEdges.set(pinKey, { boardId, pinName, state, vcc });
       return;
     }
@@ -275,11 +301,7 @@ export class CircuitSimulationService {
         this.pending = false;
         void this.tick();
       } else if (this.pendingMcuEdges.size > 0) {
-        const edges = Array.from(this.pendingMcuEdges.values());
-        this.pendingMcuEdges.clear();
-        for (const edge of edges) {
-          void this.handleMcuEdge(edge.boardId, edge.pinName, edge.state, edge.vcc);
-        }
+        this.scheduleEdgeDrain();
       }
     }
   }

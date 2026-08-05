@@ -1131,6 +1131,28 @@ export class RP2040Simulator {
   }
 
   /**
+   * Feed bytes into a hardware UART's RX from an external part (GPS module,
+   * a wired peer board via Interconnect, …). Uniform seam across simulators
+   * (`sim.feedUart(uart, data)`) — Interconnect already probes for it.
+   *
+   * RP2040 has two PL011 UARTs: uart 0 = Serial1 (GP0/GP1 on the Earle
+   * Philhower core), uart 1 = Serial2 (GP8/GP9 by default). Unlike
+   * `serialWrite`, this always targets the hardware UART — never the USB
+   * CDC console — so it works the same in Arduino and MicroPython modes.
+   *
+   * @returns true when the bytes were delivered.
+   */
+  feedUart(uart: number, data: string): boolean {
+    if (!this.rp2040) return false;
+    const target = this.rp2040.uart[uart];
+    if (!target) return false;
+    for (let i = 0; i < data.length; i++) {
+      target.feedByte(data.charCodeAt(i));
+    }
+    return true;
+  }
+
+  /**
    * Send a raw byte to the serial interface (for control characters like Ctrl+C).
    */
   serialWriteByte(byte: number): void {

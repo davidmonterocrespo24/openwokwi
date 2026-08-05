@@ -129,6 +129,38 @@ export function calculatePinPosition(
 }
 
 /**
+ * Rotate a pin's element-space (x, y) around the DynamicComponent wrapper
+ * centre, returning coordinates LOCAL to the pin-overlay container (whose
+ * origin is the inner element top-left, i.e. component pos + wrapper inset).
+ *
+ * Shared by every always-/hover-rendered pin layer (wire-target boxes,
+ * seated-pin markers) so they can never drift apart: the wrapper is rotated
+ * by CSS `transform: rotate()` about `center center`, but the overlay layers
+ * live OUTSIDE that wrapper and must reproduce the rotation manually.
+ * `wrapperBox` is the wrapper's UNROTATED layout box (offsetWidth/Height),
+ * which is what CSS rotates around; pass null (or angle 0) to skip rotation.
+ */
+export function rotatePinLocal(
+  x: number,
+  y: number,
+  rotation: number,
+  wrapperBox: { w: number; h: number } | null,
+  wrapperOffsetX: number,
+  wrapperOffsetY: number,
+): { x: number; y: number } {
+  const angle = ((rotation % 360) + 360) % 360;
+  if (angle === 0 || !wrapperBox) return { x, y };
+  const pivotX = -wrapperOffsetX + wrapperBox.w / 2;
+  const pivotY = -wrapperOffsetY + wrapperBox.h / 2;
+  const theta = (angle * Math.PI) / 180;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const dx = x - pivotX;
+  const dy = y - pivotY;
+  return { x: pivotX + dx * cos - dy * sin, y: pivotY + dx * sin + dy * cos };
+}
+
+/**
  * Gets all pins for a component with their absolute canvas positions.
  * Useful for rendering pin overlays and finding nearby pins.
  *

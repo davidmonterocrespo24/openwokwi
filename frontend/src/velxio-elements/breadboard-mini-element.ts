@@ -58,6 +58,9 @@ function buildPins(): BreadboardMiniPin[] {
 
 const PINS: readonly BreadboardMiniPin[] = buildPins();
 
+/** Pure hole-grid export — same geometry as the rendered element, DOM-free. */
+export const BREADBOARD_MINI_PINS: readonly BreadboardMiniPin[] = PINS;
+
 let artPromise: Promise<string | null> | null = null;
 function fetchArt(): Promise<string | null> {
   if (!artPromise) {
@@ -85,7 +88,13 @@ function buildFallbackSvg(): string {
   return parts.join('');
 }
 
-export class BreadboardMiniElement extends HTMLElement {
+// DOM-free import guard — see breadboard-element.ts.
+const HTMLElementBase: typeof HTMLElement =
+  typeof HTMLElement !== 'undefined'
+    ? HTMLElement
+    : (class {} as unknown as typeof HTMLElement);
+
+export class BreadboardMiniElement extends HTMLElementBase {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -111,6 +120,6 @@ export class BreadboardMiniElement extends HTMLElement {
   }
 }
 
-if (!customElements.get('velxio-breadboard-mini')) {
+if (typeof customElements !== 'undefined' && !customElements.get('velxio-breadboard-mini')) {
   customElements.define('velxio-breadboard-mini', BreadboardMiniElement);
 }

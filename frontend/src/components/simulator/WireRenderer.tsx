@@ -24,6 +24,10 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   previewWaypoints,
   overridePath,
 }) => {
+  // Breadboard seating wires are pure connectivity — the part visually
+  // sits in the holes, so there is nothing to draw.
+  if (wire.bb) return null;
+
   const waypoints = previewWaypoints ?? wire.waypoints;
   const path = overridePath ?? generateOrthogonalPath(wire.start, waypoints, wire.end);
 
@@ -35,7 +39,7 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   const opacity = isSelected || isHovered ? 1 : 0.85;
 
   return (
-    <g style={{ pointerEvents: 'none' }}>
+    <g style={{ pointerEvents: 'none' }} strokeLinecap="round" strokeLinejoin="round">
       {/* Dark outline for wire crossing effect */}
       <path d={path} stroke="#1a1a1a" strokeWidth={outlineW} fill="none" />
 
@@ -69,11 +73,6 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
         strokeWidth="1"
       />
       <circle cx={wire.end.x} cy={wire.end.y} r="3" fill={color} stroke="#1a1a1a" strokeWidth="1" />
-
-      {/* Waypoint dots */}
-      {waypoints.map((wp, i) => (
-        <circle key={i} cx={wp.x} cy={wp.y} r="2" fill={color} />
-      ))}
     </g>
   );
 };

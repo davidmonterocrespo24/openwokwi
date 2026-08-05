@@ -22,7 +22,9 @@
 import { useSimulatorStore, getBoardSimulator, getBoardPinManager } from '../../store/useSimulatorStore';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { isStm32BoardKind } from '../../types/board';
+import type { BoardKind } from '../../types/board';
 import { stm32PinNameToLinear } from '../Stm32Bridge';
+import { boardPinToNumber } from '../../utils/boardPinMapping';
 
 // 3.3 V LVCMOS thresholds with a hysteresis band so a node hovering near the
 // midpoint doesn't chatter. A pulled-up idle input sits at ~3.3 V and a
@@ -31,8 +33,13 @@ const V_HIGH = 2.0;
 const V_LOW = 0.8;
 
 /** Map a board pin name to a plain GPIO number, or -1 if it isn't one we
- *  drive digitally (GND/VCC/UART-named pads, etc.). */
-function gpioFromPinName(name: string): number {
+ *  drive digitally (GND/VCC/UART-named pads, etc.). Delegates to the
+ *  canonical silkscreen->GPIO table so labeled pins resolve too — the old
+ *  digits/GPIO-only regex returned -1 for nano-esp32 'D2'/'A0', which left
+ *  INPUT_PULLUP buttons permanently LOW on that family (2026-07 audit). */
+function gpioFromPinName(name: string, boardKind: BoardKind): number {
+  const n = boardPinToNumber(boardKind, name);
+  if (n != null) return n;
   if (/^\d+$/.test(name)) return parseInt(name, 10); // "4", "15"
   const m = name.match(/^GPIO(\d+)$/i) || name.match(/^GP(\d+)$/i);
   return m ? parseInt(m[1], 10) : -1;
@@ -61,7 +68,7 @@ export function connectDigitalInputsToMcu(): () => void {
       for (const [key, net] of pinNetMap) {
         if (!key.startsWith(prefix)) continue;
         const pinName = key.slice(prefix.length);
-        const gpio = isStm32 ? stm32PinNameToLinear(pinName) : gpioFromPinName(pinName);
+        const gpio = isStm32 ? stm32PinNameToLinear(pinName) : gpioFromPinName(pinName, board.boardKind);
         if (gpio < 0) continue;
         if (driven.has(gpio)) continue; // the MCU drives this pin (digitalWrite)
         // Only drive pins whose net is backed by a real source/element (rail,

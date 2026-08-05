@@ -44,7 +44,10 @@ interface CompilationConsoleProps {
   onClear: () => void;
 }
 
-export const CompilationConsole: React.FC<CompilationConsoleProps> = ({
+// Memoized: the console lives inside EditorPage, which re-renders on every
+// simulator-store change (component drags, pin updates, etc.). Without memo,
+// each of those re-rendered every log line even though `logs` was untouched.
+export const CompilationConsole: React.FC<CompilationConsoleProps> = React.memo(({
   isOpen,
   onClose,
   logs,
@@ -216,24 +219,32 @@ export const CompilationConsole: React.FC<CompilationConsoleProps> = ({
       </div>
     </div>
   );
-};
+});
+CompilationConsole.displayName = 'CompilationConsole';
 
-const LogLine: React.FC<{ log: CompilationLog }> = ({ log }) => (
+// Shared formatter: `Date.toLocaleTimeString(...)` builds a fresh Intl
+// formatter on every call (~0.1-0.3 ms). With hundreds of log lines and the
+// console re-rendering on every editor state change, that alone produced
+// ~150 ms render tasks — a major slice of the frozen-browser-after-Run bug.
+const TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
+  hour12: false,
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+// Memoized: a log entry is immutable once appended, so a line never needs to
+// re-render — appends only mount NEW lines instead of re-rendering all.
+const LogLine = React.memo<{ log: CompilationLog }>(({ log }) => (
   <div style={styles.logLine}>
-    <span style={styles.timestamp}>
-      {log.timestamp.toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      })}
-    </span>
+    <span style={styles.timestamp}>{TIME_FORMAT.format(log.timestamp)}</span>
     <span style={{ ...styles.logMessage, color: logColor(log.type) }}>
       {log.type === 'core-install' && <span style={styles.coreTag}>CORE </span>}
       {log.message}
     </span>
   </div>
-);
+));
+LogLine.displayName = 'LogLine';
 
 function statusColor(status: 'error' | 'success' | 'running'): string {
   return status === 'error' ? '#ef5350' : status === 'success' ? '#66bb6a' : '#9aa0a6';

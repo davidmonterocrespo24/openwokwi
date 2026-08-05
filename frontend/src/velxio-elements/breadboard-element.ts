@@ -86,6 +86,10 @@ function buildPins(): BreadboardPin[] {
 
 const PINS: readonly BreadboardPin[] = buildPins();
 
+/** Pure hole-grid export — lets snapping/seating logic and tests use the
+ * exact same geometry as the rendered element without touching the DOM. */
+export const BREADBOARD_PINS: readonly BreadboardPin[] = PINS;
+
 /* Shared, module-level fetch of the Fritzing artwork (one request no matter
  * how many breadboards are on the canvas). Resolves to the raw <svg> markup
  * or null when unavailable (missing asset, offline dev edge cases). */
@@ -117,7 +121,15 @@ function buildFallbackSvg(): string {
   return parts.join('');
 }
 
-export class BreadboardElement extends HTMLElement {
+// DOM-free import guard: the hole-grid exports above are consumed by pure
+// geometry code (breadboardSnap) and node-side tests, where HTMLElement
+// does not exist. The stub is never instantiated outside a browser.
+const HTMLElementBase: typeof HTMLElement =
+  typeof HTMLElement !== 'undefined'
+    ? HTMLElement
+    : (class {} as unknown as typeof HTMLElement);
+
+export class BreadboardElement extends HTMLElementBase {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -145,6 +157,6 @@ export class BreadboardElement extends HTMLElement {
   }
 }
 
-if (!customElements.get('velxio-breadboard')) {
+if (typeof customElements !== 'undefined' && !customElements.get('velxio-breadboard')) {
   customElements.define('velxio-breadboard', BreadboardElement);
 }

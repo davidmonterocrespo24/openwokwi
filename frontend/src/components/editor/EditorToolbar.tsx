@@ -3,13 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { useElectricalStore } from '../../store/useElectricalStore';
-import { verifyCircuit, type VerificationResult } from '../../simulation/verify/circuitVerifier';
-import { buildInputFromStore } from '../../simulation/spice/storeAdapter';
-import { BOARD_PIN_GROUPS } from '../../simulation/spice/boardPinGroups';
+import { type VerificationResult } from '../../simulation/verify/circuitVerifier';
+import { verifyCircuitFromStore } from '../../simulation/verify/verifyFromStore';
 import { CircuitVerificationModal } from '../simulator/CircuitVerificationModal';
-import type { PinSourceState } from '../../simulation/spice/types';
 import type { BoardKind, LanguageMode } from '../../types/board';
-import { BOARD_KIND_FQBN, BOARD_SUPPORTS_MICROPYTHON, isPiBoardKind, boardDisplayName } from '../../types/board';
+import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, isPiBoardKind, boardDisplayName } from '../../types/board';
 import { compileCode } from '../../services/compilation';
 import {
   compileRom,
@@ -24,6 +22,7 @@ import { reportRunEvent } from '../../services/metricsService';
 import { useProjectStore } from '../../store/useProjectStore';
 import { LibraryManagerModal } from '../simulator/LibraryManagerModal';
 import { InstallLibrariesModal } from '../simulator/InstallLibrariesModal';
+import { mergeSuggestedLibraries } from '../../utils/libraryManifest';
 import { parseCompileResult } from '../../utils/compilationLogger';
 import type { CompilationLog, CompileTarget } from '../../utils/compilationLogger';
 import { exportToWokwiZip } from '../../utils/wokwiZip';
@@ -590,6 +589,9 @@ export const EditorToolbar = ({
           // P2.4 — THIS board's declared manifest (compile scope). Per-board so
           // two boards can use different libraries without clashing.
           libraries: activeBoard?.libraries?.length ? activeBoard.libraries : null,
+          // Pure ESP-IDF mode (issue #139): tell the backend to compile the
+          // user's app_main() sources without the arduino-esp32 component.
+          language: activeBoard?.languageMode === 'espidf' ? 'espidf' : undefined,
         },
       );
 
@@ -606,6 +608,18 @@ export const EditorToolbar = ({
           compileBoardProgram(activeBoardId, program);
           if (result.has_wifi !== undefined) {
             updateBoard(activeBoardId, { hasWifi: result.has_wifi });
+          }
+          // P2.4 auto-migration: a green build reports the libraries it
+          // really used; fold single-candidate ones into this board's
+          // declared manifest so the NEXT compile runs scoped instead of
+          // scan-all (the mode where unrelated libraries could leak in).
+          const mergedLibs = mergeSuggestedLibraries(
+            activeBoard?.libraries,
+            result.manifest_suggested_libraries,
+          );
+          if (mergedLibs) {
+            updateBoard(activeBoardId, { libraries: mergedLibs });
+            console.log('[manifest] auto-declared from build:', mergedLibs);
           }
         }
         setMessage({ type: 'success', text: 'Compiled successfully' });
@@ -646,77 +660,10 @@ export const EditorToolbar = ({
    * silently report a clean result so the user isn't blocked on circuits
    * that aren't physically meaningful yet.
    */
-  const runVerification = useCallback(async (): Promise<VerificationResult | null> => {
-    try {
-      const sim = useSimulatorStore.getState();
-      // Skip if the circuit hasn't got anything analysable on it yet.
-      const hasSource = sim.components.some(
-        (c) => c.metadataId.startsWith('signal-generator') || c.metadataId.startsWith('battery'),
-      );
-      if (!hasSource && sim.boards.length === 0) return null;
-
-      const snap = {
-        components: sim.components.map((c) => ({
-          id: c.id,
-          metadataId: c.metadataId,
-          properties: c.properties,
-        })),
-        wires: sim.wires,
-        boards: sim.boards.map((b) => {
-          // Realistic pre-flight: simulate the WORST CASE — every digital
-          // pin connected to a load is forced HIGH at the board's vcc.
-          // This is what we want because the user's sketch WILL eventually
-          // do `digitalWrite(pin, HIGH)` (otherwise why is the LED wired?).
-          // Testing idle state would never flag a missing series resistor
-          // because the LED draws zero current when its pin is LOW.
-          //
-          // Caveat: pins wired only to inputs (e.g. a pull-up resistor +
-          // button) get over-driven here too. The verifier rules are
-          // already tolerant — a properly-spec'd pull-up sees minimal
-          // current and doesn't trip overcurrent / overpower. A circuit
-          // that would actually fault under HIGH is flagged correctly.
-          const pinStates: Record<string, PinSourceState> = {};
-          const group = BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default;
-          const wiredPinNames = new Set<string>();
-          for (const w of sim.wires) {
-            if (w.start.componentId === b.id) wiredPinNames.add(w.start.pinName);
-            if (w.end.componentId === b.id) wiredPinNames.add(w.end.pinName);
-          }
-          for (const pinName of wiredPinNames) {
-            // Skip GND / power-rail pin names — they belong to the rail
-            // groups and don't need to be re-asserted as digital sources.
-            if (group.gnd.includes(pinName)) continue;
-            if (group.vcc_pins.includes(pinName)) continue;
-            const arduinoPin = Number.parseInt(pinName, 10);
-            // Skip pins we can't identify as a digital GPIO (e.g.
-            // 'AREF', 'RESET', 'TX', 'RX' on some boards). Those are
-            // either rail-ish or non-driven by the sketch.
-            if (Number.isNaN(arduinoPin)) continue;
-            pinStates[pinName] = { type: 'digital', v: group.vcc };
-          }
-          return { id: b.id, boardKind: b.boardKind, pinStates };
-        }),
-      };
-      const input = buildInputFromStore(snap);
-      const result = await verifyCircuit(input);
-      // Concise outcome log — verification failing silently in production is
-      // hard to spot otherwise (the rules read 0 A when currents are missing).
-      console.log(
-        '[verify]',
-        JSON.stringify({
-          errors: result.errors.map((e) => e.code),
-          warnings: result.warnings.map((w) => w.code),
-          solved: !!result.solve,
-          branches: result.solve ? Object.keys(result.solve.branchCurrents) : null,
-          nodes: result.solve ? Object.keys(result.solve.nodeVoltages) : null,
-        }),
-      );
-      return result;
-    } catch (err) {
-      console.warn('[verifyCircuit] failed', err);
-      return null;
-    }
-  }, []);
+  const runVerification = useCallback(
+    (): Promise<VerificationResult | null> => verifyCircuitFromStore(),
+    [],
+  );
 
   /**
    * Returns true if the caller should proceed inline. All findings are written
@@ -880,6 +827,19 @@ export const EditorToolbar = ({
       // QEMU boards: auto-compile if no firmware available yet
       if (isQemuBoard) {
         console.log('[handleRun] QEMU path');
+        // Clean restart when the board is already running. Esp32Bridge.connect()
+        // is a no-op while the socket is non-CLOSED, so startBoard() on a live
+        // session does NOTHING — and if the backend QEMU session has since died
+        // but the frontend socket is still zombie (CONNECTING/OPEN/CLOSING), the
+        // user sees a dead sim that only a page reload fixes. This is the exact
+        // "el agente terminó, di Run y no funcionó; recargué y sí" report: the
+        // agent's run_simulation left the board running, so the user's Run
+        // no-op'd. Stop first (closes the WS), let it settle, then boot fresh —
+        // mirrors what the MicroPython branch above already does.
+        if (board?.running) {
+          stopBoard(activeBoardId);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
         if (!board?.compiledProgram || codeChangedSinceLastCompile) {
           console.log('[handleRun] auto-compile + run');
           autoRunAfterCompile.current = true;
@@ -1106,7 +1066,7 @@ export const EditorToolbar = ({
               })),
             ]);
           },
-          { boardOptions: board.boardOptions, spiffsFiles: board.spiffsFiles, libraries: board.libraries?.length ? board.libraries : null },
+          { boardOptions: board.boardOptions, spiffsFiles: board.spiffsFiles, libraries: board.libraries?.length ? board.libraries : null, language: board.languageMode === 'espidf' ? 'espidf' : undefined },
         );
 
         const resultLogs = parseCompileResult(result, label, boardTarget);
@@ -1410,9 +1370,11 @@ export const EditorToolbar = ({
     <>
       <div className="editor-toolbar-wrapper" style={{ position: 'relative' }}>
         <div className="editor-toolbar" ref={toolbarRef}>
-          {/* MicroPython language selector — only when active board supports it.
-              The board context pill that used to live here was removed: it
-              duplicated the BoardSelector dropdown elsewhere in the toolbar. */}
+          {/* Language selector — only when active board supports an
+              alternative to Arduino C++ (MicroPython on Pico/ESP32 boards,
+              pure ESP-IDF on the ESP32 family — issue #139). The board
+              context pill that used to live here was removed: it duplicated
+              the BoardSelector dropdown elsewhere in the toolbar. */}
           {activeBoard && BOARD_SUPPORTS_MICROPYTHON.has(activeBoard.boardKind) && (
             <select
               className="tb-lang-select"
@@ -1436,6 +1398,9 @@ export const EditorToolbar = ({
             >
               <option value="arduino">Arduino C++</option>
               <option value="micropython">MicroPython</option>
+              {BOARD_SUPPORTS_ESPIDF.has(activeBoard.boardKind) && (
+                <option value="espidf">ESP-IDF</option>
+              )}
             </select>
           )}
 

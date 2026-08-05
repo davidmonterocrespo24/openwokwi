@@ -30,6 +30,7 @@ import { useElectricalStore } from '../../store/useElectricalStore';
 import { setAdcVoltage } from '../parts/partUtils';
 import type { BoardKind } from '../../types/board';
 import { interpolateAt } from './waveformStats';
+import { boardPinToNumber } from '../../utils/boardPinMapping';
 
 // Which Arduino-style pin name maps to which ADC channel, per board.
 function adcRange(prefix: string, start: number, count: number) {
@@ -72,17 +73,21 @@ const ADC_PIN_MAP: Partial<Record<BoardKind, Array<{ pinName: string; channel: n
     { pinName: 'GP29', channel: 3 },
   ],
 
-  // ESP32
-  esp32: adcRange('GPIO', 32, 8),
-  'esp32-devkit-c-v4': adcRange('GPIO', 32, 8),
-  'esp32-cam': adcRange('GPIO', 32, 8),
+  // ESP32 — pinNames here are lookup keys into pinNetMap, so they MUST be
+  // the boards' REAL silkscreen names. The old 'GPIO32'-style keys never
+  // matched the bare-number pin names actual wires carry ('34', '4', 'A0'),
+  // so the SPICE->ADC path silently skipped every esp32-family pin
+  // (2026-07 emulation-gaps audit; divider circuits read 0 forever).
+  esp32: adcRange('', 32, 8),
+  'esp32-devkit-c-v4': adcRange('', 32, 8),
+  'esp32-cam': adcRange('', 32, 8),
   'wemos-lolin32-lite': adcRange('GPIO', 32, 8),
-  'esp32-s3': adcRange('GPIO', 1, 10),
-  'xiao-esp32-s3': adcRange('GPIO', 1, 10),
+  'esp32-s3': adcRange('', 1, 10),
+  'xiao-esp32-s3': adcRange('D', 0, 9),
   'arduino-nano-esp32': adcRange('A', 0, 8),
-  'esp32-c3': adcRange('GPIO', 0, 6),
-  'xiao-esp32-c3': adcRange('GPIO', 0, 6),
-  'aitewinrobot-esp32c3-supermini': adcRange('GPIO', 0, 6),
+  'esp32-c3': adcRange('', 0, 6),
+  'xiao-esp32-c3': adcRange('D', 0, 4),
+  'aitewinrobot-esp32c3-supermini': adcRange('', 0, 6),
 };
 
 function avrPinFromName(_name: string, channel: number): number {
@@ -114,6 +119,22 @@ const ADC_PIN_TO_GPIO: Partial<Record<BoardKind, (pinName: string, channel: numb
   'aitewinrobot-esp32c3-supermini': gpioPinFromName,
 };
 
+/** Silkscreen name -> GPIO for the ADC injection. ESP32-family boards go
+ * through the canonical boardPinToNumber table (nano-esp32 'A0' -> GPIO1,
+ * xiao 'D1' -> GPIO2, bare '34' -> 34, ...); AVR/ATtiny/Pico keep their
+ * legacy per-kind converters (their sims expect Arduino pin numbers, not
+ * GPIOs — e.g. uno 'A0' -> 14). */
+function gpioForBoardPin(kind: BoardKind, pinName: string, channel: number): number {
+  if (kind === 'esp32' || kind.startsWith('esp32') || kind.startsWith('xiao-esp32')
+      || kind === 'arduino-nano-esp32' || kind === 'wemos-lolin32-lite'
+      || kind === 'aitewinrobot-esp32c3-supermini') {
+    const n = boardPinToNumber(kind, pinName);
+    if (n != null && n >= 0) return n;
+  }
+  const legacy = ADC_PIN_TO_GPIO[kind];
+  return legacy ? legacy(pinName, channel) : -1;
+}
+
 export function connectAnalogInputsToMcu(): () => void {
   const patchedAdcs = new WeakSet<object>();
   const qemuWaveformChannels = new Set<string>();
@@ -138,8 +159,8 @@ export function connectAnalogInputsToMcu(): () => void {
         const v = nodeVoltages[netName];
         if (v == null) continue;
         const clamped = Math.max(0, Math.min(vMax, v));
-        const gpioPin = ADC_PIN_TO_GPIO[board.boardKind]?.(pinName, channel);
-        if (gpioPin != null) setAdcVoltage(sim, gpioPin, clamped);
+        const gpioPin = gpioForBoardPin(board.boardKind, pinName, channel);
+        if (gpioPin >= 0) setAdcVoltage(sim, gpioPin, clamped);
       }
     }
   }
@@ -168,8 +189,7 @@ export function connectAnalogInputsToMcu(): () => void {
         setAdcWaveform?: (pin: number, samples: Uint16Array, periodNs: number) => boolean;
       };
       if (typeof shim.setAdcWaveform !== 'function') continue;
-      const gpioFn = ADC_PIN_TO_GPIO[board.boardKind];
-      if (!gpioFn) continue;
+      const gpioFn = (pn: string, ch: number) => gpioForBoardPin(board.boardKind, pn, ch);
       const boardId = board.id;
       const seen = new Set<number>();
 

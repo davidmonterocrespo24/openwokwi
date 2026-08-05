@@ -20,6 +20,13 @@ export interface CompileExtras {
   // Sent as the ESP-IDF resolution SCOPE; null/omitted = legacy scan-all.
   // Ignored by the backend for non-ESP32 (arduino-cli) boards.
   libraries?: string[] | null;
+  // Pure ESP-IDF mode (issue #139): 'espidf' compiles the files as a pure
+  // ESP-IDF project (user app_main, no arduino-esp32 component). Omitted /
+  // undefined = classic Arduino sketch compile. ESP32 boards only.
+  language?: 'espidf';
+  // Who triggered the compile — 'agent' when the AI assistant's tool did.
+  // Threads through to backend metrics; omitted = manual user action.
+  initiatedBy?: 'agent';
 }
 
 export interface CompileResult {
@@ -32,6 +39,11 @@ export interface CompileResult {
   stderr: string;
   error?: string;
   core_install_log?: string;
+  /** P2.4 — the manifest is missing libraries the build really used. */
+  manifest_incomplete?: boolean;
+  /** { header: [candidate library display names] } — single-candidate
+   * entries are safe to auto-declare (see utils/libraryManifest.ts). */
+  manifest_suggested_libraries?: Record<string, string[]> | null;
 }
 
 interface CompileStartResponse {
@@ -113,6 +125,8 @@ export async function compileCode(
         board_options,
         spiffs_files,
         libraries,
+        language: extras?.language ?? null,
+        initiated_by: extras?.initiatedBy ?? null,
       },
       { withCredentials: true, timeout: 30000 },
     );

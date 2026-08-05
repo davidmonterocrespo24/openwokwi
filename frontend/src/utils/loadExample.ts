@@ -277,8 +277,11 @@ export async function loadExample(
       .getState()
       .boards.find((b) => b.id === liveBoardId);
 
-    if (example.languageMode === 'micropython' && liveBoard) {
-      setBoardLanguageMode(liveBoard.id, 'micropython');
+    if (
+      (example.languageMode === 'micropython' || example.languageMode === 'espidf') &&
+      liveBoard
+    ) {
+      setBoardLanguageMode(liveBoard.id, example.languageMode);
     }
 
     const editorStore = useEditorStore.getState();

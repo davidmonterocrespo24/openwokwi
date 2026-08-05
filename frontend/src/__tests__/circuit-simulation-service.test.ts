@@ -396,6 +396,63 @@ describe('handleMcuEdge (Phase 1c D1)', () => {
     expect(fake.calls.alterSource).toEqual([['V_uno_9', 5]]);
   });
 
+  it('bounds solve rate under a sustained edge storm (multiplexed display)', async () => {
+    // Regression: a 4-digit 7-segment clock over QEMU keeps ~13 pins hot
+    // (thousands of GPIO edges/second). Replaying queued edges IMMEDIATELY
+    // after each solve ran the solver at 100% duty with no idle gap — the
+    // main thread starved for minutes until the sim WebSocket dropped.
+    // The drain timer must space solves out: over a ~200 ms storm window
+    // the solve count stays bounded (~1 per 33 ms gap), nowhere near the
+    // one-solve-per-edge fire hose.
+    const fake = new FakeSolverAdapter({
+      vectors: { 'v(vcc_rail)': 5 },
+      solveDelayMs: 2,
+    });
+    __setSchedulerSolverFactoryForTests(() => fake);
+    const sim = makeSimStore({
+      components: [
+        { id: 'rb', metadataId: 'resistor', properties: { value: '1k' } },
+      ],
+      wires: [
+        {
+          id: 'w1',
+          start: { componentId: 'uno', pinName: '9' },
+          end: { componentId: 'rb', pinName: '1' },
+        },
+        {
+          id: 'w2',
+          start: { componentId: 'rb', pinName: '2' },
+          end: { componentId: 'uno', pinName: 'GND' },
+        },
+      ],
+      boards: [{ id: 'uno', boardKind: 'arduino-uno' }],
+    });
+    const elec = makeElectricalStore();
+    const service = new CircuitSimulationService(
+      sim.port,
+      elec.port,
+      getMixedModeScheduler() as unknown as MixedModeSchedulerPort,
+      { collectBoardPinStates: () => ({ '9': { type: 'digital', v: 0 } }) },
+    );
+    startTracked(service);
+    await new Promise((r) => setTimeout(r, 30)); // let the initial solve land
+
+    // Storm: toggle the pin every 2 ms for 200 ms (~100 edges).
+    let state = false;
+    for (let i = 0; i < 100; i++) {
+      state = !state;
+      void service.handleMcuEdge('uno', '9', state, 5);
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    await new Promise((r) => setTimeout(r, 80)); // trailing drain
+
+    // 100 edges in ~200 ms with a 33 ms drain gap → ~7 solves + initial.
+    // Generous ceiling; the pre-fix behaviour was 1 solve per edge (100+).
+    const total = fake.calls.solve.length;
+    expect(total).toBeGreaterThanOrEqual(2); // it DID keep solving
+    expect(total).toBeLessThanOrEqual(30);
+  });
+
   it('kicks a full tick when no circuit has been loaded yet', async () => {
     const fake = new FakeSolverAdapter({ vectors: { 'v(vcc_rail)': 5 } });
     __setSchedulerSolverFactoryForTests(() => fake);

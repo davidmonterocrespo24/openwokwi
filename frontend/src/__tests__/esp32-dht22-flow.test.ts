@@ -337,6 +337,24 @@ describe('Esp32Bridge — sensor WebSocket protocol', () => {
     ]);
   });
 
+  it('connect() on a lingering (non-CLOSED) socket force-reconnects instead of no-op', () => {
+    // Regression: the agent leaves the board running (socket OPEN); the user's
+    // Run → startBoard → connect() must boot a FRESH session, not silently
+    // return because a socket already exists. Reproduces "run after the agent
+    // did nothing until I reloaded".
+    const firstWs = (bridge as any).socket as MockWebSocket;
+    expect(firstWs.readyState).toBe(MockWebSocket.OPEN);
+
+    bridge.connect(); // second connect while the first socket is still OPEN
+    const secondWs = (bridge as any).socket as MockWebSocket;
+
+    expect(firstWs.readyState).toBe(MockWebSocket.CLOSED); // old zombie torn down
+    expect(secondWs).not.toBe(firstWs); // a brand-new socket
+    secondWs.open();
+    const startMsg = secondWs.messages.find((m) => m.type === 'start_esp32');
+    expect(startMsg).toBeDefined(); // fresh boot actually happened
+  });
+
   it('sendSensorUpdate sends esp32_sensor_update message', () => {
     bridge.sendSensorUpdate(4, { temperature: 35, humidity: 70 });
     expect(ws.messages).toEqual([

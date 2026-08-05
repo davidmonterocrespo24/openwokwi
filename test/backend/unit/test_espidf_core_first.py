@@ -67,12 +67,27 @@ class TestCoreFirstResolution(unittest.TestCase):
         self.assertIn("DHT.cpp", copied)
         self.assertEqual(hdr2comp.get("DHT.h"), "user_libs_all")
 
-    def test_arch_excluded_lib_skipped(self):
+    def test_arch_excluded_lib_two_tier_guard(self):
+        """Issue #257: the architecture guard is two-tier. A DIRECT sketch
+        include of an arch-excluded lib merges anyway (user intent; many
+        avr-declared libs are pure Wire code — a real compile error beats
+        'No such file'). A TRANSITIVE pull of an arch-excluded lib is still
+        skipped (the Adafruit_ZeroDMA poison path). And 'all' counts as
+        wildcard (LiquidCrystal_I2C 2.0.0 declares architectures=all)."""
         ulibs = self.tmp / "Arduino" / "libraries"
         _mk(ulibs / "AvrOnlyLib" / "library.properties",
             "name=AvrOnlyLib\narchitectures=avr\n")
         _mk(ulibs / "AvrOnlyLib" / "Foo.h")
         _mk(ulibs / "AvrOnlyLib" / "Foo.cpp")
+        # An 'all'-declared lib whose header pulls the avr-only one
+        # transitively: Bar.h -> #include <Foo2.h>.
+        _mk(ulibs / "AllArchLib" / "library.properties",
+            "name=AllArchLib\narchitectures=all\n")
+        _mk(ulibs / "AllArchLib" / "Bar.h", '#include <Foo2.h>\n')
+        _mk(ulibs / "AllArchLib" / "Bar.cpp")
+        _mk(ulibs / "AvrOnlyLib2" / "library.properties",
+            "name=AvrOnlyLib2\narchitectures=avr\n")
+        _mk(ulibs / "AvrOnlyLib2" / "Foo2.h")
 
         c = ESPIDFCompiler()
         c.arduino_path = ""           # no core path -> static fallback set
@@ -81,11 +96,16 @@ class TestCoreFirstResolution(unittest.TestCase):
         out.mkdir(parents=True)
 
         names, hdr2comp = c._resolve_library_components(
-            ["Foo.h"],
+            ["Foo.h", "Bar.h"],
             arduino_libs=ulibs, esp32_libs=None,
             arduino_comp_name="arduino-esp32", user_libs_dir=out,
         )
-        self.assertNotIn("Foo.h", hdr2comp)
+        # Direct include of the avr-only lib: merged anyway.
+        self.assertEqual(hdr2comp.get("Foo.h"), "user_libs_all")
+        # 'all' wildcard lib: merged.
+        self.assertEqual(hdr2comp.get("Bar.h"), "user_libs_all")
+        # Transitive pull (Foo2.h via Bar.h) of an avr-only lib: skipped.
+        self.assertNotIn("Foo2.h", hdr2comp)
 
 
 class TestManifestScope(unittest.TestCase):
@@ -151,3 +171,43 @@ class TestManifestScope(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGenericHeaderCollision(unittest.TestCase):
+    """Issue reported 2026-08-03 (nikas79): ESPAsyncWebServer includes
+    <Hash.h> (an ESP8266-core header) and the global scan resolved it to a
+    hexapod-robot library that happens to ship src/Hash.h. The whole library
+    was merged and its unrelated sources broke every ESP32 build with
+    'fatal error: SoftwareSerial.h' and friends."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_generic_platform_header_never_resolves_to_a_user_lib(self):
+        ulibs = self.tmp / "Arduino" / "libraries"
+        # A library with a generic Hash.h, exactly like stemi-hexapod.
+        _mk(ulibs / "stemihexapod" / "library.properties",
+            "name=stemi-hexapod\narchitectures=esp32\n")
+        _mk(ulibs / "stemihexapod" / "src" / "Hash.h")
+        _mk(ulibs / "stemihexapod" / "src" / "Serial.cpp",
+            '#include <SoftwareSerial.h>\n')
+
+        c = ESPIDFCompiler()
+        c.arduino_path = ""
+        c._core_headers_cache = None
+        out = self.tmp / "project" / "user_libs"
+        out.mkdir(parents=True)
+
+        _names, hdr2comp = c._resolve_library_components(
+            ["Hash.h", "Server.h", "Serial.h"],
+            arduino_libs=ulibs, esp32_libs=None,
+            arduino_comp_name="arduino-esp32", user_libs_dir=out,
+        )
+        for header in ("Hash.h", "Server.h", "Serial.h"):
+            self.assertNotIn(header, hdr2comp, f"{header} must stay core-provided")
+        copied = [p.name for p in out.rglob("*") if p.is_file()]
+        self.assertNotIn("Serial.cpp", copied,
+                         "the unrelated library must NOT be merged")

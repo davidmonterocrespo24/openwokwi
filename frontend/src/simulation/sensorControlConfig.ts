@@ -190,6 +190,76 @@ export const SENSOR_CONTROLS: Record<string, SensorControlDef> = {
     defaultValues: { temperature: 24, pressure: 1013.25 },
   },
 
+  // ── DS3231 RTC (on-chip temperature sensor) ────────────────────────────────
+  ds3231: {
+    title: 'DS3231 RTC Temperature',
+    controls: [
+      {
+        type: 'slider',
+        key: 'temperature',
+        label: 'Temperature',
+        min: -40,
+        max: 85,
+        step: 0.25,
+        unit: '°C',
+        defaultValue: 25,
+        formatValue: twoDecimal,
+      },
+    ],
+    defaultValues: { temperature: 25 },
+  },
+
+  // ── GPS NEO-6M (position fed into the NMEA stream) ─────────────────────────
+  'gps-neo6m': {
+    title: 'GPS NEO-6M Position',
+    controls: [
+      {
+        type: 'slider',
+        key: 'lat',
+        label: 'Latitude',
+        min: -90,
+        max: 90,
+        step: 0.0001,
+        unit: '°',
+        defaultValue: 40.4168,
+        formatValue: (v: number) => v.toFixed(4),
+      },
+      {
+        type: 'slider',
+        key: 'lng',
+        label: 'Longitude',
+        min: -180,
+        max: 180,
+        step: 0.0001,
+        unit: '°',
+        defaultValue: -3.7038,
+        formatValue: (v: number) => v.toFixed(4),
+      },
+      {
+        type: 'slider',
+        key: 'altitude',
+        label: 'Altitude',
+        min: -100,
+        max: 9000,
+        step: 1,
+        unit: 'm',
+        defaultValue: 667,
+      },
+      {
+        type: 'slider',
+        key: 'speed',
+        label: 'Speed',
+        min: 0,
+        max: 200,
+        step: 0.5,
+        unit: 'kn',
+        defaultValue: 0,
+        formatValue: oneDecimal,
+      },
+    ],
+    defaultValues: { lat: 40.4168, lng: -3.7038, altitude: 667, speed: 0 },
+  },
+
   // ── HC-SR04 Ultrasonic Distance ───────────────────────────────────────────
   'hc-sr04': {
     title: 'Ultrasonic Distance Sensor',

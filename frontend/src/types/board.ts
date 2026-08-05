@@ -30,7 +30,7 @@ export type BoardKind =
   | 'stm32-netduino2' // Netduino 2 (F205, Cortex-M3), QEMU (serial until F205 GPIO wired)
   | 'attiny85'; // AVR ATtiny85, browser emulation (avr8js)
 
-export type LanguageMode = 'arduino' | 'micropython';
+export type LanguageMode = 'arduino' | 'micropython' | 'espidf';
 
 /** True for every Raspberry Pi backed by the QEMU bridge (Zero, 1, 2, 3, 4, 5).
  *  Excludes the Pico boards (RP2040, browser emulation). */
@@ -48,6 +48,26 @@ export function isStm32BoardKind(kind: BoardKind | string): boolean {
 export const BOARD_SUPPORTS_MICROPYTHON = new Set<BoardKind>([
   'raspberry-pi-pico',
   'pi-pico-w',
+  // ESP32 Xtensa (QEMU bridge)
+  'esp32',
+  'esp32-devkit-c-v4',
+  'esp32-cam',
+  'wemos-lolin32-lite',
+  // ESP32-S3 Xtensa (QEMU bridge)
+  'esp32-s3',
+  'xiao-esp32-s3',
+  'arduino-nano-esp32',
+  // ESP32-C3 RISC-V (QEMU bridge)
+  'esp32-c3',
+  'xiao-esp32-c3',
+  'aitewinrobot-esp32c3-supermini',
+]);
+
+/** Boards that can run pure ESP-IDF projects (app_main entry point, IDF
+ *  APIs only — no Arduino core). The backend compiles them through the same
+ *  ESP-IDF toolchain it already uses for ESP32 Arduino sketches, just
+ *  without the arduino-esp32 component. ESP32 family only (issue #139). */
+export const BOARD_SUPPORTS_ESPIDF = new Set<BoardKind>([
   // ESP32 Xtensa (QEMU bridge)
   'esp32',
   'esp32-devkit-c-v4',
@@ -94,7 +114,7 @@ export interface BoardInstance {
   serialBaudRate: number;
   serialMonitorOpen: boolean;
   activeFileGroupId: string;
-  languageMode: LanguageMode; // 'arduino' (default) or 'micropython'
+  languageMode: LanguageMode; // 'arduino' (default), 'micropython' or 'espidf'
   hasWifi?: boolean; // set by compiler — true when sketch uses WiFi
   wifiStatus?: WifiStatus;
   bleStatus?: BleStatus;

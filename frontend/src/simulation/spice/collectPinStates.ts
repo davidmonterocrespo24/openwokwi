@@ -13,28 +13,44 @@ import type { BoardKind } from '../../types/board';
 import { isStm32BoardKind } from '../../types/board';
 import { stm32PinNameToLinear } from '../Stm32Bridge';
 import { BOARD_PIN_GROUPS } from './boardPinGroups';
+import { boardPinToNumber } from '../../utils/boardPinMapping';
 
 /**
  * Convert a board pin name (e.g. "9", "A0", "GP26", "GPIO32") to the
  * Arduino-style pin number that PinManager uses internally.
  * Returns -1 if the name doesn't map to a GPIO pin.
+ *
+ * Exported so connectMcuEdgesToService can subscribe its MCU-edge
+ * listeners under the SAME name→pin mapping the netlist collector uses —
+ * a reverse mapping that disagrees (e.g. "GPIO2" vs the wire's "2")
+ * detaches every listener on resubscription and freezes LEDs mid-run.
  */
-function pinNameToArduinoPin(pinName: string, boardKind: BoardKind): number {
+export function pinNameToArduinoPin(pinName: string, boardKind: BoardKind): number {
   const group = BOARD_PIN_GROUPS[boardKind] ?? BOARD_PIN_GROUPS.default;
   if (group.gnd.includes(pinName) || group.vcc_pins.includes(pinName)) return -1;
-  if (pinName.startsWith('GP')) {
-    const n = parseInt(pinName.slice(2), 10);
-    return Number.isFinite(n) ? n : -1;
-  }
+  // Single source of truth: utils/boardPinMapping knows every family's
+  // silkscreen->GPIO map (nano-esp32 D2->GPIO5, xiao D-pins, STM32
+  // PC13->linear 45, Pico GP*, ...). This function used to be a parallel
+  // half-implementation: 'PC13'/'D2' fell through to -1, so STM32 outputs
+  // never got a V source stamped (LED dark with correct firmware, lianqi
+  // 07-23) and nano-esp32 INPUT_PULLUP pins never got their pull resistor
+  // (dead START button, prabkagi 07-21 — 2026-07 emulation-gaps audit).
+  const n = boardPinToNumber(boardKind, pinName);
+  if (n != null) return n;
+  // Fallbacks for names boardPinToNumber doesn't know (older saved
+  // projects / generic boards): GPIO before GP so 'GPIO32' never parses
+  // as 'IO32'; A<n> uses the AVR convention; ATtiny85 PB<n> is identity.
   if (pinName.startsWith('GPIO')) {
-    const n = parseInt(pinName.slice(4), 10);
-    return Number.isFinite(n) ? n : -1;
+    const g = parseInt(pinName.slice(4), 10);
+    return Number.isFinite(g) ? g : -1;
+  }
+  if (pinName.startsWith('GP')) {
+    const g = parseInt(pinName.slice(2), 10);
+    return Number.isFinite(g) ? g : -1;
   }
   if (/^A\d+$/.test(pinName)) {
     return 14 + parseInt(pinName.slice(1), 10);
   }
-  // ATtiny85 port-style names (PB0..PB5) map 1:1 to Arduino pin numbers
-  // because ATTinyCore's pinMap is identity for the tiny85 variant.
   if (/^PB\d+$/.test(pinName)) {
     return parseInt(pinName.slice(2), 10);
   }
@@ -76,20 +92,27 @@ export function collectPinStates(
   const outputPins = pm.getOutputPins();
 
   // STM32 names pins PA0/PC13 and keys its PinManager on the linear pin
-  // (port*16+pin). It runs in backend QEMU, where its OUTPUT pins are surfaced
-  // to the canvas via the part layer (not SPICE), so here we only contribute
-  // the INPUT internal pull (reported by the worker's gpio_pull) — enough for
-  // NetlistBuilder to stamp the weak resistor so an INPUT_PULLUP button-to-GND
-  // solves to idle-HIGH / pressed-LOW. connectDigitalInputsToMcu then drives
-  // the guest IDR from the solve. Leaving outputs out keeps STM32 LED rendering
-  // exactly as before.
+  // (port*16+pin). It runs in backend QEMU; the worker streams gpio_change
+  // for outputs and gpio_pull for inputs. Outputs were historically LEFT OUT
+  // of the netlist ("the part layer will render them") — but the part layer
+  // never drove wired parts, so a correctly-wired LED sat at ~0 A forever
+  // (lianqi 07-23, emulation-gaps F3). Now that the name mapping is right,
+  // stamp outputs as V sources exactly like every other board; inputs still
+  // contribute only their internal pull.
   const isStm32 = isStm32BoardKind(boardKind);
   if (isStm32) {
     for (const pinName of pinNames) {
       const linear = stm32PinNameToLinear(pinName);
-      if (linear < 0 || outputPins.has(linear)) continue;
-      const pull = pm.getPinPull(linear);
-      if (pull !== 0) result[pinName] = { type: 'input', pull };
+      if (linear < 0) continue;
+      if (outputPins.has(linear)) {
+        result[pinName] = {
+          type: 'digital',
+          v: pm.getPinState(linear) ? vcc : 0,
+        };
+      } else {
+        const pull = pm.getPinPull(linear);
+        if (pull !== 0) result[pinName] = { type: 'input', pull };
+      }
     }
     return result;
   }

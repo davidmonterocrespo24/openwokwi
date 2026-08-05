@@ -17,6 +17,8 @@ import './components/velxio-components/MotorDriverElements';
 import './components/velxio-components/FlipFlopElements';
 import './components/velxio-components/RaspberryPi3Element';
 import './components/velxio-components/Bmp280Element';
+import './components/velxio-components/Ds3231Element';
+import './components/velxio-components/GpsNeo6mElement';
 import './components/velxio-components/EPaperElement';
 import App from './App.tsx';
 

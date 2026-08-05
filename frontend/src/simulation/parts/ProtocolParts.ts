@@ -1344,7 +1344,13 @@ PartSimulationRegistry.register('ds3231', {
       const dev = new VirtualDS3231();
       dev.temperatureC = initTemp;
       sim.addI2CDevice(dev);
-      return () => removeI2CDevice(sim, dev.address);
+      registerSensorUpdate(componentId, (values) => {
+        if ('temperature' in values) dev.temperatureC = values.temperature as number;
+      });
+      return () => {
+        removeI2CDevice(sim, dev.address);
+        unregisterSensorUpdate(componentId);
+      };
     }
 
     return () => {};

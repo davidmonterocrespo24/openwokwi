@@ -286,7 +286,15 @@ export class ComponentRegistry {
    * Get component by ID
    */
   getById(id: string): ComponentMetadata | undefined {
-    return this.metadata.get(id);
+    const hit = this.metadata.get(id);
+    if (hit) return hit;
+    // Brand-prefix fallback: gallery templates and older agent-loaded
+    // projects store element tag names ("wokwi-lcd2004") where the registry
+    // keys by the bare id ("lcd2004"). Without this, such a component sits
+    // in the store, gets saved and wired — but never renders, so the user
+    // sees a circuit whose display simply does not exist on screen.
+    const bare = id.replace(/^(wokwi|velxio)-/, '');
+    return bare !== id ? this.metadata.get(bare) : undefined;
   }
 
   /**

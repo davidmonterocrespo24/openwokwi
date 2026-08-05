@@ -6,6 +6,7 @@ import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 
 import { useTranslation } from 'react-i18next';
 import { startSimulation } from '../simulation/spice/start';
 import { useSEO } from '../utils/useSEO';
+import { getLocaleFromPath, localizedPath } from '../i18n/path';
 import { restoreStashedWorkspace } from '../utils/workspaceDraft';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { EditorToolbar } from '../components/editor/EditorToolbar';
@@ -219,6 +220,16 @@ export const EditorPage: React.FC = () => {
       .getState()
       .addBoard('arduino-uno', DEFAULT_BOARD_POSITION.x, DEFAULT_BOARD_POSITION.y);
     useSimulatorStore.getState().setActiveBoardId(newId);
+    // The workspace no longer belongs to whatever project URL we were on —
+    // leaving it would silently reload the OLD project over this fresh
+    // workspace on refresh (and via the back button). replaceState, not
+    // pushState: a back-entry pointing at the stale project URL would
+    // remount the project route and cause exactly that reload.
+    const locale = getLocaleFromPath(window.location.pathname);
+    const editorPath = localizedPath('/editor', locale);
+    if (window.location.pathname !== editorPath) {
+      window.history.replaceState(null, '', editorPath);
+    }
   }, [t]);
 
   // Track mobile breakpoint

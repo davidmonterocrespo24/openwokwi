@@ -88,12 +88,30 @@ export function startSimulation(): () => void {
   const unsubChipIn = connectChipInputsToSolve();
   const unsubEdges = connectMcuEdgesToService(service);
 
-  // Let custom chips request a re-solve when they toggle an output pin, so
-  // their SPICE voltage sources (emitted by the custom-chip mapper) are
-  // refreshed and LEDs / analog parts on the chip's nets update. The service
-  // coalesces overlapping ticks, so frequent chip toggles are cheap.
+  // Let custom chips / WS boards request a re-solve when they toggle an
+  // output pin. Trailing-throttled: callers of this hook are PER-EDGE sites
+  // (PinManager, RP2040Simulator, ChipRuntime) that can fire thousands of
+  // times per second under fast toggling (multiplexed displays, bit-banged
+  // protocols). The service's own inFlight coalescing only merges OVERLAPPING
+  // ticks — under a sustained edge stream it still runs back-to-back full
+  // rebuild+solve cycles with no idle gap, which starves the main thread.
+  // One trailing tick per window keeps the last state without the storm.
+  const RESOLVE_THROTTLE_MS = 33;
+  let lastResolveAt = 0;
+  let trailingResolve: ReturnType<typeof setTimeout> | null = null;
   setElectricalResolveHook(() => {
-    void service.tick();
+    const now = Date.now();
+    if (now - lastResolveAt >= RESOLVE_THROTTLE_MS) {
+      lastResolveAt = now;
+      void service.tick();
+      return;
+    }
+    if (trailingResolve !== null) return;
+    trailingResolve = setTimeout(() => {
+      trailingResolve = null;
+      lastResolveAt = Date.now();
+      void service.tick();
+    }, RESOLVE_THROTTLE_MS - (now - lastResolveAt));
   });
 
   // Phase 1d #16 — debug helper. Call `__spiceDebug()` from DevTools
@@ -139,6 +157,10 @@ export function startSimulation(): () => void {
 
   return () => {
     setElectricalResolveHook(null);
+    if (trailingResolve !== null) {
+      clearTimeout(trailingResolve);
+      trailingResolve = null;
+    }
     unsubService();
     unsubAdc();
     unsubDigitalIn();

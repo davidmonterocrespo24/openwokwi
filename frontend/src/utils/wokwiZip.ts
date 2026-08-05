@@ -150,6 +150,10 @@ function hexToColorName(hex: string): string {
 // ── Type conversion ───────────────────────────────────────────────────────────
 
 function wokwiTypeToMetadataId(type: string): string {
+  // Velxio has no half-size breadboard element; the full board is a strict
+  // superset of its hole names (columns 1-30 exist on both), so every
+  // connection stays valid — the part just renders longer.
+  if (type === 'wokwi-breadboard-half') return 'breadboard';
   if (type.startsWith('wokwi-')) return type.slice(6);
   if (type.startsWith('board-')) return type.slice(6);
   return type;
@@ -196,13 +200,19 @@ export async function exportToWokwiZip(
   // Subtract boardPosition so coords are relative to the board
   const parts: WokwiPart[] = [
     { type: boardWokwiType, id: boardId, top: 0, left: 0, attrs: {} },
-    ...components.map((c) => ({
-      type: metadataIdToWokwiType(c.metadataId),
-      id: c.id,
-      top: Math.round(c.y - boardPosition.y),
-      left: Math.round(c.x - boardPosition.x),
-      attrs: c.properties as Record<string, unknown>,
-    })),
+    ...components.map((c) => {
+      // Rotation travels as Wokwi's top-level `rotate`, never as an attr.
+      const { rotation, ...attrs } = (c.properties ?? {}) as Record<string, unknown>;
+      const rotate = Number(rotation) || 0;
+      return {
+        type: metadataIdToWokwiType(c.metadataId),
+        id: c.id,
+        top: Math.round(c.y - boardPosition.y),
+        left: Math.round(c.x - boardPosition.x),
+        ...(rotate ? { rotate } : {}),
+        attrs,
+      };
+    }),
   ];
 
   // Build connections
@@ -217,6 +227,10 @@ export async function exportToWokwiZip(
       w.end.componentId === 'nano-rp2040';
     const startId = isBoardStart ? boardId : w.start.componentId;
     const endId = isBoardEnd ? boardId : w.end.componentId;
+    // Breadboard seating wires round-trip as Wokwi's hidden `["$bb"]` entries.
+    if (w.bb) {
+      return [`${startId}:${w.start.pinName}`, `${endId}:${w.end.pinName}`, '', ['$bb']];
+    }
     return [
       `${startId}:${w.start.pinName}`,
       `${endId}:${w.end.pinName}`,
@@ -301,12 +315,23 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
       metadataId: wokwiTypeToMetadataId(p.type),
       x: p.left + offsetX,
       y: p.top + offsetY,
-      properties: { ...p.attrs },
+      // Wokwi stores rotation as a top-level `rotate` (degrees), not an
+      // attr — map it onto properties.rotation or every rotated part
+      // imports lying flat.
+      properties: {
+        ...p.attrs,
+        ...(p.rotate ? { rotation: p.rotate } : {}),
+      },
     }));
 
   // Convert connections to Velxio wires
   const wires: Wire[] = diagram.connections.map((conn, i) => {
-    const [startStr, endStr, color] = conn;
+    const [startStr, endStr, color, path] = conn;
+    // Wokwi persists parts seated ON a breadboard as one hidden connection
+    // per pin: empty color + the special "$bb" token in the path slot.
+    // Import them as velxio breadboard-seating wires (bb: true) so they
+    // stay invisible and re-seat when the part moves.
+    const isSeating = (Array.isArray(path) && path[0] === '$bb') || color === '';
     const colonA = startStr.indexOf(':');
     const colonB = endStr.indexOf(':');
     const startCompRaw = colonA >= 0 ? startStr.slice(0, colonA) : startStr;
@@ -330,7 +355,8 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
       start: { componentId: startId, pinName: normalizedStartPin, x: 0, y: 0 },
       end: { componentId: endId, pinName: normalizedEndPin, x: 0, y: 0 },
       waypoints: [],
-      color: colorToHex(color),
+      color: isSeating ? '#000000' : colorToHex(color),
+      ...(isSeating ? { bb: true as const } : {}),
     };
   });
 

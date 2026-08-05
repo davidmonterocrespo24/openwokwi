@@ -2673,6 +2673,35 @@
       ]
     },
     {
+      "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" fill=\"#025caf\" rx=\"6\"/><circle cx=\"44\" cy=\"32\" r=\"14\" fill=\"#c9c9c4\" stroke=\"#8f8f8a\"/><circle cx=\"44\" cy=\"32\" r=\"10\" fill=\"#dbdbd6\"/><rect x=\"8\" y=\"22\" width=\"22\" height=\"20\" rx=\"2\" fill=\"#1c1c1c\"/><text x=\"32\" y=\"14\" text-anchor=\"middle\" font-size=\"8\" font-family=\"monospace\" fill=\"#9be1ff\" font-weight=\"bold\">DS3231</text><text x=\"32\" y=\"56\" text-anchor=\"middle\" font-size=\"6\" font-family=\"monospace\" fill=\"#9be1ff\">RTC I2C</text></svg>",
+      "tags": [
+        "ds3231",
+        "rtc",
+        "clock",
+        "i2c",
+        "0x68",
+        "temperature",
+        "rtclib"
+      ],
+      "properties": [
+        {
+          "name": "temperature",
+          "type": "number",
+          "defaultValue": 25,
+          "control": "number",
+          "description": "On-chip temperature sensor (°C), readable at registers 0x11/0x12"
+        }
+      ],
+      "defaultValues": {
+        "temperature": 25
+      },
+      "pinCount": 4,
+      "id": "ds3231",
+      "tagName": "velxio-ds3231",
+      "name": "DS3231 RTC",
+      "category": "other"
+    },
+    {
       "id": "flame-sensor",
       "tagName": "wokwi-flame-sensor",
       "name": "Flame Sensor",
@@ -4387,6 +4416,61 @@
       "tags": [
         "dht22"
       ]
+    },
+    {
+      "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" fill=\"#025caf\" rx=\"6\"/><rect x=\"30\" y=\"14\" width=\"26\" height=\"26\" rx=\"2\" fill=\"#d9cda8\" stroke=\"#b5a87f\"/><rect x=\"36\" y=\"20\" width=\"14\" height=\"14\" fill=\"#c7b98f\"/><rect x=\"8\" y=\"18\" width=\"18\" height=\"12\" rx=\"1\" fill=\"#20242b\"/><circle cx=\"12\" cy=\"40\" r=\"2.5\" fill=\"#ff3b30\"/><text x=\"32\" y=\"54\" text-anchor=\"middle\" font-size=\"8\" font-family=\"monospace\" fill=\"#9be1ff\" font-weight=\"bold\">NEO-6M</text><text x=\"32\" y=\"61\" text-anchor=\"middle\" font-size=\"5\" font-family=\"monospace\" fill=\"#9be1ff\">GPS NMEA</text></svg>",
+      "tags": [
+        "gps",
+        "neo-6m",
+        "neo6m",
+        "u-blox",
+        "nmea",
+        "uart",
+        "serial",
+        "position",
+        "tinygps"
+      ],
+      "properties": [
+        {
+          "name": "lat",
+          "type": "number",
+          "defaultValue": 40.4168,
+          "control": "number",
+          "description": "Latitude in decimal degrees (negative = south)"
+        },
+        {
+          "name": "lng",
+          "type": "number",
+          "defaultValue": -3.7038,
+          "control": "number",
+          "description": "Longitude in decimal degrees (negative = west)"
+        },
+        {
+          "name": "altitude",
+          "type": "number",
+          "defaultValue": 667,
+          "control": "number",
+          "description": "Altitude above mean sea level (m)"
+        },
+        {
+          "name": "speed",
+          "type": "number",
+          "defaultValue": 0,
+          "control": "number",
+          "description": "Speed over ground (knots)"
+        }
+      ],
+      "defaultValues": {
+        "lat": 40.4168,
+        "lng": -3.7038,
+        "altitude": 667,
+        "speed": 0
+      },
+      "pinCount": 4,
+      "id": "gps-neo6m",
+      "tagName": "velxio-gps-neo6m",
+      "name": "GPS NEO-6M",
+      "category": "sensors"
     },
     {
       "id": "hc-sr04",

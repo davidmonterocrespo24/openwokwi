@@ -16,7 +16,7 @@
  *   - rotating a component through the store re-stamps wire endpoints.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { calculatePinPosition } from '../utils/pinPositionCalculator';
+import { calculatePinPosition, rotatePinLocal } from '../utils/pinPositionCalculator';
 import { useSimulatorStore } from '../store/useSimulatorStore';
 
 // Build a minimal DOM matching the runtime layout:
@@ -209,3 +209,37 @@ describe('useSimulatorStore — rotating a component re-stamps wires', () => {
     expect(after.start.y).toBeCloseTo(94, 5);
   });
 });
+
+describe('rotatePinLocal — shared by hit boxes and seated-pin markers', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('returns the input unchanged at rotation 0', () => {
+    expect(rotatePinLocal(12, 34, 0, { w: 72, h: 48 }, 6, 6)).toEqual({ x: 12, y: 34 });
+    // No wrapper box measured yet → also a no-op.
+    expect(rotatePinLocal(12, 34, 90, null, 6, 6)).toEqual({ x: 12, y: 34 });
+  });
+
+  it('agrees with calculatePinPosition so green dots track wire endpoints', () => {
+    // The two must never drift: the marker layer and the wire-endpoint math
+    // are the same rotation about the same wrapper pivot, differing only by
+    // the container origin (componentX/Y + wrapper offset).
+    buildFakeComponent({
+      id: 'compR',
+      wrapperW: 72,
+      wrapperH: 48,
+      pins: [{ name: 'A', x: 0, y: 14 }],
+    });
+    const componentX = 106; // inner-element top-left (component.x 100 + 6)
+    const componentY = 106;
+    for (const rot of [0, 90, 180, 270]) {
+      const abs = calculatePinPosition('compR', 'A', componentX, componentY, rot)!;
+      // rotatePinLocal works in element space (pin.x/pin.y) and returns
+      // coords local to the container at (component.x + 6, component.y + 6).
+      const local = rotatePinLocal(0, 14, rot, { w: 72, h: 48 }, 6, 6);
+      expect(local.x + componentX).toBeCloseTo(abs.x, 5);
+      expect(local.y + componentY).toBeCloseTo(abs.y, 5);
+    }
+  });
+})

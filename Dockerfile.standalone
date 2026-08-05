@@ -75,7 +75,7 @@ RUN cd /qemu \
         curl -fSL -o "$f" "${VELXIO_BINARY_BASE_URL}/${base}-${TARGETARCH}?key=${VELXIO_LICENSE_KEY}" ; \
       fi ; \
     done \
- && for f in esp32-v3-rom.bin esp32-v3-rom-app.bin esp32c3-rom.bin; do \
+ && for f in esp32-v3-rom.bin esp32-v3-rom-app.bin esp32c3-rom.bin esp32s3_rev0_rom.bin; do \
       asset="${f%.bin}" ; \
       if [ -f "$f" ]; then \
         echo "Using local $f ($(stat -c%s "$f") bytes)" ; \
@@ -238,6 +238,7 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 # libqemu-riscv32.so   → ESP32-C3 (RISC-V RV32IMC)
 # esp32-v3-rom*.bin    → boot/app ROM images required by esp32-picsimlab machine
 # esp32c3-rom.bin      → ROM image required by esp32c3-picsimlab machine
+# esp32s3_rev0_rom.bin → ROM image required by esp32s3-picsimlab machine
 # NOTE: ROM files must live in the same directory as the .so (worker passes -L
 #       to QEMU pointing at os.path.dirname(lib_path))
 RUN mkdir -p /app/lib

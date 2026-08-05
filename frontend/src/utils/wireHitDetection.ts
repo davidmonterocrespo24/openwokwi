@@ -4,6 +4,16 @@
  */
 
 import type { Wire } from '../types/wire';
+import {
+  expandOrthogonalPoints,
+  simplifyOrthogonalPath,
+  fuseMicroJogs,
+  roundedPathFromPoints,
+} from './wireUtils';
+
+// Re-exported for existing consumers (SimulatorCanvas) — the implementation
+// moved to wireUtils so the renderer can share it without an import cycle.
+export { simplifyOrthogonalPath };
 
 export interface RenderedSegment {
   x1: number;
@@ -20,25 +30,11 @@ export interface RenderedSegment {
  * Between each consecutive stored pair, a corner point is inserted if they are not axis-aligned.
  */
 export function getRenderedPoints(wire: Wire): { x: number; y: number }[] {
-  const stored = [
+  return expandOrthogonalPoints([
     { x: wire.start.x, y: wire.start.y },
     ...(wire.waypoints ?? []),
     { x: wire.end.x, y: wire.end.y },
-  ];
-
-  if (stored.length < 2) return stored;
-
-  const result: { x: number; y: number }[] = [stored[0]];
-  for (let i = 1; i < stored.length; i++) {
-    const prev = stored[i - 1];
-    const curr = stored[i];
-    if (prev.x !== curr.x && prev.y !== curr.y) {
-      // L-shape: horizontal-first corner
-      result.push({ x: curr.x, y: prev.y });
-    }
-    result.push(curr);
-  }
-  return result;
+  ]);
 }
 
 /**
@@ -105,6 +101,7 @@ export function findWireNearPoint(
 ): Wire | null {
   for (let i = wires.length - 1; i >= 0; i--) {
     const wire = wires[i];
+    if (wire.bb) continue; // breadboard seating wires are not interactive
     const segments = getRenderedSegments(wire);
     for (const seg of segments) {
       if (distToSegment(wx, wy, seg.x1, seg.y1, seg.x2, seg.y2) <= threshold) {
@@ -196,6 +193,26 @@ export function collectAlignmentTargets(
 }
 
 /**
+ * Add the dragged wire's OWN geometry as snap targets, so a dragged
+ * segment or bend point can align — and, after simplification, fuse —
+ * with the rest of its own wire. `excludeIndices` are the indices of the
+ * points being dragged; including them would pin the drag at its current
+ * position.
+ */
+export function addOwnWireAlignmentTargets(
+  targets: { xs: Set<number>; ys: Set<number> },
+  pts: { x: number; y: number }[],
+  excludeIndices: Iterable<number>,
+): void {
+  const skip = new Set(excludeIndices);
+  for (let i = 0; i < pts.length; i++) {
+    if (skip.has(i)) continue;
+    targets.xs.add(pts[i].x);
+    targets.ys.add(pts[i].y);
+  }
+}
+
+/**
  * Find the nearest candidate from `targets` to `value` within `threshold`.
  * Returns the snapped value and the candidate that triggered it, or null
  * if nothing is in range.
@@ -284,48 +301,6 @@ export function moveSegment(
 }
 
 /**
- * Simplify an orthogonal path by removing duplicate points and collapsing
- * collinear/U-turn triples.
- *
- * Three consecutive points sharing the same x (or same y) make the middle
- * one redundant — whether the path goes straight through (collinear) or
- * doubles back over itself (U-turn). Dropping the middle point handles
- * both, which is what eliminates the visible overlapping bumps that
- * accumulate after segment drags.
- */
-export function simplifyOrthogonalPath(
-  pts: { x: number; y: number }[],
-): { x: number; y: number }[] {
-  if (pts.length <= 2) return pts.map((p) => ({ ...p }));
-
-  // Drop consecutive duplicates first
-  const dedup: { x: number; y: number }[] = [];
-  for (const p of pts) {
-    const last = dedup[dedup.length - 1];
-    if (!last || last.x !== p.x || last.y !== p.y) dedup.push({ ...p });
-  }
-
-  // Iteratively collapse three-in-a-row on the same axis until stable
-  let result = dedup;
-  let changed = true;
-  while (changed && result.length > 2) {
-    changed = false;
-    for (let i = 1; i < result.length - 1; i++) {
-      const prev = result[i - 1];
-      const curr = result[i];
-      const next = result[i + 1];
-      if ((prev.x === curr.x && curr.x === next.x) || (prev.y === curr.y && curr.y === next.y)) {
-        result = [...result.slice(0, i), ...result.slice(i + 1)];
-        changed = true;
-        break;
-      }
-    }
-  }
-
-  return result;
-}
-
-/**
  * Convert a list of rendered (expanded) points back to wire waypoints.
  * Waypoints are the interior corner/bend points (excludes start and end).
  * The path is first simplified to drop collinear runs and U-turn bumps;
@@ -335,21 +310,17 @@ export function simplifyOrthogonalPath(
 export function renderedToWaypoints(
   renderedPts: { x: number; y: number }[],
 ): { x: number; y: number }[] {
-  const simplified = simplifyOrthogonalPath(renderedPts);
+  const simplified = simplifyOrthogonalPath(fuseMicroJogs(renderedPts));
   if (simplified.length <= 2) return [];
   return simplified.slice(1, -1).map((p) => ({ x: p.x, y: p.y }));
 }
 
 /**
- * Build an SVG path string from an ordered list of rendered points (straight segments).
+ * Build an SVG path string from an ordered list of rendered points.
+ * Bends are rounded with the same radius as committed wires so segment
+ * and waypoint drag previews look identical to the final result.
  */
 export function renderedPointsToPath(pts: { x: number; y: number }[]): string {
   if (pts.length < 2) return '';
-  return (
-    `M ${pts[0].x} ${pts[0].y}` +
-    pts
-      .slice(1)
-      .map((p) => ` L ${p.x} ${p.y}`)
-      .join('')
-  );
+  return roundedPathFromPoints(pts);
 }

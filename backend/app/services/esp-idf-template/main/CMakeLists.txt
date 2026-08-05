@@ -1,7 +1,37 @@
+# Pure ESP-IDF language mode (issue #139): the user's files are the main
+# component sources — they provide app_main() and use IDF APIs directly.
+# espidf_compiler sets VELXIO_PURE_SKETCH (and drops ARDUINO_ESP32_PATH from
+# the build env) when the frontend requests language='espidf'. As the `main`
+# component, ESP-IDF gives these sources an implicit dependency on every
+# other component in the build, so driver/, esp_wifi, esp_http_server etc.
+# resolve without an explicit REQUIRES.
+if(DEFINED ENV{VELXIO_PURE_SKETCH})
+    # No CONFIGURE_DEPENDS — see the comment on the Arduino glob below.
+    file(GLOB _user_srcs
+        "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.c")
+
+    idf_component_register(
+        SRCS ${_user_srcs}
+        INCLUDE_DIRS "."
+    )
+
+    # Same -Werror relaxations as the Arduino branch: IDF's defaults are
+    # ruthless for user code pasted from tutorials.
+    target_compile_options(${COMPONENT_LIB} PRIVATE
+        -Wno-error=comment
+        -Wno-error=parentheses
+        -Wno-error=sign-compare
+        -Wno-error=narrowing
+        -Wno-error=write-strings
+        -Wno-error=missing-field-initializers
+        -Wno-error=reorder
+        -Wno-error=unused-variable
+        -Wno-error=unused-but-set-variable)
 # If Arduino component is available, use C++ main and link Arduino.
 # The component name matches the directory basename of ARDUINO_ESP32_PATH
 # (e.g. "arduino-esp32" when cloned from GitHub).
-if(DEFINED ENV{ARDUINO_ESP32_PATH})
+elseif(DEFINED ENV{ARDUINO_ESP32_PATH})
     get_filename_component(_arduino_comp_name $ENV{ARDUINO_ESP32_PATH} NAME)
 
     # arduino-esp32 ships esp32-camera as a precompiled static lib but does

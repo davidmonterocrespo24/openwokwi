@@ -1,0 +1,195 @@
+// @vitest-environment jsdom
+/**
+ * System-owned wire shapes (`autoRouted`): created by the router, re-routed
+ * by recalculateAllWirePositions when endpoints move, and demoted to
+ * hand-authored the moment the user edits them. Manual wires must never be
+ * re-shaped.
+ */
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useSimulatorStore } from '../store/useSimulatorStore';
+import { expandOrthogonalPoints } from '../utils/wireUtils';
+import { WIRE_SEPARATION } from '../utils/wireAutoRoute';
+
+const PIN = [{ name: 'P', x: 0, y: 0, signals: [] }];
+
+function mountComponent(id: string, w = 40, h = 12): void {
+  document.getElementById(id)?.remove();
+  document
+    .querySelector(`.dynamic-component-wrapper[data-component-id="${id}"]`)
+    ?.remove();
+  const wrapper = document.createElement('div');
+  wrapper.className = 'dynamic-component-wrapper';
+  wrapper.setAttribute('data-component-id', id);
+  Object.defineProperty(wrapper, 'offsetWidth', { value: w, configurable: true });
+  Object.defineProperty(wrapper, 'offsetHeight', { value: h, configurable: true });
+  const el = document.createElement('div');
+  el.id = id;
+  (el as unknown as { pinInfo: unknown }).pinInfo = PIN;
+  wrapper.appendChild(el);
+  document.body.appendChild(wrapper);
+}
+
+function wireBetween(
+  id: string,
+  fromId: string,
+  toId: string,
+  extra: Record<string, unknown> = {},
+) {
+  return {
+    id,
+    start: { componentId: fromId, pinName: 'P', x: 0, y: 0 },
+    end: { componentId: toId, pinName: 'P', x: 0, y: 0 },
+    waypoints: [],
+    color: '#000',
+    ...extra,
+  };
+}
+
+/** Total parallel-overlap px between two rendered wires (corridor < separation). */
+function overlapPx(w1: { start: never; end: never; waypoints: never }, w2: typeof w1): number {
+  const pts = (w: typeof w1) =>
+    expandOrthogonalPoints([
+      { x: (w.start as { x: number }).x, y: (w.start as { y: number }).y },
+      ...((w.waypoints as { x: number; y: number }[]) ?? []),
+      { x: (w.end as { x: number }).x, y: (w.end as { y: number }).y },
+    ]);
+  const p1 = pts(w1);
+  const p2 = pts(w2);
+  let total = 0;
+  for (let i = 1; i < p1.length; i++) {
+    for (let j = 1; j < p2.length; j++) {
+      const a1 = p1[i - 1]; const b1 = p1[i];
+      const a2 = p2[j - 1]; const b2 = p2[j];
+      const h1 = a1.y === b1.y; const h2 = a2.y === b2.y;
+      if (h1 !== h2) continue;
+      const gap = h1 ? Math.abs(a1.y - a2.y) : Math.abs(a1.x - a2.x);
+      if (gap >= WIRE_SEPARATION) continue;
+      const lo = h1
+        ? Math.max(Math.min(a1.x, b1.x), Math.min(a2.x, b2.x))
+        : Math.max(Math.min(a1.y, b1.y), Math.min(a2.y, b2.y));
+      const hi = h1
+        ? Math.min(Math.max(a1.x, b1.x), Math.max(a2.x, b2.x))
+        : Math.min(Math.max(a1.y, b1.y), Math.max(a2.y, b2.y));
+      total += Math.max(0, hi - lo);
+    }
+  }
+  return total;
+}
+
+describe('recalculateAllWirePositions — auto-route pass', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    const s = useSimulatorStore.getState();
+    s.setComponents([
+      { id: 'a1', metadataId: 'resistor', x: 0, y: 94, properties: {} },
+      { id: 'a2', metadataId: 'resistor', x: 294, y: 94, properties: {} },
+      { id: 'b1', metadataId: 'resistor', x: 0, y: 90, properties: {} },
+      { id: 'b2', metadataId: 'resistor', x: 294, y: 90, properties: {} },
+    ] as never);
+    for (const id of ['a1', 'a2', 'b1', 'b2']) mountComponent(id);
+    s.setWires([]);
+  });
+
+  it('separates two parallel autoRouted wires into side-by-side lanes', () => {
+    const s = useSimulatorStore.getState();
+    s.setWires([
+      wireBetween('w1', 'a1', 'a2', { autoRouted: true }),
+      wireBetween('w2', 'b1', 'b2', { autoRouted: true }),
+    ] as never);
+    s.recalculateAllWirePositions();
+    const [w1, w2] = useSimulatorStore.getState().wires;
+    // Their natural straight lines sit 4px apart — inside the corridor.
+    // After the pass they must not ride each other.
+    expect(overlapPx(w1 as never, w2 as never)).toBe(0);
+  });
+
+  it('never touches a hand-authored wire', () => {
+    const s = useSimulatorStore.getState();
+    const manualWaypoints = [{ x: 150, y: 400 }]; // deliberate detour
+    s.setWires([
+      wireBetween('auto', 'a1', 'a2', { autoRouted: true }),
+      wireBetween('manual', 'b1', 'b2', { waypoints: manualWaypoints }),
+    ] as never);
+    s.recalculateAllWirePositions();
+    const manual = useSimulatorStore.getState().wires.find((w) => w.id === 'manual')!;
+    expect(manual.waypoints).toEqual(manualWaypoints);
+    expect(manual.autoRouted).toBeUndefined();
+  });
+
+  it('routes an agent wire (empty waypoints) around a component in the way', () => {
+    const s = useSimulatorStore.getState();
+    // A tall component square in the middle of the a1->a2 line.
+    s.setComponents([
+      ...useSimulatorStore.getState().components,
+      { id: 'blocker', metadataId: 'chip', x: 120, y: 40, properties: {} },
+    ] as never);
+    mountComponent('blocker', 60, 120); // spans y 40..160 — covers y=100
+    s.setWires([wireBetween('agentw', 'a1', 'a2', { autoRouted: true })] as never);
+    s.recalculateAllWirePositions();
+    const w = useSimulatorStore.getState().wires[0];
+    // Must have gained waypoints that detour around the blocker.
+    expect(w.waypoints.length).toBeGreaterThan(0);
+    const pts = expandOrthogonalPoints([
+      { x: w.start.x, y: w.start.y },
+      ...w.waypoints,
+      { x: w.end.x, y: w.end.y },
+    ]);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]; const b = pts[i];
+      if (a.y === b.y) {
+        const inside = a.y > 40 - 8 && a.y < 160 + 8
+          && Math.max(a.x, b.x) > 120 - 8 && Math.min(a.x, b.x) < 180 + 8;
+        expect(inside, `segment y=${a.y} crosses the blocker`).toBe(false);
+      }
+    }
+  });
+
+  it('bb seating wires are never routed', () => {
+    const s = useSimulatorStore.getState();
+    s.setWires([
+      wireBetween('seat', 'a1', 'a2', { bb: true, autoRouted: true }),
+    ] as never);
+    s.recalculateAllWirePositions();
+    expect(useSimulatorStore.getState().wires[0].waypoints).toEqual([]);
+  });
+});
+
+describe('re-route pass — null route materialises the CHECKED elbow', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    const s = useSimulatorStore.getState();
+    // Diagonal pair with dy >> dx: previewElbow is vertical-first, while an
+    // empty waypoints array renders horizontal-first — a DIFFERENT corner
+    // the router never validated. Three live agent wires crossed a display
+    // exactly this way.
+    s.setComponents([
+      { id: 'p1', metadataId: 'resistor', x: 300, y: 500, properties: {} },
+      { id: 'p2', metadataId: 'resistor', x: 0, y: 100, properties: {} },
+      // A blocker placed so ONLY the horizontal-first corner would cross it:
+      // it sits left of p1 at p1's row.
+      { id: 'blk', metadataId: 'chip', x: 100, y: 470, properties: {} },
+    ] as never);
+    mountComponent('p1'); mountComponent('p2');
+    mountComponent('blk', 60, 80); // y 470..550 — covers p1's row (~506)
+    s.setWires([]);
+  });
+
+  it('stores the longer-axis-first elbow instead of empty waypoints', () => {
+    const s = useSimulatorStore.getState();
+    s.setWires([wireBetween('w', 'p1', 'p2', { autoRouted: true })] as never);
+    s.recalculateAllWirePositions();
+    const w = useSimulatorStore.getState().wires[0];
+    // Whatever shape came out, the RENDERED expansion must not cross blk.
+    const pts = expandOrthogonalPoints([
+      { x: w.start.x, y: w.start.y }, ...w.waypoints, { x: w.end.x, y: w.end.y },
+    ]);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]; const b = pts[i];
+      const inX = Math.max(a.x, b.x) > 100 + 4 && Math.min(a.x, b.x) < 160 - 4;
+      const inY = Math.max(a.y, b.y) > 470 + 4 && Math.min(a.y, b.y) < 550 - 4;
+      const aIn = a.x > 100 && a.x < 160 && a.y > 470 && a.y < 550;
+      const bIn = b.x > 100 && b.x < 160 && b.y > 470 && b.y < 550;
+      expect(inX && inY && !aIn && !bIn, `segment (${a.x},${a.y})->(${b.x},${b.y}) crosses blk`).toBe(false);
+    }
+  });
+});

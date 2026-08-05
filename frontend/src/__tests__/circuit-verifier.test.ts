@@ -487,6 +487,20 @@ function toInput(ex: { components: any[]; wires: any[] }): BuildNetlistInput {
   };
 }
 
+// The audit rules (2026-07) are warnings, so the errors-only assertion would
+// not catch a false positive — assert explicitly that no shipping example
+// trips them.
+const AUDIT_WARNING_CODES = new Set(['unpowered-net', 'no-return-path', 'voltage-mismatch']);
+
+function galleryFindings(result: Awaited<ReturnType<typeof verifyCircuit>>): string[] {
+  return [
+    ...result.errors.map((e) => `${e.code}(${e.componentId ?? '-'})`),
+    ...result.warnings
+      .filter((w) => AUDIT_WARNING_CODES.has(w.code))
+      .map((w) => `${w.code}(${w.componentId ?? '-'})`),
+  ];
+}
+
 describe('verifyCircuit — shipping gallery examples are clean', () => {
   it(
     'every digital example passes pre-flight verification',
@@ -494,11 +508,9 @@ describe('verifyCircuit — shipping gallery examples are clean', () => {
     async () => {
       const failures: string[] = [];
       for (const ex of digitalExamples) {
-        const result = await verifyCircuit(toInput(ex));
-        if (result.errors.length > 0) {
-          failures.push(
-            `${ex.id}: ${result.errors.map((e) => `${e.code}(${e.componentId ?? '-'})`).join(', ')}`,
-          );
+        const findings = galleryFindings(await verifyCircuit(toInput(ex)));
+        if (findings.length > 0) {
+          failures.push(`${ex.id}: ${findings.join(', ')}`);
         }
       }
       expect(failures, failures.join('\n')).toEqual([]);
@@ -511,11 +523,9 @@ describe('verifyCircuit — shipping gallery examples are clean', () => {
     async () => {
       const failures: string[] = [];
       for (const ex of analogExamples) {
-        const result = await verifyCircuit(toInput(ex));
-        if (result.errors.length > 0) {
-          failures.push(
-            `${ex.id}: ${result.errors.map((e) => `${e.code}(${e.componentId ?? '-'})`).join(', ')}`,
-          );
+        const findings = galleryFindings(await verifyCircuit(toInput(ex)));
+        if (findings.length > 0) {
+          failures.push(`${ex.id}: ${findings.join(', ')}`);
         }
       }
       expect(failures, failures.join('\n')).toEqual([]);

@@ -14,7 +14,7 @@ export const esp32s3TftExamples: ExampleProject[] = [
       'ILI9341 TFT from an ESP32-S3 over hardware SPI (FSPI / GPSPI2).',
     category: 'displays',
     difficulty: 'intermediate',
-    libraries: ['Adafruit ILI9341', 'Adafruit GFX Library'],
+    libraries: ['Adafruit ILI9341', 'Adafruit GFX Library', 'Adafruit BusIO'],
     tags: ['esp32-s3', 'ili9341', 'tft', 'spi', 'display'],
     boards: [
       {

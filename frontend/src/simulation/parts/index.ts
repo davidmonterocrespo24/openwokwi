@@ -8,6 +8,7 @@ import './BasicParts';
 import './ComplexParts';
 import './ChipParts';
 import './SensorParts';
+import './GpsParts';
 import './MotorDriverParts';
 import './LogicGateParts';
 import './ProtocolParts';

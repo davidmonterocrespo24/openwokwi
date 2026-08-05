@@ -146,9 +146,19 @@ export class PinManager {
    * Used by RP2040Simulator which has individual GPIO listeners instead of PORT registers.
    */
   triggerPinChange(pin: number, state: boolean, source: 'mcu' | 'external' = 'external'): void {
+    // A full-netlist re-solve is only needed when this edge RE-CLASSIFIES the
+    // pin (first MCU write → the netlist must grow a V-source for it). Once
+    // the pin is a known output, per-edge voltage updates flow through
+    // connectMcuEdgesToService (per-pin coalesced alterSource — no rebuild).
+    // Requesting a full tick on EVERY edge froze the browser on multiplexed
+    // circuits: a 7-segment clock over QEMU emits thousands of GPIO edges per
+    // second, and back-to-back rebuild+solve+publish cycles starved the main
+    // thread until the sim WebSocket timed out.
+    const newlyClassified = source === 'mcu' && !this.outputPins.has(pin);
     const current = this.pinStates.get(pin);
     if (current === state) {
       if (source === 'mcu') this.outputPins.add(pin);
+      if (newlyClassified) requestElectricalResolve();
       return;
     }
     this.pinStates.set(pin, state);
@@ -157,16 +167,12 @@ export class PinManager {
     if (callbacks) {
       callbacks.forEach((cb) => cb(pin, state));
     }
-    // An MCU output edge changes the circuit: request a SPICE re-solve so the
-    // analog parts on this net (LED brightness, etc.) update. WS-backed boards
-    // (ESP32 / STM32 / Raspberry Pi) reach the electrical sim ONLY through here
-    // — previously they never triggered a re-solve, so a resistor-less LED
-    // stayed at its first solved brightness until unrelated activity (e.g.
-    // serial output) forced a solve. AVR / RP2040 already resolve at their own
-    // toggle sites. Gated to 'mcu' so the solver's own input feedback
-    // (triggerPinChange with the default 'external' source) can't create a
-    // solve loop; the hook coalesces overlapping ticks so per-edge is cheap.
-    if (source === 'mcu') requestElectricalResolve();
+    // WS-backed boards (ESP32 / STM32 / Raspberry Pi) reach the electrical sim
+    // ONLY through here; the first write per pin triggers the rebuild that
+    // emits its V-source, after which connectMcuEdgesToService owns updates.
+    // Gated to 'mcu' so the solver's own input feedback (source 'external')
+    // can't create a solve loop.
+    if (newlyClassified) requestElectricalResolve();
   }
 
   /** Pins the MCU has actively driven this session. */
@@ -179,9 +185,19 @@ export class PinManager {
    * IO_MUX / pad config): 0 = none, 1 = pull-up, 2 = pull-down. The SPICE
    * collector reads this back via `getPinPull` to stamp a weak resistor.
    */
+  /** Fired on pull-state TRANSITIONS (not repeats). Simulators use it to
+   * seed the pin input to the pull's resting level the moment the firmware
+   * enables it — closing the boot window where INPUT_PULLUP read LOW until
+   * the first SPICE solve (~400 ms): 8/8 setup() reads plus the first two
+   * loop() passes returned 0 in the deterministic repro, which is exactly
+   * the phantom emergency-stop latch of the 2026-07 audit. */
+  onPullChange: ((pin: number, pull: 0 | 1 | 2) => void) | null = null;
+
   setPinPull(pin: number, pull: 0 | 1 | 2): void {
+    const prev = this.pinPulls.get(pin) ?? 0;
     if (pull === 0) this.pinPulls.delete(pin);
     else this.pinPulls.set(pin, pull);
+    if (prev !== pull) this.onPullChange?.(pin, pull);
   }
 
   /** Internal pull config for a pin: 0 = none, 1 = pull-up, 2 = pull-down. */

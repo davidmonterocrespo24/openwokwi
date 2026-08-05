@@ -17,6 +17,12 @@ export interface BoardPinGroup {
 
 type AllBoardKinds = BoardKind | 'default';
 
+const STM32_GROUP: BoardPinGroup = {
+  vcc: 3.3,
+  gnd: ['GND', 'GND.1', 'GND.2', 'GND.3', 'GND.4'],
+  vcc_pins: ['3V3', '3V3.1', '3V3.2', '5V', 'VBAT', 'VB'],
+};
+
 export const BOARD_PIN_GROUPS: Record<AllBoardKinds, BoardPinGroup> = {
   default: { vcc: 5, gnd: ['GND', 'GND.1', 'GND.2'], vcc_pins: ['5V', 'VCC'] },
 
@@ -36,6 +42,16 @@ export const BOARD_PIN_GROUPS: Record<AllBoardKinds, BoardPinGroup> = {
     vcc_pins: ['5V', 'VCC', '3.3V', 'AREF'],
   },
   attiny85: { vcc: 5, gnd: ['GND'], vcc_pins: ['VCC'] },
+
+  // STM32 family — 3.3 V logic. Bluepill silkscreens repeat bare GND/3V3.
+  'stm32-bluepill': STM32_GROUP,
+  'stm32-bluepill-f103cb': STM32_GROUP,
+  'stm32-blackpill': STM32_GROUP,
+  'stm32-blackpill-f401': STM32_GROUP,
+  'stm32-f4-discovery': STM32_GROUP,
+  'stm32-olimex-h405': STM32_GROUP,
+  'stm32-netduino-plus2': STM32_GROUP,
+  'stm32-netduino2': STM32_GROUP,
 
   'raspberry-pi-pico': {
     vcc: 3.3,

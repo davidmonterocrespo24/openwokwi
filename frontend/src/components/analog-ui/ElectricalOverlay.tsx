@@ -11,6 +11,12 @@
  * This is a read-only, zero-interactivity layer — it sits ABOVE the wire
  * layer but below the component layer so labels remain legible without
  * blocking clicks.
+ *
+ * Labels are HOVER-GATED. Showing every net at once buried dense boards
+ * (a 4-digit 7-segment clock draws ~40 wires, so ~40 `0uV` pills covered
+ * the breadboard). A label is drawn only when the user hovers its wire,
+ * or hovers a component/board that wire lands on — so pointing at a part
+ * reveals every voltage around it at once. The summary pill always shows.
  */
 import { useMemo } from 'react';
 import { useElectricalStore } from '../../store/useElectricalStore';
@@ -27,7 +33,20 @@ function formatV(v: number): string {
   return `${v.toFixed(1)}V`;
 }
 
-export function ElectricalOverlay() {
+interface ElectricalOverlayProps {
+  /** Wire currently under the cursor (canvas-level hit test). */
+  hoveredWireId?: string | null;
+  /** Component under the cursor — reveals every wire touching it. */
+  hoveredComponentId?: string | null;
+  /** Board under the cursor — same, for wires landing on board pins. */
+  hoveredBoardId?: string | null;
+}
+
+export function ElectricalOverlay({
+  hoveredWireId = null,
+  hoveredComponentId = null,
+  hoveredBoardId = null,
+}: ElectricalOverlayProps = {}) {
   const nodeVoltages = useElectricalStore((s) => s.nodeVoltages);
   const converged = useElectricalStore((s) => s.converged);
   const error = useElectricalStore((s) => s.error);
@@ -77,10 +96,32 @@ export function ElectricalOverlay() {
         const samples = netName ? timeWaveforms?.nodes.get(netName) : undefined;
         const ac = samples && samples.length > 0 && isAC(samples);
         const displayV = ac ? rms(samples!) : netName ? nodeVoltages[netName] : undefined;
-        return { id: w.id, x: mx, y: my, v: displayV, netName, ac };
+        return {
+          id: w.id,
+          x: mx,
+          y: my,
+          v: displayV,
+          netName,
+          ac,
+          // Endpoint owners, so hovering a part can reveal its wires.
+          a: w.start.componentId,
+          b: w.end.componentId,
+        };
       })
       .filter((l) => l.v !== undefined && l.netName !== '0');
   }, [wires, components, boards, nodeVoltages, timeWaveforms]);
+
+  // Hover gate kept in its own memo: the netlist rebuild above is expensive
+  // and must not re-run every time the cursor moves.
+  const visibleLabels = useMemo(() => {
+    if (!hoveredWireId && !hoveredComponentId && !hoveredBoardId) return [];
+    return labels.filter(
+      (l) =>
+        l.id === hoveredWireId ||
+        (hoveredComponentId !== null && (l.a === hoveredComponentId || l.b === hoveredComponentId)) ||
+        (hoveredBoardId !== null && (l.a === hoveredBoardId || l.b === hoveredBoardId)),
+    );
+  }, [labels, hoveredWireId, hoveredComponentId, hoveredBoardId]);
 
   const modeBadge = analysisMode === 'tran' ? 'AC' : 'DC';
   const badgeColor = analysisMode === 'tran' ? '#4dd0e1' : '#ffa500';
@@ -150,8 +191,8 @@ export function ElectricalOverlay() {
         </text>
       </g>
 
-      {/* Per-wire voltage labels */}
-      {labels.map((l) => (
+      {/* Per-wire voltage labels — only for what the cursor is on */}
+      {visibleLabels.map((l) => (
         <g key={l.id} transform={`translate(${l.x}, ${l.y})`}>
           <rect
             x={-22}

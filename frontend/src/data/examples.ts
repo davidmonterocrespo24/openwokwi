@@ -60,10 +60,11 @@ export interface ExampleProject {
   /** Code for single-board examples (ignored when boards[] is set, or when files[] is provided). */
   code: string;
   /**
-   * Optional language mode for the active board. When 'micropython', loadExample
-   * switches the board into MicroPython mode before populating files.
+   * Optional language mode for the active board. When 'micropython' or
+   * 'espidf', loadExample switches the board into that mode before
+   * populating files.
    */
-  languageMode?: 'arduino' | 'micropython';
+  languageMode?: 'arduino' | 'micropython' | 'espidf';
   /**
    * Optional multi-file payload for single-board examples. When present it
    * overrides ``code`` — every entry is loaded into the active file group as-is.
@@ -159,7 +160,7 @@ void loop() {
     title: 'ESP32: SSD1306 OLED (4-pin I2C)',
     description:
       'Drive the cheap 4-pin SSD1306 OLED module (GND/VCC/SCL/SDA) over I2C from an ESP32 (SDA=21, SCL=22).',
-    libraries: ['Adafruit SSD1306', 'Adafruit GFX Library'],
+    libraries: ['Adafruit SSD1306', 'Adafruit GFX Library', 'Adafruit BusIO'],
     category: 'displays',
     difficulty: 'intermediate',
     boardFilter: 'esp32',
@@ -211,6 +212,61 @@ void loop() {
       { id: 'w-gnd', start: { componentId: 'esp32', pinName: 'GND' }, end: { componentId: 'oled', pinName: 'GND' }, color: '#000000' },
       { id: 'w-sda', start: { componentId: 'esp32', pinName: '21' }, end: { componentId: 'oled', pinName: 'SDA' }, color: '#22aaff' },
       { id: 'w-scl', start: { componentId: 'esp32', pinName: '22' }, end: { componentId: 'oled', pinName: 'SCL' }, color: '#ff8800' },
+    ],
+  },
+  // ── Pure ESP-IDF (issue #139): user app_main(), no Arduino core. ──
+  {
+    id: 'esp32-idf-blink',
+    title: 'ESP32: Pure ESP-IDF Blink',
+    description:
+      'Blink an LED from a pure ESP-IDF project — app_main(), FreeRTOS delays and the GPIO driver, no Arduino core. Pick "ESP-IDF" in the language selector to write more projects like this.',
+    category: 'basics',
+    difficulty: 'intermediate',
+    boardType: 'esp32',
+    languageMode: 'espidf',
+    tags: ['esp32', 'esp-idf', 'freertos', 'gpio'],
+    code: '',
+    files: [
+      {
+        name: 'main.c',
+        content: `// Pure ESP-IDF blink — no Arduino core, just IDF APIs.
+// app_main() is the ESP-IDF entry point (instead of setup()/loop()).
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_log.h"
+
+#define LED_PIN GPIO_NUM_2
+
+static const char *TAG = "blink";
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "ESP-IDF blink starting");
+    gpio_reset_pin(LED_PIN);
+    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+
+    int level = 0;
+    while (1) {
+        level = !level;
+        gpio_set_level(LED_PIN, level);
+        ESP_LOGI(TAG, "LED %s", level ? "on" : "off");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+`,
+      },
+    ],
+    components: [
+      // 220R keeps the LED under its 20 mA rating on a 3.3 V GPIO.
+      { type: 'wokwi-resistor', id: 'r-led', x: 340, y: 120, properties: { value: '220' } },
+      { type: 'wokwi-led', id: 'led-ext', x: 470, y: 100, properties: { color: 'red' } },
+    ],
+    wires: [
+      { id: 'w-gpio2-r', start: { componentId: 'esp32', pinName: '2' }, end: { componentId: 'r-led', pinName: '1' }, color: '#e74c3c' },
+      { id: 'w-r-led', start: { componentId: 'r-led', pinName: '2' }, end: { componentId: 'led-ext', pinName: 'A' }, color: '#e74c3c' },
+      { id: 'w-gnd', start: { componentId: 'led-ext', pinName: 'C' }, end: { componentId: 'esp32', pinName: 'GND' }, color: '#2c3e50' },
     ],
   },
   {

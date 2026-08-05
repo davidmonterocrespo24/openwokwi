@@ -122,7 +122,7 @@ type TraceState = ReturnType<typeof useSimulatorStore.getState>;
 // Lifted to module scope (was inside getArduinoPin) so that getPinResolver
 // can call it too — the previous nested-scope version caused a runtime
 // ReferenceError "traceDetailed is not defined" on the simulator page.
-function traceDetailed(
+export function traceDetailed(
   state: TraceState,
   fromId: string,
   fromPin: string,
@@ -146,10 +146,16 @@ function traceDetailed(
       w.start.componentId === fromId && w.start.pinName === fromPin ? w.start : w.end;
     const otherEp = selfEp === w.start ? w.end : w.start;
 
-    if (isBoardComponent(otherEp.componentId)) {
-      const boardKind =
-        state.boards.find((b) => b.id === otherEp.componentId)?.boardKind ??
-        otherEp.componentId;
+    // A board endpoint is recognised by the LIVE boards list first.
+    // `isBoardComponent` matches static id prefixes ('arduino-uno', …), which
+    // only covers the default board — every board added at runtime (the agent
+    // mints UUID ids) failed the check, so tracing treated it as an unknown
+    // component and returned null. Symptom: an ESP32 clock whose QEMU was
+    // emitting hundreds of GPIO edges/second at a display that stayed dark,
+    // because no resolver ever attached.
+    const boardEp = state.boards.find((b) => b.id === otherEp.componentId);
+    if (boardEp || isBoardComponent(otherEp.componentId)) {
+      const boardKind = boardEp?.boardKind ?? otherEp.componentId;
       const pin = boardPinToNumber(boardKind, otherEp.pinName);
       if (pin !== null) return { arduinoPin: pin, crossedActiveDevice: activeSeen };
     } else {
@@ -176,14 +182,22 @@ function traceDetailed(
       // Breadboards join N holes per internal group (5-hole strip / power
       // rail), which the 2-terminal PASSIVE_PIN_PAIRS map can't express.
       // Continue the trace from every OTHER wired hole in the same group.
+      //
+      // Exclusion is by INCOMING WIRE, not by hole name: two wires may
+      // legitimately share one hole (a seated pin plus a jumper landing in
+      // that same hole — the agent bridges strips straight into the seat
+      // hole). Excluding the arrival hole made those stacked connections
+      // invisible: an ESP32 clock with QEMU firing hundreds of GPIO edges
+      // per second sat dark because every segment's bridge landed on its
+      // resistor's own seat hole and the trace dead-ended there.
       const bbGroup = comp && breadboardGroupKey(comp.metadataId, otherEp.pinName);
       if (bbGroup && comp) {
         const groupPins = new Set<string>();
         for (const gw of state.wires) {
+          if (gw.id === w.id) continue; // never bounce back on the same wire
           for (const ep of [gw.start, gw.end]) {
             if (
               ep.componentId === comp.id &&
-              ep.pinName !== otherEp.pinName &&
               breadboardGroupKey(comp.metadataId, ep.pinName) === bbGroup
             ) {
               groupPins.add(ep.pinName);
@@ -236,6 +250,7 @@ interface DynamicComponentProps {
   x?: number;
   y?: number;
   isSelected?: boolean;
+  isHovered?: boolean;
   onMouseDown?: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;
   onMouseEnter?: () => void;
@@ -250,6 +265,7 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
   x = 0,
   y = 0,
   isSelected = false,
+  isHovered = false,
   onMouseDown,
   onDoubleClick,
   onMouseEnter,
@@ -293,19 +309,96 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
   const isInteractive = logic?.attachEvents !== undefined;
 
   /**
-   * Sync React properties to Web Component
+   * Sync React properties to Web Component.
+   *
+   * Values arriving as strings (agent set_component_property, the text
+   * inputs in the property dialog) are coerced to the type of the
+   * metadata DEFAULT for that key. Without this, `el.digits = '4'`
+   * (string) silently breaks wokwi elements that strict-match
+   * (`switch (this.digits) { case 4: ... }` -> falls back to the 1-digit
+   * pinout), and `'false'` stays truthy for boolean props like colon.
    */
   useEffect(() => {
     if (!elementRef.current) return;
 
     Object.entries(properties).forEach(([key, value]) => {
       try {
-        (elementRef.current as any)[key] = value;
+        let coerced: any = value;
+        if (typeof value === 'string') {
+          const def = metadata.defaultValues?.[key];
+          if (typeof def === 'number' && value.trim() !== '' && !Number.isNaN(Number(value))) {
+            coerced = Number(value);
+          } else if (typeof def === 'boolean') {
+            coerced = value === 'true' || value === '1';
+          }
+        }
+        (elementRef.current as any)[key] = coerced;
       } catch (error) {
         console.warn(`Failed to set property ${key} on ${metadata.tagName}:`, error);
       }
     });
   }, [properties, metadata.tagName]);
+
+  /**
+   * Property changes that swap the element's pin SET (7segment digits,
+   * LED flip, display pins edge) re-render asynchronously and announce
+   * themselves with a 'pininfo-change' event. Re-derive the breadboard
+   * seating then — reseating synchronously on the property write would
+   * read the STALE pinout and seat ghost pins.
+   */
+  useEffect(() => {
+    const el = elementRef.current;
+    if (!el) return;
+    const onPinInfoChange = () => {
+      try {
+        useSimulatorStore.getState().reseatComponentOnBreadboard(id);
+      } catch {
+        // headless / tests
+      }
+    };
+    el.addEventListener('pininfo-change', onPinInfoChange);
+    return () => el.removeEventListener('pininfo-change', onPinInfoChange);
+  }, [id, metadata.tagName]);
+
+  /**
+   * Reseat once the element's geometry first becomes measurable.
+   *
+   * A part can land in the store at its FINAL position before its element
+   * mounts — the agent streams add_component + a seating move in one batch,
+   * and `updateComponent`'s reseat then finds no DOM (computeSeating null)
+   * and keeps the (empty) seating. Nothing re-derived it afterwards: the
+   * seat-correction skips when the position needs no nudge, and
+   * 'pininfo-change' only fires on pin-SET swaps, not on plain init. So the
+   * part had no bb wires until the user dragged it or reloaded — a clock
+   * started by the agent in that window ran against a dead display, while
+   * reload+run worked (bb wires are persisted). Deriving the seating at
+   * mount closes that hole for every path (agent, load, undo).
+   */
+  useEffect(() => {
+    const tryReseat = () => {
+      try {
+        const pinInfo = (elementRef.current as any)?.pinInfo;
+        if (pinInfo && Array.isArray(pinInfo) && pinInfo.length > 0) {
+          useSimulatorStore.getState().reseatComponentOnBreadboard(id);
+          return true;
+        }
+      } catch {
+        // element not ready yet / headless tests
+      }
+      return false;
+    };
+    if (tryReseat()) return;
+    // Same cadence as the pinInfo-ready poll above: the custom element may
+    // upgrade a few frames after React commits.
+    const interval = setInterval(() => {
+      if (tryReseat()) clearInterval(interval);
+    }, 100);
+    const timeout = setTimeout(() => clearInterval(interval), 2000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [id, metadata.tagName]);
 
   /**
    * Extract pinInfo from web component after it initializes
@@ -669,7 +762,13 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
         </div>
       )}
 
-      {/* Component label */}
+      {/* Component label — revealed on hover/selection only.
+          A dense board (e.g. 8 vertical resistors at 19 px pitch) turned into
+          a wall of overlapping "Resistor 220 Ω" text that hid the breadboard
+          holes and the parts themselves. Hidden with OPACITY, never
+          `display`/`position`: pinPositionCalculator derives the rotation
+          pivot from `wrapper.offsetHeight`, so taking the label out of flow
+          would move every rotated component's pins. */}
       <div
         className="component-label"
         style={{
@@ -682,6 +781,8 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
           alignItems: 'center',
           justifyContent: 'center',
           gap: '4px',
+          opacity: isHovered || isSelected ? 1 : 0,
+          transition: 'opacity 120ms ease-out',
         }}
       >
         {properties.pin !== undefined ? `Pin ${properties.pin}` : metadata.name}
@@ -746,11 +847,20 @@ export function createComponentFromMetadata(
   // dark LED). Also strip '-' from metadata.id (e.g. 'led-bar-graph') so
   // the prefix doesn't reintroduce a hyphen.
   const safePrefix = metadata.id.replace(/-/g, '_');
+  const properties: Record<string, any> = { ...metadata.defaultValues };
+  // Resistors default to vertical: they read better, take less horizontal
+  // space, and drop straight into breadboard columns (their pin span
+  // bridges the center trench). Covers 'resistor' and every preconfigured
+  // 'resistor-<value>' variant; anything with an explicit rotation in its
+  // metadata defaults keeps it.
+  if (metadata.id.startsWith('resistor') && properties.rotation === undefined) {
+    properties.rotation = 90;
+  }
   return {
     id: `${safePrefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     metadataId: metadata.id,
     x,
     y,
-    properties: { ...metadata.defaultValues },
+    properties,
   };
 }

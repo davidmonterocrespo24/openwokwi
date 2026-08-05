@@ -292,7 +292,31 @@ export class Esp32Bridge {
   }
 
   connect(): void {
-    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) return;
+    // Force a clean reconnect. The old guard here was
+    //   if (this.socket && readyState !== CLOSED) return;
+    // which made connect() a SILENT NO-OP whenever a socket lingered in any
+    // non-CLOSED state (CONNECTING / OPEN / CLOSING). That's exactly the
+    // "el agente terminó, di Run y no funcionó; recargué y sí" bug: the
+    // agent's run_simulation left a live/half-dead socket, the backend QEMU
+    // session had ended, and the user's Run → startBoard → connect() returned
+    // without doing anything. A page reload worked only because it built a
+    // fresh bridge. Tearing the zombie socket down and opening a new one to
+    // the same session key is exactly what that reload does — the backend
+    // already handles a new WS replacing an existing session (that's why
+    // reload works), so it's safe to do it without the reload.
+    if (this.socket) {
+      try {
+        this.socket.onopen = null;
+        this.socket.onmessage = null;
+        this.socket.onclose = null;
+        this.socket.onerror = null;
+        this.socket.close();
+      } catch {
+        /* already closing/closed */
+      }
+      this.socket = null;
+      this._connected = false;
+    }
 
     const base = API_BASE();
     const wsProtocol = base.startsWith('https') ? 'wss:' : 'ws:';

@@ -18,6 +18,8 @@ import type { BoardKind } from '../types/board';
 import { BOARD_KIND_LABELS } from '../types/board';
 import { isProBoardKind } from '../lib/proBoardGate';
 import raspberryPi3Svg from '../assets/Raspberry_Pi_3_illustration.svg';
+import raspberryPi4Png from '../assets/raspberry-pi-4-board.png';
+import raspberryPi5Png from '../assets/raspberry-pi-5-board.png';
 import { Attiny85 } from './velxio-components/Attiny85';
 import './velxio-components/Esp32Element'; // registers velxio-esp32
 import './velxio-components/PiPicoWElement'; // registers velxio-pi-pico-w
@@ -341,17 +343,53 @@ const PASSIVE_TAGS = new Set([
   'wokwi-inductor',
 ]);
 
+// Static illustrations for the Pi Linux family. A live velxio-raspberry-pi-*
+// custom element at natural size + CSS scale keeps its unscaled layout box,
+// so the 100px thumbnail clips it to a sliver — images render fully instead.
+// Keyed by tagName because the registry's Pi Zero/1/2 entries deliberately
+// reuse the Pi 3 board art.
+const PI_BOARD_ART: Record<string, string> = {
+  'velxio-raspberry-pi-3': raspberryPi3Svg,
+  'velxio-raspberry-pi-4': raspberryPi4Png,
+  'velxio-raspberry-pi-5': raspberryPi5Png,
+};
+
+/** Gold PRO pill shown on cards for paid-gated boards (Pi Linux + STM32). */
+const ProBadge: React.FC = () => (
+  <span
+    title="Pro feature — paid plan or Velxio Desktop"
+    style={{
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      zIndex: 1,
+      padding: '3px 10px',
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      color: '#1a1205',
+      background: 'linear-gradient(180deg,#ffd566,#f5a623)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+    }}
+  >
+    PRO
+  </span>
+);
+
 const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect }) => {
   const thumbnailRef = React.useRef<HTMLDivElement>(null);
   const usePresetSvg =
     PASSIVE_TAGS.has(component.tagName) &&
     typeof component.thumbnail === 'string' &&
     component.thumbnail.trim().startsWith('<svg');
+  const boardArt = PI_BOARD_ART[component.tagName];
 
   // Render actual web component as thumbnail
   React.useEffect(() => {
     if (!thumbnailRef.current) return;
     if (usePresetSvg) return; // SVG is rendered via dangerouslySetInnerHTML below
+    if (boardArt) return; // static illustration rendered below
 
     // Create the actual wokwi element
     const element = document.createElement(component.tagName);
@@ -395,12 +433,19 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect }) =>
         thumbnailRef.current.innerHTML = '';
       }
     };
-  }, [component.tagName, component.defaultValues, usePresetSvg]);
+  }, [component.tagName, component.defaultValues, usePresetSvg, boardArt]);
 
   return (
-    <button className="component-card" onClick={onSelect}>
+    <button className="component-card" onClick={onSelect} style={{ position: 'relative' }}>
+      {isProBoardKind(component.id) && <ProBadge />}
       <div className="card-thumbnail">
-        {usePresetSvg ? (
+        {boardArt ? (
+          <img
+            src={boardArt}
+            alt={component.name}
+            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+          />
+        ) : usePresetSvg ? (
           <div
             className="component-preview"
             dangerouslySetInnerHTML={{ __html: component.thumbnail }}
@@ -459,21 +504,17 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
 
   React.useEffect(() => {
     if (!thumbnailRef.current) return;
-    // React-rendered boards and Pi family handled below: Pi 3 has a custom
-    // illustration SVG; Pi 4 / Pi 5 instantiate their own velxio-* custom
-    // element directly because they don't go through BOARD_TAG.
-    if (kind === 'raspberry-pi-3' || kind === 'attiny85') return;
-    if (kind === 'raspberry-pi-4' || kind === 'raspberry-pi-5') {
-      const tagName = kind === 'raspberry-pi-4' ? 'velxio-raspberry-pi-4' : 'velxio-raspberry-pi-5';
-      const el = document.createElement(tagName) as HTMLElement;
-      el.style.transform = 'scale(0.35)';
-      el.style.transformOrigin = 'center center';
-      thumbnailRef.current.innerHTML = '';
-      thumbnailRef.current.appendChild(el);
-      return () => {
-        if (thumbnailRef.current) thumbnailRef.current.innerHTML = '';
-      };
-    }
+    // Static-image boards handled below via reactThumbnail: the whole Pi
+    // Linux family uses board illustrations (a live custom element at
+    // natural size + CSS scale keeps its unscaled layout box, so the
+    // 100px thumbnail clips it to a narrow sliver).
+    if (
+      kind === 'raspberry-pi-3' ||
+      kind === 'raspberry-pi-4' ||
+      kind === 'raspberry-pi-5' ||
+      kind === 'attiny85'
+    )
+      return;
 
     const tag = BOARD_TAG[kind];
     if (!tag) return;
@@ -499,6 +540,18 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
         alt="Raspberry Pi 3"
         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
       />
+    ) : kind === 'raspberry-pi-4' ? (
+      <img
+        src={raspberryPi4Png}
+        alt="Raspberry Pi 4"
+        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+      />
+    ) : kind === 'raspberry-pi-5' ? (
+      <img
+        src={raspberryPi5Png}
+        alt="Raspberry Pi 5"
+        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+      />
     ) : kind === 'attiny85' ? (
       <div style={{ transform: 'scale(0.55)', transformOrigin: 'center center' }}>
         <Attiny85 />
@@ -507,26 +560,7 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
 
   return (
     <button className="component-card" onClick={onSelect} style={{ position: 'relative' }}>
-      {isProBoardKind(kind) && (
-        <span
-          title="Pro feature — paid plan or Velxio Desktop"
-          style={{
-            position: 'absolute',
-            top: 6,
-            right: 6,
-            zIndex: 1,
-            padding: '1px 6px',
-            borderRadius: 4,
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            color: '#1a1205',
-            background: 'linear-gradient(180deg,#ffd566,#f5a623)',
-          }}
-        >
-          PRO
-        </span>
-      )}
+      {isProBoardKind(kind) && <ProBadge />}
       <div className="card-thumbnail">
         {reactThumbnail ? reactThumbnail : <div ref={thumbnailRef} className="component-preview" />}
       </div>

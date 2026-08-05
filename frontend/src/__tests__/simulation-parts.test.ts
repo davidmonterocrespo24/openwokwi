@@ -556,6 +556,77 @@ describe('7segment — attachEvents', () => {
     cleanup();
     expect(unsubMock).toHaveBeenCalledTimes(8);
   });
+
+  it('re-attach after digits changes 1→4 subscribes DIG pins (agent build order)', () => {
+    // The agent adds the display with default digits=1, THEN sets digits=4,
+    // then wires, compiles (hexEpoch bump → re-attach) and runs. The cached
+    // per-element state must rebuild for the new digit count, or the
+    // re-attach keeps subscribing COM.1/COM.2 and the display stays blank
+    // until a page reload.
+    const logic = PartSimulationRegistry.get('7segment')!;
+    const el = makeElement({ values: new Array(8).fill(0), digits: 1 });
+    const sim = makeSimulator();
+    const subscribed: number[] = [];
+    sim.pinManager.onPinChange.mockImplementation((pin: number) => {
+      subscribed.push(pin);
+      return () => {};
+    });
+
+    // First attach while digits=1 (mid-build): subscribes COM pins only.
+    const pins1 = pinMap({ 'COM.1': 30, 'COM.2': 31, DIG1: 10, DIG2: 11, DIG3: 12, DIG4: 13, A: 2 });
+    const cleanup1 = logic.attachEvents!(el, sim as any, pins1);
+    expect(subscribed).toContain(30); // COM.1 (single-digit mode)
+    expect(subscribed).not.toContain(10); // DIG1 not subscribed yet
+    cleanup1();
+
+    // Property set later: digits=4. Re-attach (compile/run does this).
+    (el as any).digits = 4;
+    subscribed.length = 0;
+    const callbacks = new Map<number, (pin: number, state: boolean) => void>();
+    sim.pinManager.onPinChange.mockImplementation(
+      (pin: number, cb: (pin: number, state: boolean) => void) => {
+        subscribed.push(pin);
+        callbacks.set(pin, cb);
+        return () => {};
+      },
+    );
+    logic.attachEvents!(el, sim as any, pins1);
+    expect(subscribed).toEqual(expect.arrayContaining([10, 11, 12, 13])); // DIG1..4
+
+    // And the display actually lights: segment A high + DIG1 enabled.
+    callbacks.get(2)!(2, true);   // segment A high
+    callbacks.get(10)!(10, true); // DIG1 on → latches segments
+    const values = (el as any).values as number[];
+    expect(values.length).toBe(32); // 4 digits × 8 segments
+    expect(values[0]).toBe(1); // digit 0, segment A lit
+  });
+
+  it('CLN pin drives colon + colonValue (attachEvents and onPinStateChange)', () => {
+    const logic = PartSimulationRegistry.get('7segment')!;
+
+    // attachEvents path (a clock face wired to a local-sim board).
+    const el = makeElement({ values: new Array(8).fill(0), colon: false, colonValue: false });
+    const sim = makeSimulator();
+    let clnCallback!: (pin: number, state: boolean) => void;
+    sim.pinManager.onPinChange.mockImplementation(
+      (pin: number, cb: (pin: number, state: boolean) => void) => {
+        if (pin === 10) clnCallback = cb;
+        return () => {};
+      },
+    );
+    logic.attachEvents!(el, sim as any, pinMap({ A: 2, CLN: 10 }));
+    clnCallback(10, true);
+    expect((el as any).colon).toBe(true);
+    expect((el as any).colonValue).toBe(true);
+    clnCallback(10, false);
+    expect((el as any).colonValue).toBe(false);
+
+    // onPinStateChange path (QEMU-backed boards dispatch by pin name).
+    const el2 = makeElement({ values: new Array(8).fill(0), colon: false, colonValue: false });
+    logic.onPinStateChange!('CLN', true, el2);
+    expect((el2 as any).colon).toBe(true);
+    expect((el2 as any).colonValue).toBe(true);
+  });
 });
 
 // ─── RGB LED ──────────────────────────────────────────────────────────────────

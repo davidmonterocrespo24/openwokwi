@@ -710,17 +710,13 @@ export const LandingPage: React.FC = () => {
           <p className="hero-trust-line">{t('landing.hero.trustLine')}</p>
         </div>
         <div className="hero-right">
-          <picture>
-            <source srcSet="/marketing/hero-editor.webp" type="image/webp" />
-            <source srcSet="/marketing/hero-editor.png" type="image/png" />
-            <img
-              src="/marketing/hero-editor.png"
-              alt={t('landing.hero.imageAlt')}
-              className="hero-preview-img"
-              loading="eager"
-              fetchPriority="high"
-            />
-          </picture>
+          <img
+            src="/estacion-meteorologica-esp32.gif"
+            alt={t('landing.hero.imageAlt')}
+            className="hero-preview-img"
+            loading="eager"
+            fetchPriority="high"
+          />
         </div>
       </section>
 

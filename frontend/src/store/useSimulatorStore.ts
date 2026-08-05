@@ -18,7 +18,7 @@ import type { I2CDevice } from '../simulation/I2CBusManager';
 import type { RP2040I2CDevice } from '../simulation/RP2040Simulator';
 import type { Wire, WireInProgress, WireEndpoint } from '../types/wire';
 import type { BoardKind, BoardInstance, LanguageMode, WifiStatus } from '../types/board';
-import { BOARD_SUPPORTS_MICROPYTHON, isPiBoardKind, isStm32BoardKind } from '../types/board';
+import { BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, isPiBoardKind, isStm32BoardKind } from '../types/board';
 import { boardGateDecision, proBoardFeatureName, triggerProUpgradePrompt } from '../lib/proBoardGate';
 import { calculatePinPosition } from '../utils/pinPositionCalculator';
 import { useOscilloscopeStore } from './useOscilloscopeStore';
@@ -30,7 +30,20 @@ import { useEditorStore } from './useEditorStore';
 import { useVfsStore } from './useVfsStore';
 import { buildProjectSdImage, decodeSdFiles, bytesToB64 } from '../utils/sdCardFiles';
 import { boardPinToNumber, isBoardComponent } from '../utils/boardPinMapping';
-import { autoWireColor, DEFAULT_WIRE_COLOR } from '../utils/wireUtils';
+import {
+  autoWireColor,
+  DEFAULT_WIRE_COLOR,
+  normalizeWireWaypoints,
+  previewElbow,
+} from '../utils/wireUtils';
+import {
+  routeAroundObstacles,
+  collectComponentObstacles,
+  collectComponentRects,
+  collectWireSegments,
+} from '../utils/wireAutoRoute';
+import { isBreadboard } from '../utils/breadboardNets';
+import { computeSeating } from '../utils/breadboardSnap';
 import { createSerialBatcher } from './serialBatcher';
 import {
   bindBoard as icBindBoard,
@@ -189,6 +202,17 @@ class Esp32BridgeShim {
   serialWrite(text: string): void {
     this.bridge.sendSerialBytes(Array.from(new TextEncoder().encode(text)));
   }
+  /**
+   * Feed bytes into a hardware UART's RX from an external part (GPS module,
+   * a wired peer board via Interconnect, …). Uniform seam across simulators
+   * (`sim.feedUart(uart, data)`). The backend QEMU worker routes the bytes
+   * into the requested UART (0 = Serial / GPIO3, 2 = Serial2 / GPIO16 on
+   * the classic ESP32 pinout).
+   */
+  feedUart(uart: number, data: string): boolean {
+    this.bridge.sendSerialBytes(Array.from(new TextEncoder().encode(data)), uart);
+    return true;
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getADC(): any {
     return null;
@@ -199,11 +223,32 @@ class Esp32BridgeShim {
    * ESP32 ADC1: GPIO 36-39 → CH0-3, GPIO 32-35 → CH4-7
    * Returns true if the pin is a valid ADC pin.
    */
+  /** GPIO -> ADC channel for the bridge's board family. Classic ESP32:
+   * ADC1 on GPIO 36-39 (CH0-3) + 32-35 (CH4-7). ESP32-S3 family (incl.
+   * xiao-esp32-s3 and the S3-based arduino-nano-esp32): ADC1 = GPIO 1-10
+   * (CH0-9), ADC2 = GPIO 11-20 (stored at channel index 10-19, matching
+   * the machine's SENS stub). Without the S3 branch analogRead always saw
+   * 0 there (2026-07 emulation-gaps audit, F1). */
+  private adcChannelForPin(pin: number): number {
+    const kind = this.bridge.boardKind as string;
+    if (kind === 'esp32-s3' || kind === 'xiao-esp32-s3' || kind === 'arduino-nano-esp32') {
+      if (pin >= 1 && pin <= 10) return pin - 1;
+      if (pin >= 11 && pin <= 20) return 10 + (pin - 11);
+      return -1;
+    }
+    if (kind === 'esp32-c3' || kind === 'xiao-esp32-c3' || kind === 'aitewinrobot-esp32c3-supermini') {
+      // C3: ADC1 = GPIO0-4 -> CH0-4, GPIO5 (ADC2_CH0) -> index 5.
+      // Verified against the qemu SARADC: esp32_adc_set{channel:3} is what
+      // analogRead(3) returns (emulation-gaps harness, 2026-07-31).
+      return pin >= 0 && pin <= 5 ? pin : -1;
+    }
+    if (pin >= 36 && pin <= 39) return pin - 36; // GPIO 36→CH0 … 39→CH3
+    if (pin >= 32 && pin <= 35) return pin - 28; // GPIO 32→CH4 … 35→CH7
+    return -1;
+  }
+
   setAdcVoltage(pin: number, voltage: number): boolean {
-    let channel = -1;
-    if (pin >= 36 && pin <= 39)
-      channel = pin - 36; // GPIO 36→CH0, 37→CH1, 38→CH2, 39→CH3
-    else if (pin >= 32 && pin <= 35) channel = pin - 28; // GPIO 32→CH4, 33→CH5, 34→CH6, 35→CH7
+    const channel = this.adcChannelForPin(pin);
     if (channel < 0) return false;
     const millivolts = Math.round(voltage * 1000);
     this.bridge.setAdc(channel, millivolts);
@@ -219,9 +264,7 @@ class Esp32BridgeShim {
    * `samples` are 12-bit raw values (0-4095) aligned on a uniform grid.
    */
   setAdcWaveform(pin: number, samples: Uint16Array, periodNs: number): boolean {
-    let channel = -1;
-    if (pin >= 36 && pin <= 39) channel = pin - 36;
-    else if (pin >= 32 && pin <= 35) channel = pin - 28;
+    const channel = this.adcChannelForPin(pin);
     if (channel < 0) return false;
     this.bridge.setAdcWaveform(channel, samples, periodNs);
     return true;
@@ -580,12 +623,24 @@ function makeGpioRoutingClearHandler(boardId: string) {
 function makePinPullHandler(boardId: string) {
   return (gpio: number, pull: 0 | 1 | 2) => {
     // Record the internal pull so the netlist stamps a weak resistor
-    // (vcc_rail for pull-up, GND for pull-down) and request a re-solve. The
-    // digital read itself is driven from the solved circuit by
-    // connectDigitalInputsToMcu — we deliberately do NOT seed the pin directly
-    // here, because that would bypass the real wiring and re-introduce the
-    // "mis-wired button still works" bug.
-    pinManagerMap.get(boardId)?.setPinPull(gpio, pull);
+    // (vcc_rail for pull-up, GND for pull-down) and request a re-solve.
+    const pm = pinManagerMap.get(boardId);
+    pm?.setPinPull(gpio, pull);
+    // Seed the guest input to the pull's RESTING level immediately (real
+    // silicon raises the pad in nanoseconds). Two failure modes this
+    // closes (2026-07 audit): (a) the boot window before the first SPICE
+    // solve where INPUT_PULLUP read LOW and phantom-triggered buttons,
+    // and (b) an INPUT_PULLUP pin with NOTHING wired — no net in
+    // pinNetMap, so connectDigitalInputsToMcu never drives it and the
+    // guest read 0 forever. On wired+sourced nets the connector overrides
+    // with the solved level right after, so the "mis-wired button still
+    // works" bug does NOT come back: the solve remains authoritative.
+    if (pull !== 0 && !(pm?.getOutputPins().has(gpio))) {
+      const sim = simulatorMap.get(boardId) as
+        | { setPinState?: (pin: number, state: boolean) => void }
+        | undefined;
+      sim?.setPinState?.(gpio, pull === 1);
+    }
     requestElectricalResolve();
   };
 }
@@ -633,6 +688,16 @@ class Stm32BridgeShim {
   /** Drive a GPIO input from a part. `pin` is the linear pin (port*16+pin). */
   setPinState(pin: number, state: boolean): void {
     this.bridge.sendPinEvent(pin, state);
+  }
+
+  /**
+   * Feed bytes into a hardware USART's RX from an external part (GPS module,
+   * a wired peer board via Interconnect, …). Uniform seam across simulators
+   * (`sim.feedUart(uart, data)`). uart 0 = USART1 (PA10 RX), 1 = USART2 (PA3).
+   */
+  feedUart(uart: number, data: string): boolean {
+    this.bridge.sendSerialBytes(Array.from(new TextEncoder().encode(data)), uart);
+    return true;
   }
 
   // ── Generic sensor registration (delegated to the backend QEMU worker) ──
@@ -888,6 +953,8 @@ interface SimulatorState {
   addComponent: (component: Component) => void;
   removeComponent: (id: string) => void;
   updateComponent: (id: string, updates: Partial<Component>) => void;
+  /** Recompute the breadboard seating wires (bb: true) of one component. */
+  reseatComponentOnBreadboard: (id: string) => void;
   updateComponentState: (id: string, state: boolean) => void;
   handleComponentEvent: (componentId: string, eventName: string, data?: unknown) => void;
   setComponents: (components: Component[]) => void;
@@ -1686,8 +1753,9 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       const board = get().boards.find((b) => b.id === boardId);
       if (!board) return;
 
-      // Only allow MicroPython for supported boards
+      // Only allow MicroPython / ESP-IDF for supported boards
       if (mode === 'micropython' && !BOARD_SUPPORTS_MICROPYTHON.has(board.boardKind)) return;
+      if (mode === 'espidf' && !BOARD_SUPPORTS_ESPIDF.has(board.boardKind)) return;
 
       // Stop any running simulation
       if (board.running) get().stopBoard(boardId);
@@ -2451,6 +2519,13 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       })),
 
     updateComponent: (id, updates) => {
+      const before = get().components.find((c) => c.id === id);
+      const isBbMove =
+        !!before && isBreadboard(before.metadataId) &&
+        (updates.x !== undefined || updates.y !== undefined);
+      const dx = isBbMove ? (updates.x ?? before.x) - before.x : 0;
+      const dy = isBbMove ? (updates.y ?? before.y) - before.y : 0;
+
       set((state) => ({
         components: state.components.map((c) => (c.id === id ? { ...c, ...updates } : c)),
       }));
@@ -2462,15 +2537,85 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         updates.properties && 'rotation' in updates.properties;
       if (updates.x !== undefined || updates.y !== undefined || rotationChanged) {
         get().updateWirePositions(id);
+        // Reseat ONLY on geometry changes (move/rotate) — the DOM pinInfo is
+        // still valid for those. Property changes that swap the pin SET
+        // (7segment digits, LED flip) re-render asynchronously; reseating
+        // now would read the STALE pinout and seat ghost pins (seen live:
+        // a digits=4 display seated with the 1-digit COM pinout). Those go
+        // through the element's 'pininfo-change' event instead
+        // (DynamicComponent listener).
+        get().reseatComponentOnBreadboard(id);
+      }
+
+      // A moving breadboard carries its seated parts: shift every part
+      // plugged into it (bb wires) by the same delta AFTER the board has
+      // moved, so each rider's own reseat re-lands on the same holes at
+      // their new location regardless of how fast the drag is.
+      if (isBbMove && (dx !== 0 || dy !== 0)) {
+        const riders = new Set<string>();
+        for (const w of get().wires) {
+          if (!w.bb) continue;
+          if (w.start.componentId === id) riders.add(w.end.componentId);
+          if (w.end.componentId === id) riders.add(w.start.componentId);
+        }
+        riders.delete(id);
+        for (const rid of riders) {
+          const rc = get().components.find((c) => c.id === rid);
+          if (rc) get().updateComponent(rid, { x: rc.x + dx, y: rc.y + dy });
+        }
       }
     },
 
+    reseatComponentOnBreadboard: (id) => {
+      const comp = get().components.find((c) => c.id === id);
+      if (!comp || isBreadboard(comp.metadataId)) return;
+      const seating = computeSeating(comp, get().components);
+      // null = geometry unmeasurable (unmounted DOM) — keep whatever
+      // seating exists rather than tearing out live connections.
+      if (seating === null) return;
+      // Nothing seated and nothing to clear: skip the store write. The
+      // mount-time reseat (DynamicComponent) calls this for EVERY part as
+      // its element becomes measurable — on a project load that would churn
+      // the wires array identity once per off-board component for no change.
+      if (
+        seating.length === 0 &&
+        !get().wires.some((w) => w.bb && (w.start.componentId === id || w.end.componentId === id))
+      ) {
+        return;
+      }
+      set((state) => {
+        const kept = state.wires.filter(
+          (w) => !(w.bb && (w.start.componentId === id || w.end.componentId === id)),
+        );
+        const seated: Wire[] = seating.map((s, i) => ({
+          id: `bbwire-${id}-${i}-${s.holeName}`,
+          start: { componentId: id, pinName: s.pinName, x: s.pinX, y: s.pinY },
+          end: { componentId: s.bbId, pinName: s.holeName, x: s.holeX, y: s.holeY },
+          waypoints: [],
+          color: '#000000',
+          bb: true,
+        }));
+        return { wires: [...kept, ...seated] };
+      });
+    },
+
     updateComponentState: (id, state) => {
-      set((prevState) => ({
-        components: prevState.components.map((c) =>
-          c.id === id ? { ...c, properties: { ...c.properties, state, value: state } } : c,
-        ),
-      }));
+      set((prevState) => {
+        // No-op guard: this runs per GPIO edge for wire-connected components.
+        // Unconditionally minting a new components array re-rendered every
+        // subscriber (canvas, editor page, console) thousands of times per
+        // second on a fast-toggling sketch — the main cause of the frozen
+        // browser on the ESP32 multiplexed-clock projects.
+        const comp = prevState.components.find((c) => c.id === id);
+        if (!comp || (comp.properties.state === state && comp.properties.value === state)) {
+          return prevState;
+        }
+        return {
+          components: prevState.components.map((c) =>
+            c.id === id ? { ...c, properties: { ...c.properties, state, value: state } } : c,
+          ),
+        };
+      });
     },
 
     handleComponentEvent: (_componentId, _eventName, _data) => {},
@@ -2518,8 +2663,35 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
 
     updateWireInProgress: (x, y) =>
       set((state) => {
-        if (!state.wireInProgress) return state;
-        return { wireInProgress: { ...state.wireInProgress, currentX: x, currentY: y } };
+        const wip = state.wireInProgress;
+        if (!wip) return state;
+
+        // Live routed preview: while the wire has no user-placed waypoints,
+        // route start -> cursor so the preview dodges components and other
+        // wires AS THE MOUSE MOVES — the committed shape then matches what
+        // the user was seeing instead of snapping on the final click.
+        // Throttled: between routings the last route keeps rendering, so
+        // the preview trails by at most one throttle window.
+        let routedPreview = wip.routedPreview ?? null;
+        let lastRouteAt = wip.lastRouteAt ?? 0;
+        if (wip.waypoints.length === 0) {
+          const now = Date.now();
+          if (now - lastRouteAt >= 40) {
+            lastRouteAt = now;
+            routedPreview = routeAroundObstacles(
+              { x: wip.startEndpoint.x, y: wip.startEndpoint.y },
+              { x, y },
+              collectComponentObstacles(state.components, [wip.startEndpoint.componentId]),
+              collectWireSegments(state.wires),
+            );
+          }
+        } else {
+          routedPreview = null; // user is hand-guiding — show their path
+        }
+
+        return {
+          wireInProgress: { ...wip, currentX: x, currentY: y, routedPreview, lastRouteAt },
+        };
       }),
 
     addWireWaypoint: (x, y) =>
@@ -2547,12 +2719,46 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       // Finish wire: auto-detect color from pin name
       const finalColor = color === DEFAULT_WIRE_COLOR ? autoWireColor(endpoint.pinName) : color;
 
+      // First-time auto-routing: a direct pin-to-pin wire (no user-placed
+      // waypoints) gets routed around other components AND clear of the
+      // wires already on the canvas. The wire is marked `autoRouted`, so
+      // the post-move pass keeps it clean when parts move; the moment the
+      // user drags a segment the flag is cleared and the shape is theirs.
+      let routed: { x: number; y: number }[] | null = null;
+      if (waypoints.length === 0) {
+        routed = routeAroundObstacles(
+          { x: startEndpoint.x, y: startEndpoint.y },
+          { x: endpoint.x, y: endpoint.y },
+          collectComponentObstacles(state.components, [
+            startEndpoint.componentId,
+            endpoint.componentId,
+          ]),
+          collectWireSegments(state.wires),
+        );
+      }
+
+      // Materialise the elbow of the final leg exactly as the live preview
+      // drew it (longer axis first). Without this the committed wire falls
+      // back to the implicit horizontal-first corner and visibly changes
+      // shape the instant the user clicks the destination pin.
+      const last = waypoints.length
+        ? waypoints[waypoints.length - 1]
+        : { x: startEndpoint.x, y: startEndpoint.y };
+      const elbow = previewElbow(last, endpoint.x, endpoint.y);
+
       const newWire: Wire = {
         id: `wire-${Date.now()}`,
         start: startEndpoint,
         end: endpoint,
-        waypoints,
+        waypoints: normalizeWireWaypoints(
+          { x: startEndpoint.x, y: startEndpoint.y },
+          routed ?? (elbow ? [...waypoints, elbow] : waypoints),
+          { x: endpoint.x, y: endpoint.y },
+        ),
         color: finalColor,
+        // System-owned shape only when the user placed no waypoints —
+        // guided wires are hand-authored from birth.
+        autoRouted: waypoints.length === 0,
       };
       set((state) => ({ wires: [...state.wires, newWire], wireInProgress: null }));
     },
@@ -2641,6 +2847,58 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
 
         return updated;
       });
+
+      // ── Re-route system-owned wires ──────────────────────────────────
+      // Endpoints just moved (component drag, agent batch, mount settle):
+      // waypoints stored earlier may now cross parts or ride other wires.
+      // Re-route every `autoRouted` wire; hand-authored wires keep their
+      // shape untouched, exactly where the user left them.
+      //
+      // This runs at drag END and on settle timers — never per drag frame
+      // (updateWirePositions handles those and does not route).
+      //
+      // Sequential on purpose: each wire sees the already-re-routed shapes
+      // of the ones before it, which is what lays parallel runs out as a
+      // tidy side-by-side bus instead of a shuffle of overlaps.
+      if (updatedWires.some((w) => w.autoRouted && !w.bb)) {
+        const rectsById = collectComponentRects(state.components);
+        for (let i = 0; i < updatedWires.length; i++) {
+          const wire = updatedWires[i];
+          if (!wire.autoRouted || wire.bb) continue;
+          const rects = rectsById
+            .filter((r) => r.id !== wire.start.componentId && r.id !== wire.end.componentId)
+            .map((r) => r.rect);
+          const routed = routeAroundObstacles(
+            { x: wire.start.x, y: wire.start.y },
+            { x: wire.end.x, y: wire.end.y },
+            rects,
+            collectWireSegments(updatedWires, wire.id),
+          );
+          // routed === null means the PREVIEW elbow (longer-axis-first) is
+          // clear — so that exact elbow must be materialised. Storing []
+          // instead renders the implicit horizontal-first corner, a
+          // DIFFERENT elbow the router never checked: three agent wires
+          // shipped crossing a display that way while their checked route
+          // was clean.
+          const elbow =
+            routed === null
+              ? previewElbow(
+                  { x: wire.start.x, y: wire.start.y },
+                  wire.end.x,
+                  wire.end.y,
+                )
+              : null;
+          updatedWires[i] = {
+            ...wire,
+            waypoints: normalizeWireWaypoints(
+              { x: wire.start.x, y: wire.start.y },
+              routed ?? (elbow ? [elbow] : []),
+              { x: wire.end.x, y: wire.end.y },
+            ),
+          };
+        }
+      }
+
       set({ wires: updatedWires });
     },
 

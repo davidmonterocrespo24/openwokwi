@@ -12,14 +12,24 @@ interface Props {
 }
 
 export const WireInProgressRenderer: React.FC<Props> = ({ wireInProgress }) => {
-  const { startEndpoint, waypoints, color, currentX, currentY } = wireInProgress;
+  const { startEndpoint, waypoints, color, currentX, currentY, routedPreview } = wireInProgress;
 
-  const path = generatePreviewPath(
-    { x: startEndpoint.x, y: startEndpoint.y },
-    waypoints,
-    currentX,
-    currentY,
-  );
+  // Prefer the live auto-route (dodges components and existing wires) when
+  // the store computed one; hand-guided previews (user waypoints) and the
+  // "direct elbow is already clean" case fall through to the classic path.
+  const path =
+    routedPreview && waypoints.length === 0
+      ? generateOrthogonalPath(
+          { x: startEndpoint.x, y: startEndpoint.y },
+          routedPreview,
+          { x: currentX, y: currentY },
+        )
+      : generatePreviewPath(
+          { x: startEndpoint.x, y: startEndpoint.y },
+          waypoints,
+          currentX,
+          currentY,
+        );
 
   if (!path) return null;
 

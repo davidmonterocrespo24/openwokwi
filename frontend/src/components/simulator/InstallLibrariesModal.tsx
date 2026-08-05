@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { installLibrary } from '../../services/libraryService';
+import { useSimulatorStore } from '../../store/useSimulatorStore';
+import { addLibraryToManifest } from '../../utils/libraryManifest';
 import './InstallLibrariesModal.css';
 
 interface InstallLibrariesModalProps {
@@ -98,6 +100,17 @@ export const InstallLibrariesModal: React.FC<InstallLibrariesModalProps> = ({
         const result = await installLibrary(item.spec);
         if (result.success) {
           setItemStatus(item.spec, 'done');
+          // Installing must also DECLARE: record the library in the active
+          // board's manifest so the compile scope knows about it. Without
+          // this, Wokwi-imported projects compiled via scan-all forever
+          // (2026-08 library-contamination investigation).
+          const sim = useSimulatorStore.getState();
+          const boardId = sim.activeBoardId;
+          const board = sim.boards.find((b) => b.id === boardId);
+          if (boardId && board) {
+            const next = addLibraryToManifest(board.libraries, item.spec);
+            if (next) sim.updateBoard(boardId, { libraries: next });
+          }
         } else {
           setItemStatus(item.spec, 'error', result.error || 'Install failed');
         }
