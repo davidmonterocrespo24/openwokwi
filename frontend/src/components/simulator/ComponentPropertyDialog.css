@@ -418,6 +418,39 @@
   color: #aaa;
   font-variant-numeric: tabular-nums;
 }
+.sd-card-label--live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.sd-card-refresh {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #555;
+  border-radius: 3px;
+  background: transparent;
+  color: #bbb;
+  cursor: pointer;
+}
+.sd-card-refresh:hover {
+  border-color: #888;
+  color: #fff;
+}
+.sd-card-file-download {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--color-action-primary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.sd-card-file-download:hover {
+  background: rgba(0, 113, 227, 0.12);
+}
 
 /* ── Keyboard binding (pushbuttons) ────────────────────────────────── */
 

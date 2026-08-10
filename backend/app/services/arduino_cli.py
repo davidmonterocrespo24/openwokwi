@@ -324,7 +324,16 @@ class ArduinoCLIService:
                 if "rp2040" in board_fqbn and write_name == "sketch.ino":
                     content = "#define Serial Serial1\n" + content
 
-                (sketch_dir / write_name).write_text(content, encoding="utf-8")
+                # Folder support: names may carry '/' paths ("apps/badge/x.py").
+                # Resolve inside the sketch dir and REJECT anything that
+                # escapes it ('..' segments, absolute paths) — the name comes
+                # straight from the request body.
+                target = (sketch_dir / write_name).resolve()
+                if not str(target).startswith(str(sketch_dir.resolve()) + os.sep):
+                    print(f"Skipping unsafe file name: {write_name!r}")
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
 
             # Fallback: no .ino files provided at all
             if not any(f["name"].endswith(".ino") for f in files):

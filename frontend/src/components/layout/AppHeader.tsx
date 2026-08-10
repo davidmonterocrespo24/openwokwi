@@ -16,6 +16,17 @@ const DISCORD_URL = 'https://discord.gg/3mARjJrh4E';
 interface AppHeaderProps {
   /** Optional auto-save state — when set, renders a save status indicator. */
   autoSave?: AutoSaveState;
+  /** Editor variant: a File/Edit menu bar rendered next to the logo. When
+   *  set, the marketing nav links (Home / Docs / Pricing / …) are hidden —
+   *  inside the editor they are noise that costs exactly the width the
+   *  toolbar is starved of on small screens; the logo still links home.
+   *  Same mechanism the Tauri desktop build uses (VITE_DESKTOP). */
+  editorMenu?: React.ReactNode;
+  /** Editor variant: the unified toolbar strip rendered in the header's
+   *  middle — the space the marketing nav used to occupy. One row instead
+   *  of header + toolbar stacked; the strip wraps internally when narrow
+   *  and the header grows to fit (height: auto on the modifier class). */
+  editorToolbar?: React.ReactNode;
 }
 
 const SAVE_STATUS_COPY: Record<AutoSaveState['status'], { label: string; color: string }> = {
@@ -62,7 +73,7 @@ const AutoSaveIndicator: React.FC<{ state: AutoSaveState }> = ({ state }) => {
   );
 };
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, editorToolbar }) => {
   const location = useLocation();
   const currentProject = useProjectStore((s) => s.currentProject);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -92,7 +103,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
     location.pathname === localize(path) ? ' header-nav-link-active' : '';
 
   return (
-    <header className="app-header">
+    <header className={"app-header" + (editorToolbar ? ' app-header--with-toolbar' : '')}>
       <div className="header-content">
         <div className="header-left">
           {/* Brand */}
@@ -122,42 +133,54 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
               velxio-prod). VITE_DESKTOP is the env flag the Tauri
               build sets — main.tsx already uses it to gate the @pro
               overlay, same pattern here. */}
-          {!import.meta.env.VITE_DESKTOP && (
+          {editorMenu}
+          {!import.meta.env.VITE_DESKTOP && !editorMenu && (
           <nav className={'header-nav-links' + (menuOpen ? ' header-nav-open' : '')}>
-            <Link to={localize('/')} className={'header-nav-link' + isActive('/')}>
-              {t('header.nav.home')}
-            </Link>
-            <Link to={localize('/docs')} className={'header-nav-link' + isActive('/docs')}>
-              {t('header.nav.documentation')}
-            </Link>
+            {/* Marketing routes live in the pro overlay; the OSS build has
+                no /docs, /about, /pricing… to link to. Editor + Examples
+                (the app's own pages) and GitHub/Discord stay everywhere. */}
+            {import.meta.env.VITE_PRO_BUILD && (
+              <>
+                <Link to={localize('/')} className={'header-nav-link' + isActive('/')}>
+                  {t('header.nav.home')}
+                </Link>
+                <Link to={localize('/docs')} className={'header-nav-link' + isActive('/docs')}>
+                  {t('header.nav.documentation')}
+                </Link>
+              </>
+            )}
             <Link to={localize('/examples')} className={'header-nav-link' + isActive('/examples')}>
               {t('header.nav.examples')}
             </Link>
             <Link to={localize('/editor')} className={'header-nav-link' + isActive('/editor')}>
               {t('header.nav.editor')}
             </Link>
-            <Link to={localize('/about')} className={'header-nav-link' + isActive('/about')}>
-              {t('header.nav.about')}
-            </Link>
-            <Link to={localize('/pricing')} className={'header-nav-link' + isActive('/pricing')}>
-              {t('header.nav.pricing')}
-            </Link>
-            <Link to={localize('/classroom')} className={'header-nav-link' + isActive('/classroom')}>
-              {t('header.nav.classroom', 'For schools')}
-            </Link>
-            <Link
-              to={localize('/account/desktop-install')}
-              className={'header-nav-link' + isActive('/account/desktop-install')}
-            >
-              {t('header.nav.download')}
-            </Link>
-            <a
-              href={blogUrlFor(currentLocale)}
-              className="header-nav-link"
-              rel="noopener"
-            >
-              {t('header.nav.blog')}
-            </a>
+            {import.meta.env.VITE_PRO_BUILD && (
+              <>
+                <Link to={localize('/about')} className={'header-nav-link' + isActive('/about')}>
+                  {t('header.nav.about')}
+                </Link>
+                <Link to={localize('/pricing')} className={'header-nav-link' + isActive('/pricing')}>
+                  {t('header.nav.pricing')}
+                </Link>
+                <Link to={localize('/classroom')} className={'header-nav-link' + isActive('/classroom')}>
+                  {t('header.nav.classroom', 'For schools')}
+                </Link>
+                <Link
+                  to={localize('/account/desktop-install')}
+                  className={'header-nav-link' + isActive('/account/desktop-install')}
+                >
+                  {t('header.nav.download')}
+                </Link>
+                <a
+                  href={blogUrlFor(currentLocale)}
+                  className="header-nav-link"
+                  rel="noopener"
+                >
+                  {t('header.nav.blog')}
+                </a>
+              </>
+            )}
             <a
               href={GITHUB_URL}
               target="_blank"
@@ -198,7 +221,22 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
           )}
         </div>
 
-        {/* Right: language + share + auth + mobile hamburger */}
+        {/* Editor toolbar strip — fills the middle the nav vacated. */}
+        {editorToolbar && (
+          <>
+            {autoSave && currentProject && <AutoSaveIndicator state={autoSave} />}
+            <div className="header-editor-toolbar">{editorToolbar}</div>
+          </>
+        )}
+
+        {/* Right: language + share + auth + mobile hamburger. In the
+            desktop-editor variant this block does not render at all: the
+            language switcher and the account button move to the corner box
+            below (bottom-left), Share lives in File > Share/Embed, and the
+            autosave dot rides next to the menus — every pixel of the row
+            goes to the toolbar, which is what lets 1440px-with-chat keep
+            the single-row layout. */}
+        {!editorToolbar && (
         <div className="header-right">
           <LanguageSwitcher />
 
@@ -222,7 +260,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
                 color: '#ccc',
                 fontSize: 13,
               }}
-              title="Share project"
+              title={t('header.shareProject', 'Share project')}
             >
               <svg
                 width="14"
@@ -253,8 +291,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
           <div data-velxio-slot="header-auth" style={{ display: 'contents' }} />
 
           {/* Mobile hamburger — useless in desktop where the nav it
-              would expand is itself hidden. */}
-          {!import.meta.env.VITE_DESKTOP && (
+              would expand is itself hidden, and in the editor variant,
+              where there is no nav to expand at all. */}
+          {!import.meta.env.VITE_DESKTOP && !editorMenu && (
             <button
               className="header-hamburger"
               onClick={() => setMenuOpen((v) => !v)}
@@ -266,7 +305,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave }) => {
             </button>
           )}
         </div>
+        )}
       </div>
+
+      {/* The account + language block lives in the file-explorer footer now
+          (EditorPage renders it) — fused so a long file tree never scrolls
+          underneath a floating box. */}
 
       {showShareModal && <ShareModal onClose={() => setShowShareModal(false)} />}
     </header>

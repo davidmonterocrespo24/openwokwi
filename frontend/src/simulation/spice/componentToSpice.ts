@@ -31,7 +31,7 @@ export interface MapperContext {
   vcc: number;
 }
 
-type Mapper = (
+export type Mapper = (
   comp: ComponentForSpice,
   netLookup: NetLookup,
   ctx: MapperContext,
@@ -1287,19 +1287,29 @@ MAPPERS['photoresistor-sensor'] = MAPPERS['photoresistor'];
  * Returns null if we have no mapping for this metadataId (caller should
  * skip the component gracefully — it just won't participate in the solve).
  */
+// Overlay seam: a private build registers SPICE mappers for components it
+// ships outside the OSS tree (e.g. the DFRobot Gravity analog sensors emit a
+// voltage source at AOUT). Same contract as the other pro seams — empty in a
+// pure OSS build. Consulted after the static MAPPERS so OSS mappings win.
+const proMappers: Record<string, Mapper> = {};
+
+export function registerSpiceMapper(id: string, mapper: Mapper): void {
+  proMappers[id] = mapper;
+}
+
 export function componentToSpice(
   comp: ComponentForSpice,
   netLookup: NetLookup,
   ctx: MapperContext,
 ): SpiceEmission | null {
-  const mapper = MAPPERS[comp.metadataId];
+  const mapper = MAPPERS[comp.metadataId] ?? proMappers[comp.metadataId];
   if (!mapper) return null;
   return mapper(comp, netLookup, ctx);
 }
 
 /** True if we have a mapping for this metadataId. */
 export function isSpiceMapped(metadataId: string): boolean {
-  return metadataId in MAPPERS;
+  return metadataId in MAPPERS || metadataId in proMappers;
 }
 
 /** All metadataIds with a SPICE mapping (for docs / UI hints). */

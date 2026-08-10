@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import socket
@@ -8,6 +9,24 @@ from app.services.board_access import board_allowed, PRO_BOARD_MESSAGE
 from app.services.esp32_lib_manager import esp_lib_manager
 from app.services.stm32_lib_manager import stm32_lib_manager
 from app.core.hooks import dispatch_ws_sim_message
+
+
+def _owner_key(websocket: WebSocket) -> str | None:
+    """Stable, opaque id for "the same person" across tabs.
+
+    The session cookie is hashed rather than stored: this is only used to
+    count concurrent guests per user, so the value never needs to be read
+    back. Falls back to the client host when there is no cookie (desktop
+    sidecar, tests), and to None when there is neither.
+    """
+    try:
+        token = websocket.cookies.get('access_token')
+    except Exception:
+        token = None
+    if token:
+        return 'u:' + hashlib.sha256(token.encode()).hexdigest()[:16]
+    host = getattr(getattr(websocket, 'client', None), 'host', None)
+    return f'h:{host}' if host else None
 
 
 def _find_free_port() -> int:
@@ -76,7 +95,19 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
                 if not await board_allowed(websocket, board):
                     await qemu_callback('error', {'message': PRO_BOARD_MESSAGE})
                 else:
-                    qemu_manager.start_instance(client_id, board, qemu_callback)
+                    # Capacity: a guest is a real QEMU process with its own
+                    # GBs, so the box is the limit. Refuse with words the
+                    # user can act on rather than letting the machine swap.
+                    owner = _owner_key(websocket)
+                    full = qemu_manager.capacity_error(owner)
+                    if full:
+                        await qemu_callback('error', {'message': full})
+                    else:
+                        # msg_data carries whatever the client declared for this
+                        # session (an overlay may materialise extra drives from it).
+                        qemu_manager.start_instance(
+                            client_id, board, qemu_callback, msg_data, owner=owner,
+                        )
 
             elif msg_type == 'stop_pi':
                 qemu_manager.stop_instance(client_id)
@@ -90,6 +121,20 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
                 pin   = msg_data.get('pin', 0)
                 state = msg_data.get('state', 0)
                 qemu_manager.set_pin_state(client_id, pin, state)
+
+            elif msg_type == 'pi_sensor_state':
+                # Canvas-fed named values for overlay boards' built-in
+                # sensors/buttons; the guest polls them via SENS requests.
+                values = msg_data.get('values', {})
+                if isinstance(values, dict):
+                    qemu_manager.set_sensor_state(client_id, values)
+
+            elif msg_type == 'pi_uart_rx':
+                # Bytes another board on the canvas sent down a TX->RX wire.
+                # Queued for the guest, which drains them with UARTRX.
+                rx: list[int] = msg_data.get('bytes', [])
+                if rx:
+                    qemu_manager.push_uart_rx(client_id, bytes(rx))
 
             elif msg_type in ('pi_attach_slave', 'pi_detach_slave'):
                 # Pluggable hook — pro overlay registers the actual handler

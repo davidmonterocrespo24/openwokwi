@@ -24,6 +24,7 @@ import {
   CMD_SET_RAMY_COUNTER,
   CMD_WRITE_BLACK_VRAM,
   CMD_WRITE_RED_VRAM,
+  CMD_WRITE_LUT,
   CMD_MASTER_ACTIVATION,
   CMD_DEEP_SLEEP,
 } from '../simulation/displays/SSD168xDecoder';
@@ -319,6 +320,90 @@ describe('SSD168xDecoder — tri-colour B/W/R pipeline', () => {
     );
     const px = seen[0].pixels;
     expect(Array.from(px)).toEqual([2, 1, 2, 1, 2, 1, 2, 1]);
+  });
+});
+
+describe('SSD168xDecoder — 4-level greyscale (custom LUT + both planes)', () => {
+  // A host that uploads its own waveform LUT (0x32) AND writes BOTH RAM planes
+  // (0x24 + 0x26) is driving a 2-bits-per-pixel 4-level greyscale render. The
+  // decoder must auto-detect this from the stream (never a panel name) and
+  // expose a `grey` channel of levels 0..3, with `pixels` a 1-bit projection.
+  it('composes 4 grey levels from the two bit-planes', () => {
+    const seen: Frame[] = [];
+    const d = new SSD168xDecoder({
+      width: 8,
+      height: 1,
+      palette: 'bw',
+      onFlush: (f) => seen.push(f),
+    });
+    feedAll(
+      d,
+      cmd(CMD_WRITE_LUT), data(0x00, 0x11, 0x22), // custom waveform LUT
+      cmd(CMD_DATA_ENTRY_MODE), data(0x03),
+      cmd(CMD_SET_RAMX_RANGE), data(0x00, 0x00),
+      cmd(CMD_SET_RAMY_RANGE), data(0x00, 0x00, 0x00, 0x00),
+      cmd(CMD_SET_RAMX_COUNTER), data(0x00),
+      cmd(CMD_SET_RAMY_COUNTER), data(0x00, 0x00),
+      // bwBit sequence 0000 1111 -> 0x0F ; redBit sequence 0011 0011 -> 0x33.
+      // Per-pixel combo (bwBit<<1|redBit): 0,0,1,1,2,2,3,3.
+      cmd(CMD_WRITE_BLACK_VRAM), data(0x0f),
+      cmd(CMD_SET_RAMX_COUNTER), data(0x00),
+      cmd(CMD_SET_RAMY_COUNTER), data(0x00, 0x00),
+      cmd(CMD_WRITE_RED_VRAM), data(0x33),
+      cmd(CMD_MASTER_ACTIVATION),
+    );
+    expect(seen.length).toBe(1);
+    const frame = seen[0];
+    expect(frame.grey).toBeDefined();
+    // combo 0->3(white) 1->2(light) 2->1(dark) 3->0(black)
+    expect(Array.from(frame.grey!)).toEqual([3, 3, 2, 2, 1, 1, 0, 0]);
+    // 1-bit projection: light levels (>=2) white, dark levels black.
+    expect(Array.from(frame.pixels)).toEqual([1, 1, 1, 1, 0, 0, 0, 0]);
+  });
+
+  it('does NOT engage greyscale for a standard 1-bit stream (no 0x32, no 0x26)', () => {
+    const seen: Frame[] = [];
+    const d = new SSD168xDecoder({
+      width: 200,
+      height: 200,
+      onFlush: (f) => seen.push(f),
+    });
+    gxepd2Init154(d);
+    feedAll(d, cmd(CMD_SET_RAMX_COUNTER), data(0x00));
+    feedAll(d, cmd(CMD_SET_RAMY_COUNTER), data(0x00, 0x00));
+    feedAll(d, cmd(CMD_WRITE_BLACK_VRAM), data(0x7f));
+    feedAll(d, cmd(CMD_DISP_UPDATE_CTRL_2), data(0xf7), cmd(CMD_MASTER_ACTIVATION));
+    expect(seen.length).toBe(1);
+    // No custom LUT and no red plane -> no greyscale channel, unchanged pixels.
+    expect(seen[0].grey).toBeUndefined();
+    expect(seen[0].pixels[0]).toBe(0);
+    expect(seen[0].pixels[1]).toBe(1);
+  });
+
+  it('a custom LUT alone (no 0x26) stays the legacy 1-bit path (no grey)', () => {
+    const seen: Frame[] = [];
+    const d = new SSD168xDecoder({
+      width: 8,
+      height: 1,
+      onFlush: (f) => seen.push(f),
+    });
+    feedAll(
+      d,
+      cmd(CMD_WRITE_LUT), data(0x01),
+      cmd(CMD_DATA_ENTRY_MODE), data(0x03),
+      cmd(CMD_SET_RAMX_RANGE), data(0x00, 0x00),
+      cmd(CMD_SET_RAMY_RANGE), data(0x00, 0x00, 0x00, 0x00),
+      cmd(CMD_SET_RAMX_COUNTER), data(0x00),
+      cmd(CMD_SET_RAMY_COUNTER), data(0x00, 0x00),
+      cmd(CMD_WRITE_BLACK_VRAM), data(0xf0),
+      cmd(CMD_MASTER_ACTIVATION),
+    );
+    // customBwLut inverts polarity (bit1=black) but with no red plane written
+    // it must NOT become greyscale.
+    expect(seen[0].grey).toBeUndefined();
+    // bwInvert (custom LUT): white where 0x24 bit==0. 0xF0 (1111 0000) ->
+    // first 4 px black, last 4 white.
+    expect(Array.from(seen[0].pixels)).toEqual([0, 0, 0, 0, 1, 1, 1, 1]);
   });
 });
 

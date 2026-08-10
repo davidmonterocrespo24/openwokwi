@@ -12,6 +12,13 @@ api.interceptors.request.use((config) => {
 export interface RunEventPayload {
   project_id?: string | null;
   board_fqbn?: string | null;
+  /** Editor BoardKind — disambiguates boards that share an FQBN (analytics). */
+  board_kind?: string | null;
+  /** Gallery example the workspace was loaded from (analytics). */
+  example_id?: string | null;
+  /** Which engine took this run — 'instant' (browser) or 'linux' (guest).
+   *  Absent for boards where the question doesn't apply. */
+  engine?: 'instant' | 'linux' | null;
 }
 
 export async function reportRunEvent(payload: RunEventPayload): Promise<void> {

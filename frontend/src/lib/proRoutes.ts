@@ -50,3 +50,27 @@ function getSnapshot(): ProRoute[] {
 export function useProRoutes(): ProRoute[] {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
+
+/**
+ * Has the overlay had its chance to register routes?
+ *
+ * The OSS root ('/') redirects to /editor — but only once it KNOWS no
+ * overlay is going to claim the home page. Redirecting on first render
+ * would race the overlay's dynamic import and bounce velxio.dev visitors
+ * into the editor before the landing page ever registered. main.tsx flips
+ * this when the overlay import settles, or immediately when no overlay is
+ * configured. Same contract as markProExamplesSettled in data/examples.
+ */
+let _settled = false;
+
+export function markProRoutesSettled(): void {
+  if (_settled) return;
+  _settled = true;
+  for (const listener of _listeners) listener();
+}
+
+const getSettled = (): boolean => _settled;
+
+export function useProRoutesSettled(): boolean {
+  return useSyncExternalStore(subscribe, getSettled, getSettled);
+}

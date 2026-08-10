@@ -53,10 +53,14 @@ export interface VlxPayload {
     activeFileGroupId: string;
     languageMode?: string;
     serialBaudRate?: number;
+    sdFiles?: Array<{ name: string; contentB64: string }>;
     /** Declared library manifest (compile scope). Absent in old files. */
     libraries?: string[];
   }>;
   fileGroups: Record<string, Array<{ name: string; content: string }>>;
+  /** EMPTY folders per group (folders holding files exist via name prefixes).
+   *  Optional — absent in projects saved before folders shipped. */
+  folderGroups?: Record<string, string[]>;
   components: Component[];
   wires: Wire[];
   activeBoardId: string | null;
@@ -72,6 +76,9 @@ function serialisableBoard(b: BoardInstance) {
     activeFileGroupId: b.activeFileGroupId,
     languageMode: b.languageMode,
     serialBaudRate: b.serialBaudRate,
+    // Built-in SD slot uploads (XIAO Sense etc.) travel with the project,
+    // exactly like a microsd-card component's properties.sdFiles do.
+    sdFiles: b.sdFiles,
     // The declared manifest must survive the .vlx round-trip: dropping it
     // silently reverted re-imported projects to scan-all resolution
     // (2026-08 library-contamination investigation).
@@ -97,11 +104,14 @@ export function buildVlxPayload(opts: { name?: string } = {}): VlxPayload {
     if (editor.fileGroups[gid]?.length) referencedGroupIds.add(gid);
   }
   const fileGroups: VlxPayload['fileGroups'] = {};
+  const folderGroups: NonNullable<VlxPayload['folderGroups']> = {};
   for (const gid of referencedGroupIds) {
     fileGroups[gid] = (editor.fileGroups[gid] ?? []).map((f) => ({
       name: f.name,
       content: f.content,
     }));
+    const folders = editor.folderGroups[gid] ?? [];
+    if (folders.length) folderGroups[gid] = folders;
   }
 
   return {
@@ -111,6 +121,7 @@ export function buildVlxPayload(opts: { name?: string } = {}): VlxPayload {
     name: opts.name,
     boards: sim.boards.map(serialisableBoard),
     fileGroups,
+    ...(Object.keys(folderGroups).length ? { folderGroups } : {}),
     components: sim.components,
     wires: sim.wires,
     activeBoardId: sim.activeBoardId,
@@ -198,6 +209,10 @@ function validatePayload(data: unknown): VlxPayload {
   if (!isPlainObject(data.fileGroups)) {
     throw new VlxParseError('Missing or invalid "fileGroups" object.');
   }
+  if (data.folderGroups !== undefined && !isPlainObject(data.folderGroups)) {
+    // Optional field (empty folders per group) — drop silently if malformed.
+    delete data.folderGroups;
+  }
   if (!Array.isArray(data.components)) {
     throw new VlxParseError('Missing or invalid "components" array.');
   }
@@ -244,6 +259,7 @@ export async function importVlxFile(file: File): Promise<VlxPayload> {
   useSimulatorStore.getState().loadProjectState({
     boards: payload.boards as unknown as BoardInstance[],
     fileGroups: payload.fileGroups,
+    folderGroups: payload.folderGroups,
     components: payload.components,
     wires: payload.wires,
     activeBoardId: payload.activeBoardId,

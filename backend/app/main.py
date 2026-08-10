@@ -115,6 +115,13 @@ app.include_router(simulation.router, prefix="/api/simulation", tags=["simulatio
 from app.api.routes import iot_gateway
 app.include_router(iot_gateway.router, prefix="/api/gateway", tags=["iot-gateway"])
 
+# Product news ("What's New" modal) — cached proxy of velxio.dev's public
+# feed so self-hosted users get product news without their browsers ever
+# leaving this server. Anonymous, no identifiers sent; opt out with
+# VELXIO_NEWS=off (an offline host just serves an empty feed).
+from app.api.routes import news
+app.include_router(news.router, prefix="/api/news", tags=["news"])
+
 # Optional pro extension. The `app.pro` package only exists in private builds
 # (overlaid at Docker build time by an external repo) — its absence in the
 # open-source image is expected and silently ignored. Anyone with private

@@ -13,70 +13,45 @@ import { SEO_ROUTES } from './seoRoutes';
 
 // ── SEO page components ─────────────────────────────────────────────────────
 import { exampleProjects } from './data/examples';
-import { LandingPage } from './pages/LandingPage';
 import { ExamplesPage } from './pages/ExamplesPage';
-import { ArduinoSimulatorPage } from './pages/ArduinoSimulatorPage';
-import { ArduinoEmulatorPage } from './pages/ArduinoEmulatorPage';
-import { AtmegaSimulatorPage } from './pages/AtmegaSimulatorPage';
-import { ArduinoMegaSimulatorPage } from './pages/ArduinoMegaSimulatorPage';
-import { Esp32SimulatorPage } from './pages/Esp32SimulatorPage';
-import { Esp32S3SimulatorPage } from './pages/Esp32S3SimulatorPage';
-import { Esp32C3SimulatorPage } from './pages/Esp32C3SimulatorPage';
-import { RaspberryPiPicoSimulatorPage } from './pages/RaspberryPiPicoSimulatorPage';
-import { RaspberryPiSimulatorPage } from './pages/RaspberryPiSimulatorPage';
-import { Velxio2Page } from './pages/Velxio2Page';
-import { Velxio25Page } from './pages/Velxio25Page';
-import { Velxio3Page } from './pages/Velxio3Page';
-import { AboutPage } from './pages/AboutPage';
-import { DocsPage } from './pages/DocsPage';
 import { ExampleDetailPage } from './pages/ExampleDetailPage';
 
-// Map route paths to their React component
-const ROUTE_COMPONENTS: Record<string, React.FC> = {
-  '/': LandingPage,
+// Map route paths to their React component. The OSS build prerenders only
+// what it ships (the examples gallery); the marketing surface lives in the
+// pro overlay and is merged in by loadRouteComponents() below.
+const OSS_ROUTE_COMPONENTS: Record<string, React.FC> = {
   '/examples': ExamplesPage,
-  '/arduino-simulator': ArduinoSimulatorPage,
-  '/arduino-emulator': ArduinoEmulatorPage,
-  '/atmega328p-simulator': AtmegaSimulatorPage,
-  '/arduino-mega-simulator': ArduinoMegaSimulatorPage,
-  '/esp32-simulator': Esp32SimulatorPage,
-  '/esp32-s3-simulator': Esp32S3SimulatorPage,
-  '/esp32-c3-simulator': Esp32C3SimulatorPage,
-  '/raspberry-pi-pico-simulator': RaspberryPiPicoSimulatorPage,
-  '/raspberry-pi-simulator': RaspberryPiSimulatorPage,
-  '/v2': Velxio2Page,
-  '/v2-5': Velxio25Page,
-  '/v3': Velxio3Page,
-  '/about': AboutPage,
-  // Docs sections — all use DocsPage with different URL params
-  '/docs': DocsPage,
-  '/docs/intro': DocsPage,
-  '/docs/getting-started': DocsPage,
-  '/docs/emulator': DocsPage,
-  '/docs/esp32-emulation': DocsPage,
-  '/docs/riscv-emulation': DocsPage,
-  '/docs/rp2040-emulation': DocsPage,
-  '/docs/raspberry-pi3-emulation': DocsPage,
-  '/docs/components': DocsPage,
-  '/docs/architecture': DocsPage,
-  '/docs/third-party': DocsPage,
-  '/docs/mcp': DocsPage,
-  '/docs/setup': DocsPage,
-  '/docs/roadmap': DocsPage,
 };
+
+let routeComponents: Record<string, React.FC> = OSS_ROUTE_COMPONENTS;
+
+/**
+ * Merge in the overlay's marketing pages (landing, about, docs, the SEO
+ * simulator landings). Pro-gated dynamic import — the never-taken branch
+ * keeps the OSS build from ever referencing files it does not have, the
+ * same pattern main.tsx uses for mountPro. The prerender script awaits
+ * this before asking for routes.
+ */
+export async function loadRouteComponents(): Promise<Record<string, React.FC>> {
+  if (import.meta.env.VITE_PRO_BUILD) {
+    const m = await import('@pro/pages/marketing');
+    routeComponents = { ...OSS_ROUTE_COMPONENTS, ...m.MARKETING_ROUTE_COMPONENTS };
+  }
+  return routeComponents;
+}
 
 /**
  * Returns all routes that have both seoMeta and a renderable component.
  */
 export function getPrerenderedRoutes() {
-  return SEO_ROUTES.filter((r) => r.seoMeta && ROUTE_COMPONENTS[r.path]);
+  return SEO_ROUTES.filter((r) => r.seoMeta && routeComponents[r.path]);
 }
 
 /**
  * Render a route's page component to an HTML string.
  */
 export function render(path: string): string {
-  const Component = ROUTE_COMPONENTS[path];
+  const Component = routeComponents[path];
   if (!Component) return '';
 
   try {

@@ -447,7 +447,33 @@ const EPaperGlyph: React.FC<InlineSVGProps> = ({ w, h }) => {
   );
 };
 
+// ── reSpeaker Lite (dual-mic XIAO-socket board) — flat glyph for cards ──────
+const RespeakerLite = () => (
+  <svg viewBox="0 0 178 437" xmlns="http://www.w3.org/2000/svg">
+    <rect x="5" y="5" width="168" height="421" rx="11" fill="#14161a" stroke="#31353d" strokeWidth="2" />
+    <rect x="43.5" y="18" width="91" height="117" rx="6" fill="none" stroke="#3a3f4a" strokeWidth="1.5" strokeDasharray="4 4" />
+    {[43, 55, 68, 81, 93, 106, 119].map((y) => (
+      <g key={y} fill="#c8a02e">
+        <rect x="46.5" y={y - 3.6} width="8" height="7.2" rx="1.4" />
+        <rect x="122.5" y={y - 3.6} width="8" height="7.2" rx="1.4" />
+      </g>
+    ))}
+    <circle cx="22" cy="262" r="4" fill="#0c0d10" stroke="#4a4f59" />
+    <circle cx="156" cy="262" r="4" fill="#0c0d10" stroke="#4a4f59" />
+    <circle cx="59" cy="291" r="6" fill="#efe9da" stroke="#a8a290" />
+    <circle cx="105" cy="291" r="6" fill="#efe9da" stroke="#a8a290" />
+    <text x="89" y="333" fontSize="11" fontFamily="monospace" fill="#cfd3da" textAnchor="middle">
+      ReSpeaker
+    </text>
+    <rect x="14" y="356" width="32" height="42" rx="3" fill="#d8963a" />
+    <rect x="58" y="364" width="30" height="32" rx="2" fill="#e8e4d8" />
+    <rect x="100" y="404" width="42" height="27" rx="8" fill="#aab0b8" />
+  </svg>
+);
+
 export const INLINE_SVGS: Record<string, InlineEntry> = {
+  // Audio front-ends
+  'respeaker-lite': { component: RespeakerLite, w: 178, h: 437 },
   // BJTs
   'wokwi-bjt-2n2222': { component: BjtNpn, w: 72, h: 72 },
   'wokwi-bjt-2n3904': { component: BjtNpn, w: 72, h: 72 },

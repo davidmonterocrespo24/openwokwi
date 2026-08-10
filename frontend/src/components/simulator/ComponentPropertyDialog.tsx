@@ -336,8 +336,11 @@ export const ComponentPropertyDialog: React.FC<ComponentPropertyDialogProps> = (
       )}
 
       {/* microSD card — upload your own files (paid). Free auto-copy of the
-          project's files happens at simulation start, not here. */}
-      {componentMetadata.id === 'microsd-card' && (
+          project's files happens at simulation start, not here. Parts that
+          carry their OWN TF slot (metadata.sdSlot, e.g. the Seeed Round
+          Display shield) get the same panel: their attach reads
+          properties.sdFiles when it builds the card image. */}
+      {(componentMetadata.id === 'microsd-card' || componentMetadata.sdSlot === true) && (
         <SdCardPanel
           files={(componentProperties.sdFiles as UploadedSdFile[] | undefined) ?? []}
           onChange={(next) => onPropertyChange?.(componentId, 'sdFiles', next)}

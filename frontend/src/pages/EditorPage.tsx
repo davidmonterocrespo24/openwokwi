@@ -2,7 +2,7 @@
  * Editor Page — main editor + simulator with resizable panels
  */
 
-import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { startSimulation } from '../simulation/spice/start';
 import { useSEO } from '../utils/useSEO';
@@ -13,11 +13,6 @@ import { EditorToolbar } from '../components/editor/EditorToolbar';
 import { FileExplorer } from '../components/editor/FileExplorer';
 
 // Lazy-load Pi workspace so xterm.js isn't in the main bundle
-const RaspberryPiWorkspace = lazy(() =>
-  import('../components/raspberry-pi/RaspberryPiWorkspace').then((m) => ({
-    default: m.RaspberryPiWorkspace,
-  })),
-);
 import { CompilationConsole } from '../components/editor/CompilationConsole';
 import { SimulatorCanvas } from '../components/simulator/SimulatorCanvas';
 import { SerialMonitor } from '../components/simulator/SerialMonitor';
@@ -25,15 +20,20 @@ import { Oscilloscope } from '../components/simulator/Oscilloscope';
 import { AppHeader } from '../components/layout/AppHeader';
 import { triggerSaveAction } from '../lib/proSaveAction';
 import { GitHubStarBanner } from '../components/layout/GitHubStarBanner';
-import { useSimulatorStore, DEFAULT_BOARD_POSITION } from '../store/useSimulatorStore';
+import { NewsModal } from '../components/layout/NewsModal';
+import { useSimulatorStore } from '../store/useSimulatorStore';
 import { useEditorStore } from '../store/useEditorStore';
 import { useCompileLogsStore } from '../store/useCompileLogsStore';
 import { useOscilloscopeStore } from '../store/useOscilloscopeStore';
 import { useProjectStore } from '../store/useProjectStore';
-import { showConfirmDialog } from '../store/useMessageDialogStore';
+import {
+  NewProjectDialog,
+  clearWorkspaceForStarter,
+} from '../components/editor/NewProjectDialog';
 import { useAutoSaveProject } from '../hooks/useAutoSaveProject';
+import { registerEditorCommand } from '../lib/editorCommands';
+import { EditorMenuBar } from '../components/editor/EditorMenuBar';
 import type { CompilationLog } from '../utils/compilationLogger';
-import { isPiBoardKind } from '../types/board';
 import '../App.css';
 
 const MOBILE_BREAKPOINT = 768;
@@ -45,6 +45,11 @@ const BOTTOM_PANEL_DEFAULT = 200;
 const EXPLORER_MIN = 110;
 const EXPLORER_MAX = 500;
 const EXPLORER_DEFAULT = 165;
+
+// Once per full page load: the pristine-visit starter dialog must not pop
+// again when the user closes it and later navigates away from and back to
+// /editor within the same SPA session.
+let starterDialogShownThisLoad = false;
 
 const resizeHandleStyle: React.CSSProperties = {
   height: 5,
@@ -77,12 +82,6 @@ export const EditorPage: React.FC = () => {
   const resizingRef = useRef(false);
   const serialMonitorOpen = useSimulatorStore((s) => s.serialMonitorOpen);
   const activeBoardId = useSimulatorStore((s) => s.activeBoardId);
-  const activeBoardKind = useSimulatorStore(
-    (s) => s.boards.find((b) => b.id === s.activeBoardId)?.boardKind,
-  );
-  // Pi 3/4/5 and Zero/1/2 all run the QEMU Linux workspace (terminal + Python),
-  // not the Arduino/Monaco editor. Pico (RP2040) is browser-emulated, not a Pi here.
-  const isLinuxPi = isPiBoardKind(activeBoardKind ?? '');
   const oscilloscopeOpen = useOscilloscopeStore((s) => s.open);
   const [consoleOpen, setConsoleOpen] = useState(false);
   // compileLogs live in a Zustand store so the velxio-pro agent overlay
@@ -108,6 +107,35 @@ export const EditorPage: React.FC = () => {
   // (not the empty starter board). One-shot; see utils/workspaceDraft.
   useEffect(() => {
     restoreStashedWorkspace();
+  }, []);
+
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+
+  // Pristine-visit starter dialog: a bare /editor landing still holds the
+  // hardcoded Uno + LED starter (see useSimulatorStore INITIAL_BOARD /
+  // builtin components). Clear it and offer the template picker over an
+  // EMPTY canvas instead of silently dropping the user into the Arduino
+  // blink (cancelling the dialog leaves a blank workspace). Guarded so it
+  // never fires over a loaded project/example URL, a restored login draft
+  // (both leave the stores non-pristine), or twice per page load. Declared
+  // AFTER the restoreStashedWorkspace effect — mount order is what makes
+  // the pristine check see the restored draft.
+  useEffect(() => {
+    if (starterDialogShownThisLoad) return;
+    const locale = getLocaleFromPath(window.location.pathname);
+    if (window.location.pathname !== localizedPath('/editor', locale)) return;
+    if (window.location.search) return;
+    if (useProjectStore.getState().currentProject) return;
+    const sim = useSimulatorStore.getState();
+    const pristine =
+      sim.boards.length === 1 &&
+      sim.boards[0].id === 'arduino-uno' &&
+      sim.components.length === 2 &&
+      sim.components.every((c) => c.id === 'led_builtin' || c.id === 'r_builtin');
+    if (!pristine) return;
+    starterDialogShownThisLoad = true;
+    clearWorkspaceForStarter();
+    setShowNewProjectDialog(true);
   }, []);
 
   // ── GitHub star prompt (show twice at most: 2nd visit OR after 3 min) ──────
@@ -197,40 +225,12 @@ export const EditorPage: React.FC = () => {
     triggerSaveAction();
   }, []);
 
-  const handleNewClick = useCallback(async () => {
-    const confirmed = await showConfirmDialog(
-      t('editor.fileExplorer.confirmNew.message'),
-      {
-        kind: 'error',
-        title: t('editor.fileExplorer.confirmNew.title'),
-        confirmLabel: t('editor.fileExplorer.confirmNew.confirm'),
-        cancelLabel: t('editor.fileExplorer.confirmNew.cancel'),
-        danger: true,
-      },
-    );
-    if (!confirmed) return;
-    const sim = useSimulatorStore.getState();
-    sim.boards.forEach((b) => sim.stopBoard(b.id));
-    const ids = sim.boards.map((b) => b.id);
-    ids.forEach((id) => sim.removeBoard(id));
-    sim.setComponents([]);
-    sim.setWires([]);
-    useProjectStore.getState().clearCurrentProject();
-    const newId = useSimulatorStore
-      .getState()
-      .addBoard('arduino-uno', DEFAULT_BOARD_POSITION.x, DEFAULT_BOARD_POSITION.y);
-    useSimulatorStore.getState().setActiveBoardId(newId);
-    // The workspace no longer belongs to whatever project URL we were on —
-    // leaving it would silently reload the OLD project over this fresh
-    // workspace on refresh (and via the back button). replaceState, not
-    // pushState: a back-entry pointing at the stale project URL would
-    // remount the project route and cause exactly that reload.
-    const locale = getLocaleFromPath(window.location.pathname);
-    const editorPath = localizedPath('/editor', locale);
-    if (window.location.pathname !== editorPath) {
-      window.history.replaceState(null, '', editorPath);
-    }
-  }, [t]);
+  // "New workspace" opens the starter-template dialog. Destruction moved
+  // from here into the dialog's selection handler — Cancel/ESC now leaves
+  // the current workspace untouched, so the old confirm dialog is gone.
+  const handleNewClick = useCallback(() => {
+    setShowNewProjectDialog(true);
+  }, []);
 
   // Track mobile breakpoint
   useEffect(() => {
@@ -256,6 +256,23 @@ export const EditorPage: React.FC = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [handleSaveClick]);
+
+  // File-menu commands owned by this page. Registered here (not in the
+  // menu) so the menu never duplicates the confirm-dialog / autosave logic.
+  useEffect(() => {
+    const offSave = registerEditorCommand('project.save', handleSaveClick);
+    const offNew = registerEditorCommand('project.new', () => {
+      void handleNewClick();
+    });
+    const offExplorer = registerEditorCommand('view.toggleExplorer', () =>
+      setExplorerOpen((v) => !v),
+    );
+    return () => {
+      offSave();
+      offNew();
+      offExplorer();
+    };
+  }, [handleSaveClick, handleNewClick]);
 
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — canvas undo/redo. Skipped when the
   // user is typing in any input/textarea/contenteditable so the Monaco
@@ -373,9 +390,139 @@ export const EditorPage: React.FC = () => {
     [explorerWidth],
   );
 
+  /* ── Unified toolbar (desktop) ──
+     Editor controls + canvas controls in one strip; the canvas side is
+     portaled into `canvasHeaderSlot` from SimulatorCanvas. Since the
+     marketing nav left the editor header, the header's middle is empty
+     space — so this strip now rides INSIDE the AppHeader row (via the
+     editorToolbar prop) instead of being a second bar: one 44px row where
+     there used to be 44+38. On narrow widths the strip wraps internally
+     and the header grows; the docked AI chat is avoided by the same
+     padding-right the strip always had. */
+  /* Account block. Fused as the explorer panel's footer so a long file
+     tree scrolls ABOVE it instead of disappearing underneath a floating
+     box; when the explorer is collapsed it falls back to the small fixed
+     corner box (avatar only there — no room for a name). */
+  const accountBlock = !isMobile ? (
+    // Just the account button. Language lives in the menubar's Language
+    // menu (for everyone) and inside the account menu (for signed-in
+    // users) — the standalone globe crowded the footer for no gain.
+    <div data-velxio-slot="header-auth" style={{ display: 'contents' }} />
+  ) : undefined;
+
+  const unifiedToolbar = !isMobile ? (
+        <div className="unified-toolbar">
+          {/* View-mode toggle: explorer | Code / Both / Circuit — one
+              segmented group so the four pane switches read as one control.
+              Hidden on mobile — there's already a code/circuit toggle in
+              the mobile bottom-nav. */}
+          <div
+            role="group"
+            aria-label={t('editor.shell.viewMode')}
+            className="view-mode-toggle"
+            style={{
+              display: 'flex',
+              // Never squeezed below its buttons: flexbox used to crush
+              // this block to a third of its width and clip two of them.
+              flexShrink: 0,
+              gap: 1,
+              background: '#252526',
+              border: '1px solid #3c3c3c',
+              borderRadius: 4,
+              overflow: 'hidden',
+              alignSelf: 'center',
+              margin: '0 6px',
+            }}
+          >
+            <button
+              onClick={() => setExplorerOpen((v) => !v)}
+              aria-pressed={explorerOpen}
+              title={explorerOpen ? t('editor.menu.hideExplorer', 'Hide file explorer') : t('editor.menu.showExplorer', 'Show file explorer')}
+              style={{
+                background: explorerOpen ? 'var(--color-action-primary)' : 'transparent',
+                color: explorerOpen ? 'white' : '#aaa',
+                border: 'none',
+                height: 28,
+                padding: '0 10px',
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+            <div style={{ width: 1, background: '#3c3c3c', alignSelf: 'stretch' }} />
+            {(
+              [
+                { key: 'code', label: t('editor.shell.code'), path: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
+                { key: 'both', label: t('editor.shell.both'), path: 'M3 3h7v18H3zM14 3h7v18h-7z' },
+                { key: 'circuit', label: t('editor.shell.circuit'), path: 'M5 12h14M12 5v14' },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setViewMode(m.key)}
+                aria-pressed={viewMode === m.key}
+                style={{
+                  background: viewMode === m.key ? 'var(--color-action-primary)' : 'transparent',
+                  color: viewMode === m.key ? 'white' : '#aaa',
+                  border: 'none',
+                  height: 28,
+                  padding: '0 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontFamily: 'inherit',
+                }}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d={m.path} />
+                </svg>
+                <span className="vm-label">{m.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="unified-toolbar-editor">
+            <EditorToolbar
+              consoleOpen={consoleOpen}
+              setConsoleOpen={setConsoleOpen}
+              compileLogs={compileLogs}
+              setCompileLogs={setCompileLogs}
+            />
+          </div>
+          <div className="unified-toolbar-canvas" ref={setCanvasHeaderSlot} />
+        </div>
+  ) : undefined;
+
   return (
     <div className="app">
-      <AppHeader autoSave={autoSave} />
+      <AppHeader
+        autoSave={autoSave}
+        editorMenu={!isMobile ? <EditorMenuBar /> : undefined}
+        editorToolbar={unifiedToolbar}
+      />
 
       {/* ── Mobile tab bar (top, above panels) ── */}
       {isMobile && (
@@ -423,102 +570,6 @@ export const EditorPage: React.FC = () => {
         </nav>
       )}
 
-      {/* ── Unified top toolbar (desktop only) ──
-          Editor controls + canvas controls share a single full-width row so
-          the bar doesn't reflow when the editor/canvas splitter is dragged.
-          The canvas controls (board selector, Serial, Scope, zoom, Add) are
-          portaled into `canvasHeaderSlot` from inside SimulatorCanvas. */}
-      {!isMobile && (
-        <div className="unified-toolbar">
-          <button
-            className="explorer-toggle-btn unified-toolbar-explorer-toggle"
-            onClick={() => setExplorerOpen((v) => !v)}
-            title={explorerOpen ? 'Hide file explorer' : 'Show file explorer'}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-          {/* View-mode toggle: Code / Both / Circuit. Lets users hide a
-              pane to give the right-docked AI chat more breathing room.
-              Hidden on mobile — there's already a code/circuit toggle in
-              the mobile bottom-nav. */}
-          <div
-            role="group"
-            aria-label={t('editor.shell.viewMode')}
-            className="view-mode-toggle"
-            style={{
-              display: 'flex',
-              gap: 1,
-              background: '#252526',
-              border: '1px solid #3c3c3c',
-              borderRadius: 4,
-              overflow: 'hidden',
-              alignSelf: 'center',
-              margin: '0 6px',
-            }}
-          >
-            {(
-              [
-                { key: 'code', label: t('editor.shell.code'), path: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
-                { key: 'both', label: t('editor.shell.both'), path: 'M3 3h7v18H3zM14 3h7v18h-7z' },
-                { key: 'circuit', label: t('editor.shell.circuit'), path: 'M5 12h14M12 5v14' },
-              ] as const
-            ).map((m) => (
-              <button
-                key={m.key}
-                onClick={() => setViewMode(m.key)}
-                aria-pressed={viewMode === m.key}
-                style={{
-                  background: viewMode === m.key ? '#0e639c' : 'transparent',
-                  color: viewMode === m.key ? 'white' : '#aaa',
-                  border: 'none',
-                  height: 28,
-                  padding: '0 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontFamily: 'inherit',
-                }}
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d={m.path} />
-                </svg>
-                <span className="vm-label">{m.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="unified-toolbar-editor">
-            <EditorToolbar
-              consoleOpen={consoleOpen}
-              setConsoleOpen={setConsoleOpen}
-              compileLogs={compileLogs}
-              setCompileLogs={setCompileLogs}
-            />
-          </div>
-          <div className="unified-toolbar-canvas" ref={setCanvasHeaderSlot} />
-        </div>
-      )}
 
       <div className="app-container" ref={containerRef}>
         {/* ── Editor side ── */}
@@ -543,9 +594,20 @@ export const EditorPage: React.FC = () => {
           {explorerOpen && (
             <>
               <div
-                style={{ width: explorerWidth, flexShrink: 0, display: 'flex', overflow: 'hidden' }}
+                style={{
+                  width: explorerWidth,
+                  flexShrink: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
               >
-                <FileExplorer onSaveClick={handleSaveClick} onNewClick={handleNewClick} />
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+                  <FileExplorer onSaveClick={handleSaveClick} onNewClick={handleNewClick} />
+                </div>
+                {accountBlock && (
+                  <div className="explorer-account-footer">{accountBlock}</div>
+                )}
               </div>
               {!isMobile && (
                 <div
@@ -554,6 +616,10 @@ export const EditorPage: React.FC = () => {
                 />
               )}
             </>
+          )}
+
+          {!explorerOpen && accountBlock && (
+            <div className="editor-corner-box">{accountBlock}</div>
           )}
 
           {/* Editor main area */}
@@ -573,7 +639,7 @@ export const EditorPage: React.FC = () => {
                 <button
                   className="explorer-toggle-btn"
                   onClick={() => setExplorerOpen((v) => !v)}
-                  title={explorerOpen ? 'Hide file explorer' : 'Show file explorer'}
+                  title={explorerOpen ? t('editor.menu.hideExplorer', 'Hide file explorer') : t('editor.menu.showExplorer', 'Show file explorer')}
                 >
                   <svg
                     width="16"
@@ -599,21 +665,14 @@ export const EditorPage: React.FC = () => {
               </div>
             )}
 
-            {/* Editor area: Pi workspace or Monaco editor */}
+            {/* Editor area — Monaco for every board, QEMU-Linux included.
+                Pi boards edit script.py here like any other board edits its
+                sketch; their interactive terminal lives in the bottom serial
+                panel (SerialMonitor renders an xterm for Pi kinds). The old
+                RaspberryPiWorkspace (own file tree + own editor + upload
+                button) confused users with three competing file surfaces. */}
             <div className="editor-wrapper" style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              {isLinuxPi && activeBoardId ? (
-                <Suspense
-                  fallback={
-                    <div style={{ color: '#666', padding: 16, fontSize: 12 }}>
-                      Loading Pi workspace…
-                    </div>
-                  }
-                >
-                  <RaspberryPiWorkspace boardId={activeBoardId} />
-                </Suspense>
-              ) : (
-                <CodeEditor />
-              )}
+              <CodeEditor />
             </div>
 
             {/* Console */}
@@ -699,6 +758,11 @@ export const EditorPage: React.FC = () => {
           round={starRound}
         />
       )}
+      <NewsModal />
+      <NewProjectDialog
+        isOpen={showNewProjectDialog}
+        onClose={() => setShowNewProjectDialog(false)}
+      />
       {/* Slot reserved for the private pro overlay (e.g. agent chat panel).
           Self-hosted builds without an overlay see nothing here. */}
       <div data-velxio-slot="agent-chat" />

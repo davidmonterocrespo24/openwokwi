@@ -1,3 +1,4 @@
+import { getProBoard } from '../lib/proBoardRegistry';
 /**
  * Board Pin Mapping Utility
  *
@@ -242,7 +243,14 @@ export const BOARD_COMPONENT_IDS = [
  * Check whether a componentId represents a board (not an external component).
  */
 export function isBoardComponent(componentId: string): boolean {
-  return BOARD_COMPONENT_IDS.some((id) => componentId === id || componentId.startsWith(id));
+  if (BOARD_COMPONENT_IDS.some((id) => componentId === id || componentId.startsWith(id))) {
+    return true;
+  }
+  // Overlay-registered boards (proBoardRegistry) are boards too — recognized
+  // without listing their closed names in the OSS array. This is what lets a
+  // wire to a pro board's Dx pad resolve through boardPinToNumber (which also
+  // consults the pro def), fixing the "wire to D2 does nothing" case.
+  return getProBoard(componentId) !== undefined;
 }
 
 /**
@@ -254,6 +262,12 @@ export function isBoardComponent(componentId: string): boolean {
  * @returns Numeric pin/GPIO number, or null if unmapped
  */
 export function boardPinToNumber(boardId: string, pinName: string): number | null {
+  // Overlay-registered boards resolve through their own mapping first.
+  const proDef = getProBoard(boardId);
+  if (proDef?.pinToNumber) {
+    const n = proDef.pinToNumber(pinName);
+    if (n !== null) return n;
+  }
   if (boardId === 'arduino-uno' || boardId === 'arduino-nano') {
     // Power / GND pins — not real GPIOs, skip silently
     if (/^(GND|VCC|VIN|IOREF|AREF|RESET|3\.3V|3V3|5V|3V)/.test(pinName)) return -1;
@@ -310,11 +324,10 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
   // table works.  `pinName` may be either the physical pin number
   // ("1" … "40") OR a BCM-style name ("GPIO14") emitted by the Pi
   // element's pinInfo — power / GND pins return -1.
-  if (
-    boardId === 'raspberry-pi-3' || boardId.startsWith('raspberry-pi-3') ||
-    boardId === 'raspberry-pi-4' || boardId.startsWith('raspberry-pi-4') ||
-    boardId === 'raspberry-pi-5' || boardId.startsWith('raspberry-pi-5')
-  ) {
+  // The whole QEMU-Linux Pi family shares the 40-pin header (the Zero,
+  // 1B+ and 2B render the same element as the 3) — matching only 3/4/5
+  // left the small boards without any pin mapping at all.
+  if (boardId.startsWith('raspberry-pi-') && boardId !== 'raspberry-pi-pico') {
     if (/^(GND|VCC|3V3|5V|ID_S[DC])/.test(pinName)) return -1;
     if (pinName.startsWith('GPIO')) {
       const n = parseInt(pinName.substring(4), 10);
@@ -333,6 +346,18 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
     }
     const num = parseInt(pinName, 10);
     if (!isNaN(num)) return num;
+    return null;
+  }
+
+  // Overlay S3 boards whose pads are bare GPIO numbers but whose kind does not
+  // start with 'esp32' — the M5 Cardputer's EXT header and Grove Port A. Its
+  // pads go up to G40, above the classic ESP32's 39, so the shared branch below
+  // would reject the two highest ones even if the kind matched.
+  if (boardId === 'cardputer-adv') {
+    if (pinName.startsWith('GND') || pinName.startsWith('3V3') || pinName.startsWith('5V'))
+      return -1;
+    const num = parseInt(pinName, 10);
+    if (!isNaN(num) && num >= 0 && num <= 48) return num; // S3 has 48 GPIOs
     return null;
   }
 

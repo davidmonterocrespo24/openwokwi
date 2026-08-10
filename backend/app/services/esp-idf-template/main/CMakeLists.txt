@@ -104,14 +104,16 @@ elseif(DEFINED ENV{ARDUINO_ESP32_PATH})
     # explicit pin number — but this default keeps the new-project flow
     # smooth.
     #
-    # SKIP on ESP32-C3 and S3 variants: their pins_arduino.h DOES define
-    # LED_BUILTIN already (as `static const uint8_t LED_BUILTIN = ...;`
+    # ONLY on the generic `esp32` variant: every other variant we build
+    # (C3/S3 on the 2.x core; C3/C6/S2/S3 on the 3.x core) defines
+    # LED_BUILTIN itself (as `static const uint8_t LED_BUILTIN = ...;`
     # plus `#define LED_BUILTIN LED_BUILTIN`). Pre-defining it from the
     # command line clashes with the self-define: the preprocessor expands
     # `static const uint8_t LED_BUILTIN = ...` to `static const uint8_t 2 = ...`
-    # which is a syntax error. Only set the fallback for the generic ESP32
-    # Xtensa variant that genuinely lacks the symbol.
-    if(NOT IDF_TARGET STREQUAL "esp32c3" AND NOT IDF_TARGET STREQUAL "esp32s3")
+    # which is a syntax error. A whitelist (instead of the old C3/S3
+    # blacklist) keeps new targets safe by default — the ESP32-C6 variant
+    # was the first to hit the blacklist gap.
+    if(IDF_TARGET STREQUAL "esp32")
         target_compile_definitions(${COMPONENT_LIB} PRIVATE
             "LED_BUILTIN=2")
     endif()

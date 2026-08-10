@@ -13,12 +13,18 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import type { ComponentMetadata } from '../types/component-metadata';
-import { useSimulatorStore } from '../store/useSimulatorStore';
+import {
+  useSimulatorStore,
+  getBoardBridge,
+  getBoardPinManager,
+} from '../store/useSimulatorStore';
 import { useElectricalStore } from '../store/useElectricalStore';
 import { useEditorStore } from '../store/useEditorStore';
 import { buildProjectSdImage, decodeSdFiles } from '../utils/sdCardFiles';
 import { PartSimulationRegistry } from '../simulation/parts';
 import { isBoardComponent, boardPinToNumber } from '../utils/boardPinMapping';
+import { isBoardSeated } from '../utils/socketSnap';
+import { isPiBoardKind } from '../types/board';
 import { isKeyBindable, formatKeyLabel } from '../utils/keyButtonBindings';
 import {
   createDefaultPinResolver,
@@ -122,13 +128,43 @@ type TraceState = ReturnType<typeof useSimulatorStore.getState>;
 // Lifted to module scope (was inside getArduinoPin) so that getPinResolver
 // can call it too — the previous nested-scope version caused a runtime
 // ReferenceError "traceDetailed is not defined" on the simulator page.
+
+/**
+ * Resolve a component pad through a SEATED board rather than a wire.
+ *
+ * Sockets are a real electrical connection with nothing to draw: the board's
+ * pads sit on the component's pads. `boardSocket` (read off the element, the
+ * rule-6a way) says the component is a socket; isBoardSeated says a board is
+ * actually in it; and the shared pad NAME is the contract that makes the two
+ * grids one net — which is exactly why a socket's pinInfo uses the board's own
+ * names. Returns null for anything that is not a seated socket pad.
+ */
+function traceThroughSocket(
+  state: TraceState,
+  componentId: string,
+  pinName: string,
+): { pin: number; boardId: string } | null {
+  const el = document.getElementById(componentId) as
+    | (HTMLElement & { boardSocket?: { anchorPin: string; accepts: string[] } })
+    | null;
+  const sock = el?.boardSocket;
+  if (!sock || !Array.isArray(sock.accepts)) return null;
+  for (const b of state.boards) {
+    if (!sock.accepts.some((prefix) => b.boardKind.startsWith(prefix))) continue;
+    if (!isBoardSeated(b.id, b.boardKind, b.x, b.y, state.components)) continue;
+    const pin = boardPinToNumber(b.boardKind, pinName);
+    if (pin !== null) return { pin, boardId: b.id };
+  }
+  return null;
+}
+
 export function traceDetailed(
   state: TraceState,
   fromId: string,
   fromPin: string,
   depth: number,
   activeSeen = false,
-): { arduinoPin: number | null; crossedActiveDevice: boolean } {
+): { arduinoPin: number | null; crossedActiveDevice: boolean; boardId?: string } {
   if (depth > 6) return { arduinoPin: null, crossedActiveDevice: activeSeen };
 
   const wires = state.wires.filter(
@@ -136,6 +172,18 @@ export function traceDetailed(
       (w.start.componentId === fromId && w.start.pinName === fromPin) ||
       (w.end.componentId === fromId && w.end.pinName === fromPin),
   );
+
+  // A board SEATED on a socket component is connected without any wire — that
+  // is what seating means, and it is how the hardware ships: a XIAO pushed
+  // into a shield's header, a Pi HAT dropped onto the 40-pin. So when this
+  // component declares a socket (boardSocket, the same contract the magnet
+  // reads) and a board is seated on it, a pad resolves to the SAME-NAMED pin
+  // of that board. Without this hop a seated shield's buttons and LEDs were
+  // dead until the user drew wires that the real stack does not have.
+  const socketPin = traceThroughSocket(state, fromId, fromPin);
+  if (socketPin !== null) {
+    return { arduinoPin: socketPin.pin, crossedActiveDevice: activeSeen, boardId: socketPin.boardId };
+  }
 
   // Remember a custom-chip neighbour on this net (if any) as a fallback —
   // a real board pin found in any branch still takes priority over it.
@@ -157,7 +205,15 @@ export function traceDetailed(
     if (boardEp || isBoardComponent(otherEp.componentId)) {
       const boardKind = boardEp?.boardKind ?? otherEp.componentId;
       const pin = boardPinToNumber(boardKind, otherEp.pinName);
-      if (pin !== null) return { arduinoPin: pin, crossedActiveDevice: activeSeen };
+      // The board id travels with the pin: a QEMU-Linux board has no MCU
+      // simulator, so an input part needs to know WHICH board's bridge to
+      // push the level into (see the pi-aware simulator below).
+      if (pin !== null)
+        return {
+          arduinoPin: pin,
+          crossedActiveDevice: activeSeen,
+          boardId: boardEp?.id ?? otherEp.componentId,
+        };
     } else {
       const comp = state.components.find((c) => c.id === otherEp.componentId);
       if (!chipNeighbour && comp?.metadataId === 'custom-chip') {
@@ -252,6 +308,8 @@ interface DynamicComponentProps {
   isSelected?: boolean;
   isHovered?: boolean;
   onMouseDown?: (e: React.MouseEvent) => void;
+  /** Right click: the canvas opens the properties + pins dialog here. */
+  onContextMenu?: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -267,6 +325,7 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
   isSelected = false,
   isHovered = false,
   onMouseDown,
+  onContextMenu,
   onDoubleClick,
   onMouseEnter,
   onMouseLeave,
@@ -387,13 +446,40 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
       }
       return false;
     };
-    if (tryReseat()) return;
-    // Same cadence as the pinInfo-ready poll above: the custom element may
-    // upgrade a few frames after React commits.
+    // Wires resolve through the same pinInfo, and the canvas' load-settle
+    // timers (100/300/500ms) can ALL fire before this element is findable —
+    // an overlay-defined custom element upgrades when its (large) chunk
+    // lands, and on the example route the wires themselves are stored after
+    // further awaits. So: the first time THIS part's pinInfo is actually
+    // readable from the DOM, re-derive every wire endpoint. Measured on
+    // staging: without this, all four wires to the part sat on its corner
+    // until the user nudged something.
+    const tryWires = () => {
+      try {
+        const el = document.getElementById(id) as (HTMLElement & { pinInfo?: unknown[] }) | null;
+        if (el && Array.isArray(el.pinInfo) && el.pinInfo.length > 0) {
+          useSimulatorStore.getState().recalculateAllWirePositions();
+          return true;
+        }
+      } catch {
+        // headless tests
+      }
+      return false;
+    };
+
+    const reseated = tryReseat();
+    const wired = tryWires();
+    if (reseated && wired) return;
+    // Poll until both settle. 10s, not 2s: the overlay chunk that defines
+    // the element can take that long on a slow connection, and giving up
+    // early is exactly the corner-wire bug again.
+    let done = { reseat: reseated, wires: wired };
     const interval = setInterval(() => {
-      if (tryReseat()) clearInterval(interval);
+      if (!done.reseat) done.reseat = tryReseat();
+      if (!done.wires) done.wires = tryWires();
+      if (done.reseat && done.wires) clearInterval(interval);
     }, 100);
-    const timeout = setTimeout(() => clearInterval(interval), 2000);
+    const timeout = setTimeout(() => clearInterval(interval), 10000);
     return () => {
       clearInterval(interval);
       clearTimeout(timeout);
@@ -480,9 +566,23 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
           tag === 'wokwi-analog-joystick' ||
           tag === 'wokwi-ky-040' ||
           tag === 'wokwi-membrane-keypad' ||
-          tag === 'wokwi-rotary-dialer');
+          tag === 'wokwi-rotary-dialer' ||
+          // Rule-6a escape hatch: a (possibly private-overlay) element whose
+          // surface IS the interaction — a touch screen — declares it via a
+          // property instead of this list growing pro tag names. While the
+          // sim runs, touching it must touch, not drag: the Round Display's
+          // glass was painting the green dot AND dragging the shield around.
+          (target as { ownsPointer?: boolean }).ownsPointer === true);
       if (ownsPointer) {
-        // Let the wokwi component own this pointerdown.
+        // A declared touch SCREEN (ownsPointer property, not the wokwi tag
+        // list): its model listens on POINTER events — a separate stream —
+        // so stopping THIS mousedown costs it nothing, and it must be
+        // stopped: left-drag that reaches the canvas background pans the
+        // whole world under the finger mid-swipe. Wokwi knobs keep the
+        // legacy pass-through, their internal handlers may bind this very
+        // mouse event.
+        if ((target as { ownsPointer?: boolean }).ownsPointer === true) e.stopPropagation();
+        // Let the component own this pointerdown.
         return;
       }
       e.stopPropagation();
@@ -563,7 +663,44 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
       // null pin lookup (`getArduinoPin` returns null when there's no board),
       // so the stub below is enough — it satisfies the type signature without
       // doing anything when called.
+      // A QEMU-Linux board (Raspberry Pi family, UNIHIKER) has no MCU
+      // simulator: the guest IS the CPU. An input part still calls
+      // `simulator.setPinState(pin, level)` to report a button press or a
+      // PIR trip, and that call used to land on the legacy AVR instance and
+      // vanish — clicking the sensor did nothing at all. Route it to the
+      // bridge of the board this component is actually wired to: `gpio_in`
+      // for the guest, the canvas-fed `pin<N>` value the browser engine's
+      // shims read, and the PinManager so wires and SPICE see the edge.
+      const piBoardId = (() => {
+        const st = useSimulatorStore.getState();
+        const ownPins = new Set<string>();
+        for (const w of st.wires) {
+          if (w.start.componentId === id) ownPins.add(w.start.pinName);
+          if (w.end.componentId === id) ownPins.add(w.end.pinName);
+        }
+        for (const pinName of ownPins) {
+          const { boardId } = traceDetailed(st, id, pinName, 0);
+          const board = boardId ? st.boards.find((b) => b.id === boardId) : undefined;
+          if (board && isPiBoardKind(board.boardKind)) return board.id;
+        }
+        return null;
+      })();
+      const piSimulator = piBoardId
+        ? ({
+            setPinState: (pin: number, state: boolean) => {
+              getBoardBridge(piBoardId)?.sendPinEvent(pin, state);
+              getBoardBridge(piBoardId)?.setSensorState({ [`pin${pin}`]: state ? 1 : 0 });
+              getBoardPinManager(piBoardId)?.triggerPinChange(pin, state, 'external');
+            },
+            isRunning: () =>
+              !!useSimulatorStore.getState().boards.find((b) => b.id === piBoardId)?.running,
+            pinManager: getBoardPinManager(piBoardId),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any)
+        : null;
+
       const stubSimulator =
+        piSimulator ??
         simulator ??
         ({
           setPinState: () => {},
@@ -721,22 +858,45 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
   // while simulation is live.
   return (
     <div
-      className={`dynamic-component-wrapper${isBurnt ? ' velxio-burnt' : ''}`}
+      className={`dynamic-component-wrapper${isBurnt ? ' velxio-burnt' : ''}${
+        isSelected ? ' velxio-ants' : ''
+      }`}
       style={{
         position: 'absolute',
         left: `${x}px`,
         top: `${y}px`,
         cursor: interactionRunning && isInteractive ? 'pointer' : 'move',
-        border: isSelected ? '2px dashed #007acc' : '2px solid transparent',
+        // The selection outline itself is the .velxio-ants pseudo-element
+        // (a static dashed border cannot be animated). The transparent
+        // border stays so selecting does not shift the body by 2px.
+        border: '2px solid transparent',
         borderRadius: '4px',
         padding: '4px',
         userSelect: 'none',
+        // Drag-to-front (zRaise) beats the static layers: a part dragged onto
+        // a board — or a board dragged onto a part — the last one dragged
+        // paints on top. Untouched parts keep the classic selected/idle z.
+        // Local order inside .component-interactive-group only. The
+        // drag-to-front rank is applied on that GROUP (SimulatorCanvas) —
+        // a z set here is clamped by the group's stacking context and could
+        // never lift the part above a dragged board.
         zIndex: isSelected ? 5 : 1,
         pointerEvents: 'auto',
         transform: properties.rotation ? `rotate(${properties.rotation}deg)` : undefined,
         transformOrigin: 'center center',
       }}
       onMouseDownCapture={handleMouseDown}
+      // Capture phase: interactive parts (pushbutton, switch, pot) stop
+      // propagation in their own handlers, which would otherwise swallow the
+      // right click before the canvas ever saw it.
+      onContextMenuCapture={onContextMenu}
+      onTouchStartCapture={(e) => {
+        // Mobile mirror of the ownsPointer guard: while the sim runs, a
+        // finger on a declared touch screen is INPUT for the screen (its
+        // pointer handlers still fire), never a canvas pan/drag gesture.
+        const t = e.target as { ownsPointer?: boolean };
+        if (interactionRunning && t.ownsPointer === true) e.stopPropagation();
+      }}
       onDoubleClick={handleDoubleClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

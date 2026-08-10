@@ -59,6 +59,12 @@ export function decodeSdFiles(raw: unknown): SdFile[] {
   return out;
 }
 
+/** Source files never land on the card: on real hardware your code lives in
+ *  flash, not on the microSD, and a sketch listing the card should see its
+ *  DATA (csv, json, txt, wav...), not its own source. Uploads are exempt —
+ *  an explicit upload always lands, whatever its extension. */
+const SD_EXCLUDED_SOURCES = /\.(ino|h|hpp|c|cpp|py)$/i;
+
 /**
  * Build the SD image from the project workspace files (auto-copied, free) plus
  * any uploaded files (paid). Uploaded files override same-named project files.
@@ -70,6 +76,7 @@ export function buildProjectSdImage(
 ): Uint8Array {
   const byName = new Map<string, SdFile>();
   for (const f of workspaceFiles) {
+    if (SD_EXCLUDED_SOURCES.test(f.name)) continue;
     byName.set(f.name.toLowerCase(), { name: f.name, data: new TextEncoder().encode(f.content) });
   }
   for (const f of uploaded) {

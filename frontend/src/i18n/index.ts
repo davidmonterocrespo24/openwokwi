@@ -30,6 +30,38 @@ import enSeo3 from "./locales/en/seo3.json";
 import enSeo4 from "./locales/en/seo4.json";
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "./config";
 
+/**
+ * Deep merge for locale resource files. The namespace used to be built
+ * with a SHALLOW spread, so a top-level section present in two files had
+ * the later file silently clobber the earlier one wholesale: common2's
+ * `editor` erased common.json's `editor.share.*` (the Share modal's
+ * visibility labels rendered as raw keys), and the same collision on
+ * `header` later wiped `header.auth.*` — the account menu showed
+ * "header.auth.signOut". Merging by key ends the failure class.
+ */
+function deepMerge(
+  base: Record<string, unknown>,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(extra)) {
+    const prev = out[k];
+    if (
+      prev && v &&
+      typeof prev === "object" && typeof v === "object" &&
+      !Array.isArray(prev) && !Array.isArray(v)
+    ) {
+      out[k] = deepMerge(
+        prev as Record<string, unknown>,
+        v as Record<string, unknown>,
+      );
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 const NAMESPACES = ["common"] as const;
 type Namespace = (typeof NAMESPACES)[number];
 
@@ -47,9 +79,7 @@ void i18n
     resources: {
       en: {
         common: {
-          ...enCommon,
-          ...enCommon2,
-          ...enReleases,
+          ...deepMerge(deepMerge(enCommon, enCommon2), enReleases),
           seo: {
             ...enSeo.seo,
             ...enSeo2.seo,
@@ -131,9 +161,10 @@ export async function loadLocale(locale: Locale): Promise<void> {
     ...((seo4Mod.default ?? seo4Mod).seo ?? {}),
   };
   const merged = {
-    ...(commonMod.default ?? commonMod),
-    ...(common2Mod.default ?? common2Mod),
-    ...(releasesMod.default ?? releasesMod),
+    ...deepMerge(
+      deepMerge(commonMod.default ?? commonMod, common2Mod.default ?? common2Mod),
+      releasesMod.default ?? releasesMod,
+    ),
     seo: seoBody,
     docs: { ...docs1Body, ...docs2Body },
   };

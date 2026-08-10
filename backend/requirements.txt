@@ -9,7 +9,14 @@ pydantic>=2.11.0
 pydantic-settings>=2.6.0
 # httpx — iot_gateway proxy + MCP
 httpx>=0.27.1
-mcp>=1.0.0
+# Capped below 2.0: mcp 2.0.0 (2026-07-28) deleted mcp.server.fastmcp, which
+# app/mcp/server.py imports. The unbounded `>=1.0.0` meant CI resolved the new
+# major the next day and every Backend Unit Tests run since 2026-07-29 died at
+# COLLECTION — pytest exit 2, all 295 unit tests silently unrun. The deploy
+# venv only escaped because it was built before 2.0.0 shipped; its next
+# requirements-triggered rebuild would have hit the same wall.
+# Lifting the cap means porting to the 2.x server API (mcp.server.mcpserver).
+mcp>=1.0.0,<2
 esptool>=4.7.0
 # WASM runtime for Custom Chips on ESP32 (chip's WASM runs in the QEMU worker
 # subprocess so I2C events get a synchronous response — see

@@ -1,0 +1,342 @@
+/*
+ * ComponentInfoPanel - the floating datasheet popover (picker hover) and
+ * the embeddable ComponentInfoBody the Part Inspector dialog reuses. Split
+ * out of ComponentPickerModal.css so surfaces outside the picker can import
+ * these styles without dragging the whole modal stylesheet along.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Floating datasheet popover (ComponentInfoPanel) — portaled to body  *
+ * ------------------------------------------------------------------ */
+.component-info-panel {
+  position: fixed;
+  /* Above the picker overlay (9000) — the popover is summoned by hovering
+     cards INSIDE that modal, so anything lower hides it behind the list. */
+  z-index: 9100;
+  width: 316px;
+  max-height: 74vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px;
+  background: #262626;
+  border: 1px solid #454545;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #e8e8e8;
+  /* Interactive: the pointer can move onto the panel to scroll the datasheet
+     or click Buy without it hiding (grace-period handled in the modal). */
+  pointer-events: auto;
+  transition: opacity 0.12s ease;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.component-info-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.component-info-panel::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.component-info-panel::-webkit-scrollbar-thumb:hover {
+  background: #6a6a6a;
+}
+
+.component-info-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cip-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cip-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1c1c1c;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cip-thumb svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.cip-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cip-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.cip-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cip-cat {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #cfe3ff;
+  background: rgba(0, 122, 204, 0.22);
+  border: 1px solid rgba(0, 122, 204, 0.4);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.cip-pins {
+  font-size: 11px;
+  color: #aaa;
+  background: #333;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.cip-pro {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #1a1205;
+  background: linear-gradient(180deg, #ffd566, #f5a623);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.cip-desc {
+  margin: 0 0 10px;
+  color: #c4c4c4;
+  font-size: 12.5px;
+}
+
+/* Rendered Markdown datasheet (react-markdown output). The whole panel
+   scrolls, so the doc flows at its natural height. */
+.cip-doc {
+  margin: 0 0 10px;
+  color: #c9c9c9;
+  font-size: 12.5px;
+}
+
+.cip-doc > :first-child {
+  margin-top: 0;
+}
+
+.cip-doc > :last-child {
+  margin-bottom: 0;
+}
+
+.cip-doc p {
+  margin: 0 0 7px;
+  line-height: 1.5;
+}
+
+.cip-doc h1,
+.cip-doc h2,
+.cip-doc h3 {
+  margin: 10px 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #8fb8e6;
+}
+
+.cip-doc ul,
+.cip-doc ol {
+  margin: 0 0 7px;
+  padding-left: 16px;
+}
+
+.cip-doc li {
+  margin: 2px 0;
+  line-height: 1.45;
+}
+
+.cip-doc strong {
+  color: #f0f0f0;
+  font-weight: 600;
+}
+
+.cip-doc code {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-size: 11px;
+  background: #1c1c1c;
+  border: 1px solid #383838;
+  border-radius: 3px;
+  padding: 0 4px;
+  color: #e6c07b;
+}
+
+.cip-doc a {
+  color: #6db3f2;
+  text-decoration: none;
+}
+
+.cip-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 8px;
+  font-size: 11.5px;
+}
+
+.cip-doc th,
+.cip-doc td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid #363636;
+}
+
+.cip-doc th {
+  color: #9a9a9a;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+
+.cip-doc td:first-child {
+  color: #cfcfcf;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  white-space: nowrap;
+}
+
+.cip-section-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #8a8a8a;
+  margin-bottom: 5px;
+}
+
+.cip-prop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cip-prop-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 2px 0;
+  border-bottom: 1px solid #333;
+}
+
+.cip-prop-row:last-child {
+  border-bottom: none;
+}
+
+.cip-prop-name {
+  color: #b8b8b8;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  white-space: nowrap;
+}
+
+.cip-prop-val {
+  color: #eaeaea;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 62%;
+}
+
+.cip-more {
+  font-size: 11px;
+  color: #888;
+  margin-top: 5px;
+}
+
+.cip-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #383838;
+}
+
+.cip-tag {
+  font-size: 10.5px;
+  color: #9a9a9a;
+  background: #303030;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* Brand / manufacturer line under the title */
+.cip-brand {
+  font-size: 11px;
+  color: #8f8f8f;
+  font-style: italic;
+}
+
+/* Buy footer — sticks to the bottom of the (scrollable) panel so the
+   purchase action is always reachable without scrolling. */
+.cip-footer {
+  position: sticky;
+  bottom: -12px; /* cancel the panel's bottom padding */
+  margin: 12px -14px -12px;
+  padding: 10px 14px;
+  background: linear-gradient(to top, #262626 70%, rgba(38, 38, 38, 0));
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cip-buy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-action-primary, #007acc);
+  border-radius: 7px;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    transform 0.05s;
+}
+
+.cip-buy:hover {
+  background: #0a86db;
+}
+
+.cip-buy:active {
+  transform: translateY(1px);
+}
+
+.cip-buy svg {
+  flex-shrink: 0;
+}
+
+
+/* No authored doc and no metadata description — most of the catalogue. Say it
+   plainly instead of leaving the panel looking broken. */
+.cip-desc--empty {
+  color: #7a7a7a;
+  font-style: italic;
+}

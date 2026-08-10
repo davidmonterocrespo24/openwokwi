@@ -182,11 +182,43 @@ function pushPinState(boardId: string, pin: number, state: boolean): void {
   }
 }
 
+// ── Serial seam for boards driven from outside the sim/bridge pair ───────
+//
+// A QEMU-Linux board can also run its Python in the tab (no WebSocket, no
+// bridge object). Such a board still has UART wires on the canvas, so it
+// needs both directions of the routing: a sink to receive bytes, and a way
+// to announce the ones it sends. Both are plain callbacks — nothing here
+// knows what is on the other end.
+const serialSinks = new Map<string, (ch: string, uart: number) => void>();
+
+/** Receive UART bytes addressed to this board. Returns an unregister fn. */
+export function registerSerialSink(
+  boardId: string,
+  sink: (ch: string, uart: number) => void,
+): () => void {
+  serialSinks.set(boardId, sink);
+  return () => {
+    if (serialSinks.get(boardId) === sink) serialSinks.delete(boardId);
+  };
+}
+
+/** Announce a UART byte this board just transmitted, so the wires route it. */
+export function feedBoardSerialOut(boardId: string, ch: string, uart = 0): void {
+  const subs = boards.get(boardId)?.serialFanout.get(uart);
+  if (subs) for (const cb of subs) cb(ch);
+}
+
 /** Push a UART byte into the receiving board's UART RX. */
 function pushSerialByte(boardId: string, ch: string, uart: number): void {
   if (!runtime) return;
   const entry = boards.get(boardId);
   if (!entry) return;
+
+  const sink = serialSinks.get(boardId);
+  if (sink) {
+    sink(ch, uart);
+    return;
+  }
 
   if (isBrowserSim(entry.kind)) {
     const sim = runtime.getBoardSimulator(boardId);
@@ -204,8 +236,15 @@ function pushSerialByte(boardId: string, ch: string, uart: number): void {
     const bridge = runtime.getStm32Bridge(boardId);
     bridge?.sendSerialBytes?.([ch.charCodeAt(0)], uart);
   } else if (isPi3Bridge(entry.kind)) {
-    const bridge = runtime.getBoardBridge(boardId);
-    bridge?.sendSerialBytes?.([ch.charCodeAt(0)]);
+    const bridge = runtime.getBoardBridge(boardId) as
+      | { sendUartBytes?: (b: number[]) => void; sendSerialBytes?: (b: number[]) => void }
+      | undefined;
+    // The header UART is a different pipe from the console: typing a
+    // peer's bytes into the shell used to be the only option, and it
+    // meant the guest's own boot chatter went out on the wire while the
+    // data a script wrote never did.
+    if (bridge?.sendUartBytes) bridge.sendUartBytes([ch.charCodeAt(0)]);
+    else bridge?.sendSerialBytes?.([ch.charCodeAt(0)]);
   }
 }
 
@@ -320,6 +359,24 @@ function ensureSerialHook(entry: BoardEntry): void {
       ? runtime.getStm32Bridge(entry.id)
       : runtime.getBoardBridge(entry.id);
   if (!bridge) return;
+
+  // A QEMU-Linux board has TWO serial streams: the console (the shell)
+  // and the header UART. Only the second one is on the wire — hooking the
+  // console here would send the guest's boot chatter and shell prompt to
+  // the peer board, which is what used to happen for lack of anything
+  // better.
+  const piBridge = bridge as unknown as { onUartTx?: ((t: string) => void) | null };
+  if (isPi3Bridge(entry.kind) && 'onUartTx' in piBridge) {
+    if ((bridge as unknown as { __icUartHook?: boolean }).__icUartHook) return;
+    (bridge as unknown as { __icUartHook?: boolean }).__icUartHook = true;
+    const prevUart = piBridge.onUartTx ?? null;
+    piBridge.onUartTx = (text: string) => {
+      prevUart?.(text);
+      const subs = boards.get(boardId)?.serialFanout.get(0);
+      if (subs) for (const ch of text) for (const cb of subs) cb(ch);
+    };
+    return;
+  }
   if ((bridge as any).__icSerialHookInstalled) return;
   (bridge as any).__icSerialHookInstalled = true;
   entry.origSerialCallback = bridge.onSerialData ?? null;
@@ -688,6 +745,22 @@ export function updateWires(wires: readonly Wire[]): void {
  */
 export function notifyBoardReady(_boardId: string, wires: readonly Wire[]): void {
   updateI2CBridges(wires);
+}
+
+/**
+ * Re-attempt the serial hook for a board whose sim/bridge did not exist
+ * when the routes were built. Routes are installed at page load; a Pi's
+ * bridge is created at Run — so the TX hook silently no-opped and the
+ * guest's UART bytes never reached the wire. The store calls this when
+ * the bridge connects; ensureSerialHook is idempotent via its flag.
+ */
+export function reensureSerialHooks(boardId: string): void {
+  const entry = boards.get(boardId);
+  if (!entry || entry.serialFanout.size === 0) return;
+  // The hook lives on the sim/bridge INSTANCE and marks it with a flag.
+  // A fresh instance carries no flag, so ensureSerialHook installs on it;
+  // this call is what makes that happen after a compile or a reconnect.
+  ensureSerialHook(entry);
 }
 
 /** For tests: reset all internal state. */

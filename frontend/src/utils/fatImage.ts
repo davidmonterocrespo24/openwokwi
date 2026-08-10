@@ -102,6 +102,117 @@ export interface BuildFatOptions {
   label?: string;
 }
 
+/** A file listed out of a FAT16 image by `readFat16Image`. */
+export interface FatDirFile {
+  /** Long name when LFN entries were present, else the 8.3 name. */
+  name: string;
+  size: number;
+  data: Uint8Array;
+}
+
+function readU16(buf: Uint8Array, off: number): number {
+  return buf[off] | (buf[off + 1] << 8);
+}
+function readU32(buf: Uint8Array, off: number): number {
+  return (buf[off] | (buf[off + 1] << 8) | (buf[off + 2] << 16) | (buf[off + 3] << 24)) >>> 0;
+}
+
+/**
+ * List the ROOT directory of a FAT16 "super-floppy" image and extract each
+ * file's bytes — the inverse of `buildFat16Image`, but general enough for a
+ * card a guest OS (FatFs / Arduino SD) has written to: it follows real
+ * cluster chains, honours sectors-per-cluster from the BPB, decodes VFAT
+ * long names and skips deleted/volume/directory entries. Subdirectories are
+ * not descended (the builder is root-only too).
+ *
+ * Returns [] for anything that does not look like a mountable FAT16 volume —
+ * the caller treats that as "no readable card", never as an error.
+ */
+export function readFat16Image(img: Uint8Array): FatDirFile[] {
+  try {
+    if (img.length < SEC || img[510] !== 0x55 || img[511] !== 0xaa) return [];
+    const bytesPerSec = readU16(img, 11);
+    const spc = img[13];
+    const reserved = readU16(img, 14);
+    const numFats = img[16];
+    const rootEntries = readU16(img, 17);
+    const fatSz = readU16(img, 22);
+    if (!bytesPerSec || !spc || !reserved || !numFats || !fatSz || !rootEntries) return [];
+
+    const fatStart = reserved * bytesPerSec;
+    const rootStart = (reserved + numFats * fatSz) * bytesPerSec;
+    const rootBytes = rootEntries * 32;
+    const dataStart = rootStart + Math.ceil(rootBytes / bytesPerSec) * bytesPerSec;
+    const clusterBytes = spc * bytesPerSec;
+    if (dataStart >= img.length) return [];
+
+    const out: FatDirFile[] = [];
+    // LFN entries accumulate (in on-disk reverse order) until their 8.3 entry.
+    let lfnParts: Array<{ seq: number; chars: string }> = [];
+
+    for (let slot = 0; slot < rootEntries; slot++) {
+      const d = rootStart + slot * 32;
+      if (d + 32 > img.length) break;
+      const first = img[d];
+      if (first === 0x00) break; // end of directory
+      if (first === 0xe5) {
+        lfnParts = []; // deleted entry
+        continue;
+      }
+      const attr = img[d + 11];
+      if ((attr & 0x0f) === 0x0f) {
+        // VFAT long-name entry: 13 UTF-16 chars in fixed slots.
+        const slots = [1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30];
+        let chars = '';
+        for (const s of slots) {
+          const code = img[d + s] | (img[d + s + 1] << 8);
+          if (code === 0x0000 || code === 0xffff) break;
+          chars += String.fromCharCode(code);
+        }
+        lfnParts.push({ seq: img[d] & 0x1f, chars });
+        continue;
+      }
+      if (attr & 0x08 || attr & 0x10) {
+        // volume label / directory
+        lfnParts = [];
+        continue;
+      }
+
+      let name: string;
+      if (lfnParts.length) {
+        name = lfnParts
+          .sort((a, b) => a.seq - b.seq)
+          .map((p) => p.chars)
+          .join('');
+      } else {
+        const base = String.fromCharCode(...img.subarray(d, d + 8)).trimEnd();
+        const ext = String.fromCharCode(...img.subarray(d + 8, d + 11)).trimEnd();
+        name = ext ? `${base}.${ext}` : base;
+      }
+      lfnParts = [];
+
+      const size = readU32(img, d + 28);
+      let cluster = readU16(img, d + 26);
+      const data = new Uint8Array(size);
+      let got = 0;
+      // Follow the chain; guard against loops with a step cap.
+      for (let steps = 0; got < size && cluster >= 2 && cluster < 0xfff8; steps++) {
+        if (steps > 1_000_000) break;
+        const at = dataStart + (cluster - 2) * clusterBytes;
+        if (at >= img.length) break;
+        const take = Math.min(clusterBytes, size - got, img.length - at);
+        data.set(img.subarray(at, at + take), got);
+        got += take;
+        cluster = readU16(img, fatStart + cluster * 2);
+      }
+      out.push({ name, size, data: got === size ? data : data.subarray(0, got) });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Build a FAT16 image containing `files` in the root directory.
  * Throws if the files don't fit the volume or the root directory.

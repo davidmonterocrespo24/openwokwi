@@ -30,9 +30,13 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 1100px;
-  max-height: 85vh;
+  width: 96%;
+  max-width: 1680px;
+  /* Fixed height (not max-height) so the modal keeps the SAME size regardless
+     of how many components the current filter shows — the grid area just has
+     empty space below when the results are few, instead of the whole modal
+     shrinking. */
+  height: 88vh;
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease;
@@ -49,31 +53,34 @@
   }
 }
 
-/* Header */
+/* Header — title, search and category filter share one compact row */
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  gap: 14px;
+  padding: 12px 20px;
   border-bottom: 1px solid #e0e0e0;
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 600;
   color: #333;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 20px;
   color: #666;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 2px 8px;
   line-height: 1;
   border-radius: 4px;
+  flex-shrink: 0;
   transition:
     background 0.2s,
     color 0.2s;
@@ -84,23 +91,27 @@
   color: #333;
 }
 
-/* Search Section */
-.search-section {
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.search-input-wrapper {
+/* Inline search (lives in the header row) */
+.header-search-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 11px;
+  color: #999;
+  pointer-events: none;
 }
 
 .search-input {
   width: 100%;
-  padding: 12px 40px 12px 12px;
-  font-size: 16px;
-  border: 2px solid #e0e0e0;
+  padding: 8px 34px 8px 34px;
+  font-size: 14px;
+  border: 1.5px solid #e0e0e0;
   border-radius: 8px;
   outline: none;
   transition: border-color 0.2s;
@@ -112,13 +123,13 @@
 
 .clear-search-btn {
   position: absolute;
-  right: 12px;
+  right: 10px;
   background: none;
   border: none;
   color: #999;
   cursor: pointer;
   padding: 4px;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
   border-radius: 4px;
   transition:
@@ -131,53 +142,43 @@
   color: #666;
 }
 
-/* Category Tabs */
-.category-tabs {
-  display: flex;
-  gap: 8px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  flex-wrap: nowrap;
-  max-width: 100%;
-  min-height: 60px;
-  align-items: center;
-}
-
-.category-tab {
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s;
+/* Category filter — compact dropdown in the header row */
+.category-select {
   flex-shrink: 0;
+  max-width: 190px;
+  padding: 8px 30px 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
+  background-color: #f5f5f5;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 
-.category-tab:hover {
-  background: #e8e8e8;
+.category-select:hover {
   border-color: #ccc;
 }
 
-.category-tab.active {
-  background: var(--color-action-primary);
+.category-select:focus {
   border-color: var(--color-action-primary);
-  color: white;
 }
 
 /* Components Grid */
 .components-grid {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 16px 20px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
   align-content: start;
 }
 
@@ -275,15 +276,15 @@
 /* Component Card */
 .component-card {
   background: white;
-  border: 2px solid #e0e0e0;
+  border: 1.5px solid #e0e0e0;
   border-radius: 8px;
-  padding: 16px;
+  padding: 10px;
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .component-card:hover {
@@ -296,7 +297,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100px;
+  height: 72px;
   background: #f9f9f9;
   border-radius: 6px;
   overflow: hidden;
@@ -320,19 +321,20 @@
 .card-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .card-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #333;
+  line-height: 1.25;
 }
 
 .card-description {
-  font-size: 13px;
+  font-size: 11.5px;
   color: #666;
-  line-height: 1.4;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -343,7 +345,7 @@
 .card-meta {
   display: flex;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
 }
 
@@ -357,7 +359,7 @@
 
 /* Footer */
 .modal-footer {
-  padding: 16px 24px;
+  padding: 8px 20px;
   border-top: 1px solid #e0e0e0;
   display: flex;
   justify-content: space-between;
@@ -370,26 +372,22 @@
 }
 
 /* Scrollbar styles */
-.components-grid::-webkit-scrollbar,
-.category-tabs::-webkit-scrollbar {
+.components-grid::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.components-grid::-webkit-scrollbar-track,
-.category-tabs::-webkit-scrollbar-track {
+.components-grid::-webkit-scrollbar-track {
   background: #f0f0f0;
   border-radius: 4px;
 }
 
-.components-grid::-webkit-scrollbar-thumb,
-.category-tabs::-webkit-scrollbar-thumb {
+.components-grid::-webkit-scrollbar-thumb {
   background: #ccc;
   border-radius: 4px;
 }
 
-.components-grid::-webkit-scrollbar-thumb:hover,
-.category-tabs::-webkit-scrollbar-thumb:hover {
+.components-grid::-webkit-scrollbar-thumb:hover {
   background: #999;
 }
 
@@ -404,8 +402,6 @@
 }
 
 .modal-header,
-.search-section,
-.category-tabs,
 .modal-footer {
   border-color: #444;
 }
@@ -424,14 +420,24 @@
   color: #888;
 }
 
-.category-tab {
-  background: #3d3d3d;
-  border-color: #555;
-  color: #ccc;
+.search-icon {
+  color: #888;
 }
 
-.category-tab:hover {
-  background: #4d4d4d;
+.category-select {
+  background-color: #3d3d3d;
+  border-color: #555;
+  color: #ddd;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+
+.category-select:hover {
+  border-color: #777;
+}
+
+.category-select option {
+  background: #2d2d2d;
+  color: #ddd;
 }
 
 .component-card {

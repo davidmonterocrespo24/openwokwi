@@ -74,8 +74,14 @@ let generated = 0;
 
 try {
   // Load entry-server.tsx through Vite's transform pipeline
-  const { getPrerenderedRoutes, render, getPrerenderedExampleRoutes, renderExample } =
+  const { getPrerenderedRoutes, render, getPrerenderedExampleRoutes, renderExample,
+          loadRouteComponents } =
     await vite.ssrLoadModule('/src/entry-server.tsx');
+
+  // Pull in the overlay's marketing pages (pro builds) before asking for
+  // the route list — without this the prerender would silently cover only
+  // the OSS surface.
+  await loadRouteComponents();
 
   const routes = getPrerenderedRoutes();
   const exampleRoutes = getPrerenderedExampleRoutes();

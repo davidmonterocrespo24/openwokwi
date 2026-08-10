@@ -9,14 +9,44 @@
  * - Click to select and add component
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ComponentRegistry } from '../services/ComponentRegistry';
 import type { ComponentMetadata, ComponentCategory } from '../types/component-metadata';
+import { ComponentInfoPanel, HOVER_DELAY, type HoverTarget, type PanelData } from './ComponentInfoPanel';
+
+// Grace period after the pointer leaves a card before the datasheet popover
+// hides — long enough to cross the gap onto the (interactive) panel. Must be
+// comfortably larger than HOVER_DELAY so re-entering a card cancels the hide
+// before it fires.
+const HIDE_DELAY = 220;
+
+/** Hover controls handed to each card so it can drive the shared popover. */
+interface CardHoverApi {
+  show: (t: HoverTarget) => void;
+  cancelHide: () => void;
+  scheduleHide: () => void;
+  /** Current show generation — an armed show is void once this changes. */
+  showGen: () => number;
+}
 import type { BoardKind } from '../types/board';
 import { BOARD_KIND_LABELS } from '../types/board';
 import { isProBoardKind } from '../lib/proBoardGate';
+import {
+  getProBoard,
+  listProBoards,
+  subscribeProBoards,
+  getProBoardsVersion,
+} from '../lib/proBoardRegistry';
+import {
+  ONLINE_ONLY_BOARD_ADS,
+  ONLINE_ONLY_COMPONENT_ADS,
+  ONLINE_EDITOR_URL,
+  isOnlineOnlyAdSuppressed,
+  type OnlineOnlyBoardAd,
+  type OnlineOnlyComponentAd,
+} from '../lib/onlineOnlyBoards';
 import raspberryPi3Svg from '../assets/Raspberry_Pi_3_illustration.svg';
 import raspberryPi4Png from '../assets/raspberry-pi-4-board.png';
 import raspberryPi5Png from '../assets/raspberry-pi-5-board.png';
@@ -46,6 +76,9 @@ const BOARD_DESCRIPTIONS: Record<BoardKind, string> = {
   'arduino-mega': '8-bit AVR, 256KB flash, 54 digital I/O',
   'raspberry-pi-pico': 'RP2040 dual-core Cortex-M0+',
   'pi-pico-w': 'RP2040 + WiFi/BT, same emulator as Pico',
+  'raspberry-pi-zero': 'ARM Cortex-A7, 1 core / 512 MB, Linux/Python (QEMU)',
+  'raspberry-pi-1': 'Pi 1 B+, ARM Cortex-A7 profile, Linux/Python (QEMU)',
+  'raspberry-pi-2': 'Pi 2B, ARM Cortex-A7 quad-core, Linux/Python (QEMU)',
   'raspberry-pi-3': 'ARM64 Cortex-A53 quad-core, Linux/Python (QEMU)',
   'raspberry-pi-4': 'ARM64 Cortex-A72 quad-core, Linux/Python (QEMU)',
   'raspberry-pi-5': 'ARM64 Cortex-A76 quad-core + RP1 I/O, Linux/Python (QEMU)',
@@ -70,12 +103,43 @@ const BOARD_DESCRIPTIONS: Record<BoardKind, string> = {
   attiny85: '8-bit AVR, 8KB flash, 6 GPIO (browser)',
 };
 
+/**
+ * Maker-first category order for the picker grid and the category filter.
+ * Velxio's audience is hobbyist-heavy: everyday digital parts (sensors,
+ * LEDs/outputs, displays, buttons) lead, while diodes/resistors/capacitors
+ * ('passive'), transistors/op-amps/instruments ('analog') and logic gates
+ * sink to the end of the list.
+ */
+const CATEGORY_ORDER: string[] = [
+  'sensors',
+  'output',
+  'displays',
+  'input',
+  'motors',
+  'communication',
+  'electromech',
+  'boards',
+  'other',
+  'passive',
+  'analog',
+  'logic',
+];
+
+function categoryRank(category: string): number {
+  const i = CATEGORY_ORDER.indexOf(category);
+  // Unknown/future categories land before the passive tail, not after it.
+  return i === -1 ? CATEGORY_ORDER.indexOf('other') : i;
+}
+
 const ALL_BOARDS: BoardKind[] = [
   'arduino-uno',
   'arduino-nano',
   'arduino-mega',
   'raspberry-pi-pico',
   'pi-pico-w',
+  'raspberry-pi-zero',
+  'raspberry-pi-1',
+  'raspberry-pi-2',
   'raspberry-pi-3',
   'raspberry-pi-4',
   'raspberry-pi-5',
@@ -112,7 +176,69 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     'all',
   );
   const [registry] = useState(() => ComponentRegistry.getInstance());
+  // Late-overlay registrations must re-render an already-mounted picker:
+  // the @pro import is dynamic, so boards/components can register AFTER the
+  // first render. Without these subscriptions the memos below freeze on the
+  // pre-registration state (boards missing, ONLINE ads instead of the real
+  // components - and which one you got depended on a reload race).
+  const proBoardsVersion = useSyncExternalStore(
+    subscribeProBoards,
+    getProBoardsVersion,
+    getProBoardsVersion,
+  );
+  const registryVersion = useSyncExternalStore(
+    registry.subscribe,
+    registry.getVersion,
+    registry.getVersion,
+  );
+
   const [isLoading, setIsLoading] = useState(true);
+  // Floating datasheet popover shown on card hover. A single instance is
+  // driven from here so only one panel ever exists in the DOM. Hiding is
+  // DEFERRED through a grace-period timer so the pointer can travel from the
+  // card onto the panel (to scroll a long doc or click Buy) without it
+  // vanishing: the card's leave arms the hide, the panel's enter cancels it.
+  const [hoverTarget, setHoverTarget] = useState<HoverTarget | null>(null);
+  const hideTimer = useRef<number | undefined>(undefined);
+  // Monotonic generation stamped when a card arms its show timer. Bumping it
+  // invalidates any already-armed show so a grid change (scroll/filter/search)
+  // can't pop a panel at a now-stale card rect after the pointer's card reflows.
+  const showGenRef = useRef(0);
+  const cancelHide = () => window.clearTimeout(hideTimer.current);
+  const showPanel = (t: HoverTarget) => {
+    window.clearTimeout(hideTimer.current);
+    setHoverTarget(t);
+  };
+  const scheduleHide = () => {
+    window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => setHoverTarget(null), HIDE_DELAY);
+  };
+  // Immediate hide — used when the grid itself changes under the pointer
+  // (scroll, filter, search) so a stale panel never lingers. Also invalidates
+  // any armed (not-yet-fired) show timer.
+  const clearHover = () => {
+    showGenRef.current++;
+    window.clearTimeout(hideTimer.current);
+    setHoverTarget(null);
+  };
+  const hoverApi: CardHoverApi = {
+    show: showPanel,
+    cancelHide,
+    scheduleHide,
+    showGen: () => showGenRef.current,
+  };
+  // Clear any pending hide timer if the modal unmounts mid-hover.
+  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
+  // The modal stays mounted (parent toggles `isOpen`), so reset the popover
+  // when it closes — otherwise a panel left showing at close (e.g. clicking a
+  // card to add it, or ESC while hovering) reappears detached on reopen.
+  useEffect(() => {
+    if (!isOpen) {
+      showGenRef.current++;
+      window.clearTimeout(hideTimer.current);
+      setHoverTarget(null);
+    }
+  }, [isOpen]);
 
   // Wait for registry to load
   useEffect(() => {
@@ -133,13 +259,54 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
       components = components.filter((c) => c.category === selectedCategory);
     }
 
-    return components;
-  }, [searchQuery, selectedCategory, registry, isLoading]);
+    // Registry entries that ARE boards (the injected Raspberry Pi family)
+    // must never render as component cards: the boards row above already
+    // shows every BoardKind with the real art, and adding one through the
+    // component path drops a dead canvas part instead of a running board
+    // (that is how "add a Pi 4" placed a 40-pin prop that never boots).
+    components = components.filter((c) => !(c.id in BOARD_KIND_LABELS));
 
-  // Get available categories
+    // Maker-first ordering: most users reach for a sensor, an LED or a
+    // display far more often than a bare transistor or a 74HC gate, so
+    // passives / analog / logic sink to the end. Array.sort is stable —
+    // the registry's own order is preserved within each category.
+    components = [...components].sort(
+      (a, b) => categoryRank(a.category) - categoryRank(b.category),
+    );
+
+    return components;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, selectedCategory, registry, isLoading, registryVersion, proBoardsVersion]);
+
+
+  // Boards list: static OSS kinds + overlay-registered boards (proBoardRegistry).
+  const allBoards = useMemo(() => {
+    return [...ALL_BOARDS, ...(listProBoards().map((d) => d.kind) as BoardKind[])];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proBoardsVersion]);
+
+  // Online-only component ads: shown where the real component would sit, and
+  // hidden automatically in any build whose registry has the real component
+  // (the hosted overlay merges it in) — same contract as VISIBLE_BOARD_ADS.
+  const visibleComponentAds = useMemo(() => {
+    if (isLoading) return [];
+    const q = searchQuery.toLowerCase();
+    return ONLINE_ONLY_COMPONENT_ADS.filter(
+      (ad) =>
+        !registry.getById(ad.id) &&
+        !isOnlineOnlyAdSuppressed(ad.id) &&
+        (selectedCategory === 'all' || ad.category === selectedCategory) &&
+        (!q || ad.label.toLowerCase().includes(q)),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registry, isLoading, searchQuery, selectedCategory, registryVersion, proBoardsVersion]);
+
+  // Get available categories — same maker-first order as the grid.
   const categories = useMemo(() => {
     if (isLoading) return [];
-    return registry.getCategories();
+    return [...registry.getCategories()].sort(
+      (a, b) => categoryRank(a) - categoryRank(b),
+    );
   }, [registry, isLoading]);
 
   // Handle ESC key to close modal
@@ -161,23 +328,36 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
   return createPortal(
     <div className="component-picker-overlay" onClick={onClose}>
       <div className="component-picker-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+        {/* Header: title + inline search + category filter + close, all on
+            one row to maximise the space left for the components grid. */}
         <div className="modal-header">
           <h2>{t('editor.componentPicker.title')}</h2>
-          <button className="close-btn" onClick={onClose} aria-label={t('editor.componentPicker.close')}>
-            X
-          </button>
-        </div>
 
-        {/* Search Bar */}
-        <div className="search-section">
-          <div className="search-input-wrapper">
+          <div className="header-search-wrapper">
+            <svg
+              className="search-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
             <input
               type="text"
               className="search-input"
               placeholder={t('editor.componentPicker.searchPlaceholder')}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                clearHover();
+              }}
               autoFocus
             />
             {searchQuery && (
@@ -190,41 +370,38 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
               </button>
             )}
           </div>
-        </div>
 
-        {/* Category Tabs */}
-        <div className="category-tabs">
-          <button
-            className={`category-tab ${selectedCategory === 'all' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('all')}
+          <select
+            className="category-select"
+            value={selectedCategory}
+            onChange={(e) => {
+              setSelectedCategory(e.target.value as ComponentCategory | 'all' | 'boards');
+              clearHover();
+            }}
+            aria-label="Filter by category"
           >
-            {t('editor.componentPicker.allComponents')}
+            <option value="all">{t('editor.componentPicker.allComponents')}</option>
+            {categories
+              .filter((c) => c !== 'boards')
+              .map((category) => (
+                <option key={category} value={category}>
+                  {ComponentRegistry.getCategoryDisplayName(category)}
+                </option>
+              ))}
+            {onSelectBoard && (
+              <option value="boards">{t('editor.componentPicker.boards')}</option>
+            )}
+          </select>
+
+          <button className="close-btn" onClick={onClose} aria-label={t('editor.componentPicker.close')}>
+            X
           </button>
-          {categories
-            .filter((c) => c !== 'boards')
-            .map((category) => (
-              <button
-                key={category}
-                className={`category-tab ${selectedCategory === category ? 'active' : ''}`}
-                onClick={() => setSelectedCategory(category)}
-              >
-                {ComponentRegistry.getCategoryDisplayName(category)}
-              </button>
-            ))}
-          {onSelectBoard && (
-            <button
-              className={`category-tab ${selectedCategory === 'boards' ? 'active' : ''}`}
-              onClick={() => setSelectedCategory('boards')}
-            >
-              {t('editor.componentPicker.boards')}
-            </button>
-          )}
         </div>
 
         {/* Boards Panel */}
         {selectedCategory === 'boards' ? (
-          <div className="components-grid">
-            {ALL_BOARDS.map((kind) => (
+          <div className="components-grid" onScroll={clearHover}>
+            {allBoards.map((kind) => (
               <BoardCard
                 key={kind}
                 kind={kind}
@@ -232,7 +409,11 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                   onSelectBoard?.(kind);
                   onClose();
                 }}
+                hoverApi={hoverApi}
               />
+            ))}
+            {visibleBoardAds().map((ad) => (
+              <OnlineOnlyBoardCard key={ad.id} ad={ad} />
             ))}
           </div>
         ) : (
@@ -240,13 +421,13 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
             {/* Single scrollable area wrapping both the boards row (only in
                 "All Components" view) and the components grid, so the modal
                 shows ONE scrollbar instead of two stacked ones. */}
-            <div className="components-scroll">
+            <div className="components-scroll" onScroll={clearHover}>
               {selectedCategory === 'all' && onSelectBoard && (
                 <div
                   className="components-grid components-grid--inline"
                   style={{ borderBottom: '1px solid #333', paddingBottom: 8, marginBottom: 4 }}
                 >
-                  {ALL_BOARDS.filter(
+                  {allBoards.filter(
                     (k) =>
                       !searchQuery ||
                       BOARD_KIND_LABELS[k].toLowerCase().includes(searchQuery.toLowerCase()),
@@ -258,7 +439,14 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                         onSelectBoard(kind);
                         onClose();
                       }}
+                      hoverApi={hoverApi}
                     />
+                  ))}
+                  {visibleBoardAds().filter(
+                    (ad) =>
+                      !searchQuery || ad.label.toLowerCase().includes(searchQuery.toLowerCase()),
+                  ).map((ad) => (
+                    <OnlineOnlyBoardCard key={ad.id} ad={ad} />
                   ))}
                 </div>
               )}
@@ -269,7 +457,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                     <div className="spinner"></div>
                     <p>{t('editor.componentPicker.loading')}</p>
                   </div>
-                ) : filteredComponents.length === 0 ? (
+                ) : filteredComponents.length === 0 && visibleComponentAds.length === 0 ? (
                   <div className="no-results">
                     <p>{t('editor.componentPicker.noResults')}</p>
                     {searchQuery && (
@@ -289,6 +477,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                     <ComponentCard
                       key={component.id}
                       component={component}
+                      hoverApi={hoverApi}
                       onSelect={() => {
                         // Pro overlays can intercept clicks on pro_only
                         // components by setting window.__velxio_pro_gate__.
@@ -304,6 +493,10 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                     />
                   ))
                 )}
+                {!isLoading &&
+                  visibleComponentAds.map((ad) => (
+                    <OnlineOnlyComponentCard key={ad.id} ad={ad} />
+                  ))}
               </div>
             </div>
 
@@ -317,10 +510,50 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
           </>
         )}
       </div>
+
+      {/* Floating datasheet popover (portals to <body>). Keyed on the anchor
+          so it remounts per card and re-measures its position cleanly. */}
+      {hoverTarget && (
+        <ComponentInfoPanel
+          key={`${hoverTarget.data.name}-${Math.round(hoverTarget.rect.left)}-${Math.round(
+            hoverTarget.rect.top,
+          )}`}
+          target={hoverTarget}
+          onPanelEnter={cancelHide}
+          onPanelLeave={scheduleHide}
+        />
+      )}
     </div>,
     document.body
   );
 };
+
+/**
+ * Shared hover behaviour for the picker cards: on enter/focus cancel any
+ * pending hide and arm a delayed "show panel"; on leave/blur cancel that arm
+ * and hand off to the modal's grace-period hide (so the pointer can travel
+ * onto the panel). Always clears its own arm timer on unmount.
+ */
+function useCardHover(buildData: () => PanelData, api: CardHoverApi) {
+  const timer = useRef<number | undefined>(undefined);
+  const start = (e: React.MouseEvent | React.FocusEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    api.cancelHide();
+    window.clearTimeout(timer.current);
+    const gen = api.showGen();
+    timer.current = window.setTimeout(() => {
+      // Voided if a grid change (clearHover) bumped the generation meanwhile.
+      if (api.showGen() !== gen) return;
+      api.show({ data: buildData(), rect });
+    }, HOVER_DELAY);
+  };
+  const end = () => {
+    window.clearTimeout(timer.current);
+    api.scheduleHide();
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return { onMouseEnter: start, onMouseLeave: end, onFocus: start, onBlur: end };
+}
 
 /**
  * Component Card - Individual component display in the grid
@@ -328,6 +561,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
 interface ComponentCardProps {
   component: ComponentMetadata;
   onSelect: () => void;
+  hoverApi: CardHoverApi;
 }
 
 // Passive components (resistor / capacitor / inductor) come with metadata
@@ -377,8 +611,23 @@ const ProBadge: React.FC = () => (
   </span>
 );
 
-const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect }) => {
+const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect, hoverApi }) => {
   const thumbnailRef = React.useRef<HTMLDivElement>(null);
+  const hover = useCardHover(
+    () => ({
+      id: component.id,
+      name: component.name,
+      category: ComponentRegistry.getCategoryDisplayName(component.category),
+      description: component.description,
+      pinCount: component.pinCount,
+      properties: component.properties,
+      tags: component.tags,
+      thumbnail: component.thumbnail,
+      pro_only: component.pro_only,
+    }),
+    hoverApi,
+  );
+  // Passives short-circuit to their preset SVG (value-encoded look).
   const usePresetSvg =
     PASSIVE_TAGS.has(component.tagName) &&
     typeof component.thumbnail === 'string' &&
@@ -405,10 +654,17 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect }) =>
     (element as HTMLElement).style.transform = `scale(${scale})`;
     (element as HTMLElement).style.transformOrigin = 'center center';
 
-    // Pass the preset's default value through so value-sensitive elements
-    // (e.g. wokwi-resistor color bands) render the right look in the picker.
-    if (component.defaultValues?.value !== undefined) {
-      (element as any).value = component.defaultValues.value;
+    // Pass the preset's defaults through so variant-sensitive elements render
+    // the right look in the picker — e.g. wokwi-resistor color bands (value)
+    // or the M5Stack Chain matrix light/dark housing (mono). Same property
+    // assignment DynamicComponent performs when the part is placed, so any
+    // element that tolerates placement tolerates the preview.
+    for (const [key, val] of Object.entries(component.defaultValues ?? {})) {
+      try {
+        (element as any)[key] = val;
+      } catch {
+        /* read-only prop on some upstream element — skip */
+      }
     }
 
     // Set default properties for better preview appearance
@@ -436,7 +692,7 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect }) =>
   }, [component.tagName, component.defaultValues, usePresetSvg, boardArt]);
 
   return (
-    <button className="component-card" onClick={onSelect} style={{ position: 'relative' }}>
+    <button className="component-card" onClick={onSelect} style={{ position: 'relative' }} {...hover}>
       {isProBoardKind(component.id) && <ProBadge />}
       <div className="card-thumbnail">
         {boardArt ? (
@@ -497,10 +753,24 @@ const BOARD_TAG: Partial<Record<BoardKind, string>> = {
 interface BoardCardProps {
   kind: BoardKind;
   onSelect: () => void;
+  hoverApi: CardHoverApi;
 }
 
-const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
+const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect, hoverApi }) => {
   const thumbnailRef = React.useRef<HTMLDivElement>(null);
+  const hover = useCardHover(
+    () => ({
+      id: kind,
+      name: BOARD_KIND_LABELS[kind],
+      category: 'Boards',
+      description: BOARD_DESCRIPTIONS[kind] ?? getProBoard(kind)?.description ?? '',
+      pinCount: 0,
+      properties: [],
+      tags: [],
+      pro_only: isProBoardKind(kind),
+    }),
+    hoverApi,
+  );
 
   React.useEffect(() => {
     if (!thumbnailRef.current) return;
@@ -509,6 +779,9 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
     // natural size + CSS scale keeps its unscaled layout box, so the
     // 100px thumbnail clips it to a narrow sliver).
     if (
+      kind === 'raspberry-pi-zero' ||
+      kind === 'raspberry-pi-1' ||
+      kind === 'raspberry-pi-2' ||
       kind === 'raspberry-pi-3' ||
       kind === 'raspberry-pi-4' ||
       kind === 'raspberry-pi-5' ||
@@ -516,7 +789,7 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
     )
       return;
 
-    const tag = BOARD_TAG[kind];
+    const tag = BOARD_TAG[kind] ?? getProBoard(kind)?.tag;
     if (!tag) return;
 
     const el = document.createElement(tag) as HTMLElement;
@@ -534,10 +807,15 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
   }, [kind]);
 
   const reactThumbnail =
-    kind === 'raspberry-pi-3' ? (
+    // Zero/1/2 render on canvas through the Pi-3 element (same 40-pin art),
+    // so their cards reuse the same illustration.
+    kind === 'raspberry-pi-3' ||
+    kind === 'raspberry-pi-zero' ||
+    kind === 'raspberry-pi-1' ||
+    kind === 'raspberry-pi-2' ? (
       <img
         src={raspberryPi3Svg}
-        alt="Raspberry Pi 3"
+        alt={BOARD_KIND_LABELS[kind]}
         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
       />
     ) : kind === 'raspberry-pi-4' ? (
@@ -559,15 +837,97 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect }) => {
     ) : null;
 
   return (
-    <button className="component-card" onClick={onSelect} style={{ position: 'relative' }}>
+    <button
+      className="component-card"
+      onClick={onSelect}
+      style={{ position: 'relative' }}
+      {...hover}
+    >
       {isProBoardKind(kind) && <ProBadge />}
       <div className="card-thumbnail">
         {reactThumbnail ? reactThumbnail : <div ref={thumbnailRef} className="component-preview" />}
       </div>
       <div className="card-content">
         <div className="card-name">{BOARD_KIND_LABELS[kind]}</div>
-        <div className="card-description">{BOARD_DESCRIPTIONS[kind]}</div>
+        <div className="card-description">{BOARD_DESCRIPTIONS[kind] ?? getProBoard(kind)?.description}</div>
       </div>
     </button>
   );
 };
+
+// ── Online-only board ads ───────────────────────────────────────────────────
+// Boards implemented by the hosted editor (velxio.com), free to use there.
+// Hidden automatically in any build that registers the real BoardKind.
+/** Recomputed on access (not module load): overlay board registration patches
+ *  BOARD_KIND_LABELS at mount, which must hide the corresponding ad. */
+const visibleBoardAds = () =>
+  ONLINE_ONLY_BOARD_ADS.filter(
+    (ad) => !(ad.id in BOARD_KIND_LABELS) && !isOnlineOnlyAdSuppressed(ad.id),
+  );
+
+/** Teal "ONLINE" pill: the board runs (free) in the hosted editor. */
+const OnlineBadge: React.FC = () => (
+  <span
+    title="Free in the online editor — velxio.com"
+    style={{
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      zIndex: 1,
+      padding: '3px 10px',
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      color: '#04211c',
+      background: 'linear-gradient(180deg,#5eead4,#14b8a6)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+    }}
+  >
+    ONLINE
+  </span>
+);
+
+/** Advertisement card for a component only available in the hosted editor. */
+const OnlineOnlyComponentCard: React.FC<{ ad: OnlineOnlyComponentAd }> = ({ ad }) => (
+  <button
+    className="component-card"
+    style={{ position: 'relative' }}
+    title={`${ad.label} — available in the online editor at velxio.com`}
+    onClick={() => window.open(ONLINE_EDITOR_URL, '_blank', 'noopener')}
+  >
+    <OnlineBadge />
+    <div className="card-thumbnail">
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        dangerouslySetInnerHTML={{ __html: ad.thumbnailSvg }}
+      />
+    </div>
+    <div className="card-content">
+      <div className="card-name">{ad.label}</div>
+      <div className="card-description">{ad.description}</div>
+    </div>
+  </button>
+);
+
+/** Advertisement card for a board only available in the hosted editor. */
+const OnlineOnlyBoardCard: React.FC<{ ad: OnlineOnlyBoardAd }> = ({ ad }) => (
+  <button
+    className="component-card"
+    style={{ position: 'relative' }}
+    title={`${ad.label} — free to use in the online editor at velxio.com`}
+    onClick={() => window.open(ONLINE_EDITOR_URL, '_blank', 'noopener')}
+  >
+    <OnlineBadge />
+    <div className="card-thumbnail">
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        dangerouslySetInnerHTML={{ __html: ad.thumbnailSvg }}
+      />
+    </div>
+    <div className="card-content">
+      <div className="card-name">{ad.label}</div>
+      <div className="card-description">{ad.description}</div>
+    </div>
+  </button>
+);

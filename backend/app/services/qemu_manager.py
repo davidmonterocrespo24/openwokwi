@@ -30,6 +30,7 @@ Protocol channel (chardev 1) — wired by Phase 2's pi_protocol_mux
 """
 
 import asyncio
+import base64
 import logging
 import os
 import socket
@@ -148,6 +149,74 @@ PI_CONFIGS: dict[str, dict] = {
 # that still send the legacy "start_pi" message without a board field.
 DEFAULT_PI_BOARD = 'raspberry-pi-3'
 
+# Hard ceiling for one guest session, in seconds. A QEMU instance costs a
+# process and its RAM for as long as it lives, and a tab left open all day
+# used to keep one pinned. 2 h is far past any interactive session; the
+# client is told plainly when it trips. Override with VELXIO_PI_MAX_SESSION_S.
+MAX_SESSION_SECONDS = int(os.environ.get('VELXIO_PI_MAX_SESSION_S', '7200'))
+
+# Capacity. Every guest is a real QEMU process holding its own RAM (1-2 GB
+# per board profile) and vCPU threads, so the machine — not the code — is
+# the limit. Without a ceiling the Nth user simply pushes the box into
+# swap and everyone's session gets slow, which is worse than telling the
+# Nth user to wait a minute. Per-owner keeps one person's tabs from
+# eating the pool: opening the same project in six tabs is six guests.
+MAX_INSTANCES = int(os.environ.get('VELXIO_PI_MAX_INSTANCES', '6'))
+MAX_INSTANCES_PER_OWNER = int(os.environ.get('VELXIO_PI_MAX_PER_OWNER', '2'))
+
+# Every key a profile must carry — the boot path reads exactly these.
+_PI_PROFILE_KEYS = frozenset(
+    {'qemu', 'cpu', 'smp', 'memory', 'image_set', 'kernel', 'initramfs',
+     'rootfs', 'bus'}
+)
+
+
+# ── Per-instance extra drives (overlay seam) ─────────────────────────────
+#
+# A profile's `extra_drive` is static (the same tar for every session). An
+# overlay may need a drive built PER SESSION — e.g. the packages a given
+# project declared. It registers a resolver here; the boot path calls it
+# with the client id and the start payload and appends whatever raw images
+# it returns, read-only, after the profile's own.
+#
+# Signature: def(client_id: str, board_type: str, payload: dict) -> list[str]
+_EXTRA_DRIVE_RESOLVER: Callable[[str, str, dict], list] | None = None
+
+
+def set_pi_extra_drive_resolver(fn) -> None:
+    """Install (or clear) the overlay's per-instance extra-drive resolver."""
+    global _EXTRA_DRIVE_RESOLVER
+    _EXTRA_DRIVE_RESOLVER = fn
+
+
+def _resolve_extra_drives(client_id: str, board_type: str, payload: dict) -> list:
+    if _EXTRA_DRIVE_RESOLVER is None:
+        return []
+    try:
+        return list(_EXTRA_DRIVE_RESOLVER(client_id, board_type, payload) or [])
+    except Exception:
+        logger.exception('extra-drive resolver failed (continuing without it)')
+        return []
+
+
+def register_pi_board_profile(board_type: str, cfg: dict) -> None:
+    """Register (or override) a QEMU-Linux board profile at runtime.
+
+    Seam for private overlays to add board profiles (same shape as the
+    ``PI_CONFIGS`` entries) without the OSS tree carrying their names —
+    e.g. an ARM64 SBC that boots the generic arm64 image set with a
+    different -cpu model. Must be called before the board's first
+    ``start_instance`` (overlay registration time is fine).
+    """
+    missing = _PI_PROFILE_KEYS - cfg.keys()
+    if missing:
+        raise ValueError(
+            f'pi board profile {board_type!r} missing keys: {sorted(missing)}'
+        )
+    PI_CONFIGS[board_type] = dict(cfg)
+    logger.info('registered QEMU board profile %r (cpu=%s, image_set=%s)',
+                board_type, cfg['cpu'], cfg['image_set'])
+
 
 # ── Pluggable I2C/SPI/UART dispatcher ────────────────────────────────────
 #
@@ -229,6 +298,22 @@ class PiInstance:
         self._proto_out_fd: int | None = None  # we read here  ← guest writes
         self._tasks: list[asyncio.Task] = []
         self.running = False
+        # Canvas-fed named values served to the guest via the SENS
+        # protocol op (overlay boards' built-in sensors/buttons).
+        self.sensor_state: dict[str, float] = {}
+        # Bytes another board on the canvas sent to this one's header UART
+        # (TX->RX wire). The guest drains them with the UARTRX op; nothing
+        # here interprets them, they are a pipe between two boards.
+        self.uart_rx = bytearray()
+        # Last externally-driven level per BCM pin (canvas buttons, PIR,
+        # a wired board's output). GPIO_IN answers from here.
+        self.pin_levels: dict[int, int] = {}
+        # Raw `start_pi` payload — carries whatever the client declared for
+        # this session (e.g. the packages an overlay must materialise).
+        self.start_payload: dict = {}
+        # Who this guest belongs to (opaque key from the route), for the
+        # per-owner capacity check. None when the caller has no identity.
+        self.owner: str | None = None
 
     async def emit(self, event_type: str, data: dict) -> None:
         try:
@@ -248,8 +333,29 @@ class QemuManager:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    def capacity_error(self, owner: str | None) -> str | None:
+        """Why this start must be refused, or None when there is room.
+
+        Returned as a message the user reads, so it says what to do next
+        instead of just failing."""
+        if len(self._instances) >= MAX_INSTANCES:
+            return (
+                'All the Linux machines are busy right now. '
+                'Try again in a minute — sessions free up as people stop them.'
+            )
+        if owner:
+            mine = sum(1 for i in self._instances.values() if i.owner == owner)
+            if mine >= MAX_INSTANCES_PER_OWNER:
+                return (
+                    f'You already have {mine} Linux sessions running. '
+                    'Stop one before starting another.'
+                )
+        return None
+
     def start_instance(self, client_id: str, board_type: str,
-                       callback: EventCallback) -> None:
+                       callback: EventCallback,
+                       payload: dict | None = None,
+                       owner: str | None = None) -> None:
         if client_id in self._instances:
             logger.warning('start_instance: %s already running', client_id)
             return
@@ -260,7 +366,13 @@ class QemuManager:
             )
             board_type = DEFAULT_PI_BOARD
         inst = PiInstance(client_id, callback, board_type=board_type)
+        inst.start_payload = dict(payload or {})
+        inst.owner = owner
         self._instances[client_id] = inst
+        logger.info(
+            'pi capacity: %d/%d guests running (starting %s)',
+            len(self._instances), MAX_INSTANCES, client_id,
+        )
         asyncio.create_task(self._boot(inst))
 
     def stop_instance(self, client_id: str) -> None:
@@ -271,8 +383,41 @@ class QemuManager:
     def set_pin_state(self, client_id: str, pin: str | int, state: int) -> None:
         """Drive a GPIO pin from outside (e.g. connected Arduino)."""
         inst = self._instances.get(client_id)
-        if inst and inst._gpio_writer:
+        if not inst:
+            return
+        # Remember the level: GPIO_IN polls answer from this map. Without
+        # it a button on the canvas fired edge callbacks in the guest but
+        # GPIO.input() read an eternal 0 (the old stub).
+        inst.pin_levels[int(pin)] = 1 if state else 0
+        if inst._gpio_writer:
             asyncio.create_task(self._send_gpio(inst, int(pin), bool(state)))
+
+    def push_uart_rx(self, client_id: str, data: bytes) -> None:
+        """Queue bytes for the guest's header UART (a wired board's TX)."""
+        inst = self._instances.get(client_id)
+        if not inst or not data:
+            return
+        # Bound the queue: a script that never reads must not grow it
+        # without limit (the peer keeps transmitting either way).
+        if len(inst.uart_rx) > 64 * 1024:
+            del inst.uart_rx[: len(inst.uart_rx) - 64 * 1024]
+        inst.uart_rx.extend(data)
+
+    def set_sensor_state(self, client_id: str, values: dict) -> None:
+        """Merge canvas-fed named values (served to the guest via SENS).
+
+        Used by overlay boards whose built-in sensors/buttons live on the
+        canvas element: the frontend pushes updates over the WebSocket and
+        the guest polls them with ``SENS <name>`` protocol requests.
+        """
+        inst = self._instances.get(client_id)
+        if not inst:
+            return
+        for key, value in values.items():
+            try:
+                inst.sensor_state[str(key)] = float(value)
+            except (TypeError, ValueError):
+                continue
 
     async def send_serial_bytes(self, client_id: str, data: bytes) -> None:
         inst = self._instances.get(client_id)
@@ -408,7 +553,22 @@ class QemuManager:
             # exactly the two chardev-backed virtio-serial ports we
             # need.  -nographic auto-binds -serial mon:stdio which
             # collides with our explicit -chardev IDs.
-            '-nic',     'none',
+            # Networking: OFF by default. A profile that wants the guest to
+            # reach anything sets `egress_guestfwd`, and even then the NIC is
+            # `restrict=on` — no route to the internet, no route to the host
+            # LAN — with a single guestfwd tunnel to whatever the overlay
+            # points at (a filtering proxy). User code never gets a raw
+            # socket to the outside.
+            *(
+                ['-nic', 'none']
+                if not cfg.get('egress_guestfwd')
+                else [
+                    '-netdev',
+                    'user,id=egress,restrict=on,guestfwd=tcp:10.0.2.100:8080-cmd:'
+                    + str(cfg['egress_guestfwd']),
+                    '-device', 'virtio-net-pci,netdev=egress',
+                ]
+            ),
             '-display', 'none',
             '-monitor', 'none',
             '-serial',  'none',
@@ -440,6 +600,20 @@ class QemuManager:
             '-append', 'console=hvc0 root=/dev/vda rw quiet panic=10',
         ]
 
+        # Optional read-only auxiliary disk (overlay-registered board
+        # profiles use it to ship guest-side shim libraries). Shows up as
+        # the second virtio-blk — /dev/vdb on the pci transport.
+        extra_drives = [cfg.get('extra_drive')] + _resolve_extra_drives(
+            inst.client_id, inst.board_type, inst.start_payload,
+        )
+        for idx, drive in enumerate(d for d in extra_drives if d and os.path.exists(d)):
+            drive_id = f'aux{idx}'
+            cmd += [
+                '-drive', f'if=none,file={drive},format=raw,readonly=on,id={drive_id}',
+                '-device', (f'virtio-blk-pci,drive={drive_id}' if cfg['bus'] == 'pci'
+                            else f'virtio-blk-device,drive={drive_id}'),
+            ]
+
         logger.info('Launching QEMU for %s: %s',
                     inst.client_id, ' '.join(cmd))
 
@@ -466,6 +640,11 @@ class QemuManager:
         inst.running = True
         await inst.emit('system', {'event': 'booting'})
 
+        # Session ceiling: a forgotten tab used to hold a QEMU process (and
+        # its RAM) for as long as the browser stayed open. After this many
+        # seconds the instance shuts itself down and tells the client why.
+        inst._tasks.append(asyncio.create_task(self._expire(inst)))
+
         # Give QEMU a moment to open its TCP sockets
         await asyncio.sleep(1.0)
 
@@ -473,6 +652,22 @@ class QemuManager:
         inst._tasks.append(asyncio.create_task(self._connect_serial(inst)))
         inst._tasks.append(asyncio.create_task(self._connect_gpio(inst)))
         inst._tasks.append(asyncio.create_task(self._watch_stderr(inst)))
+
+    async def _expire(self, inst: PiInstance) -> None:
+        """Stop an instance that has outlived MAX_SESSION_SECONDS."""
+        try:
+            await asyncio.sleep(MAX_SESSION_SECONDS)
+        except asyncio.CancelledError:
+            return
+        if not inst.running:
+            return
+        logger.info('[%s] session ceiling reached (%ds) — shutting down',
+                    inst.client_id, MAX_SESSION_SECONDS)
+        await inst.emit('serial_output', {
+            'data': ('\r\n[Velxio] This Linux session reached its time limit '
+                     'and was stopped. Press Run to start a fresh one.\r\n'),
+        })
+        self.stop_instance(inst.client_id)
 
     # ── Console (virtio-console / /dev/hvc0) ──────────────────────────────────
 
@@ -562,38 +757,48 @@ class QemuManager:
                     inst.client_id, inst.proto_pipe_base)
 
         loop = asyncio.get_running_loop()
-        # Use add_reader to integrate the readable FIFO with the loop.
-        linebuf = bytearray()
 
-        def _on_readable() -> None:
-            fd = inst._proto_out_fd
-            if fd is None:
-                return
-            try:
-                data = os.read(fd, 4096)
-            except BlockingIOError:
-                return
-            except OSError:
-                return
-            if not data:
-                return
-            linebuf.extend(data)
-            while b'\n' in linebuf:
-                line, _, rest = linebuf.partition(b'\n')
-                linebuf[:] = rest
-                asyncio.create_task(self._handle_gpio_line(
-                    inst, line.decode('ascii', 'ignore').strip(),
-                ))
+        # Thread-based blocking pump instead of loop.add_reader. add_reader
+        # on the FIFO fd was observed (staging, 2026-07-28) to arm epoll but
+        # never deliver callbacks under uvloop when the fd number recycles a
+        # just-closed socket fd (e.g. _connect_serial's retry sockets) —
+        # nondeterministic per instance, and the guest's GPIO lines then sat
+        # unread in the pipe while LEDs stayed dark. A worker thread doing
+        # kernel select() + os.read() has no fd-reuse hazard; handler
+        # coroutines are scheduled back onto the loop. Mirrors the executor
+        # pattern _watch_stderr already uses.
+        def _pump() -> None:
+            import select as _select
+            buf = bytearray()
+            while inst.running:
+                fd = inst._proto_out_fd
+                if fd is None:
+                    return
+                try:
+                    ready, _, _ = _select.select([fd], [], [], 0.5)
+                except (OSError, ValueError):
+                    return  # fd closed by _shutdown
+                if not ready:
+                    continue
+                try:
+                    data = os.read(fd, 4096)
+                except BlockingIOError:
+                    continue
+                except OSError:
+                    return
+                if not data:
+                    continue
+                buf.extend(data)
+                while b'\n' in buf:
+                    line, _, rest = buf.partition(b'\n')
+                    buf[:] = rest
+                    asyncio.run_coroutine_threadsafe(
+                        self._handle_gpio_line(
+                            inst, line.decode('ascii', 'ignore').strip()),
+                        loop,
+                    )
 
-        loop.add_reader(inst._proto_out_fd, _on_readable)
-        # Keep this coroutine alive while inst is running so the loop
-        # doesn't garbage-collect the reader registration.
-        while inst.running:
-            await asyncio.sleep(1.0)
-        try:
-            loop.remove_reader(inst._proto_out_fd)
-        except Exception:
-            pass
+        await loop.run_in_executor(None, _pump)
 
     async def _handle_gpio_line(self, inst: PiInstance, line: str) -> None:
         """Dispatch a single text-protocol line from the Pi shim layer.
@@ -639,15 +844,29 @@ class QemuManager:
                 pass
             return
 
+        if op == 'SENS' and len(parts) == 2:
+            # Canvas-fed named value (overlay boards' built-in sensors /
+            # buttons). Unknown names read as 0 so guest shims degrade
+            # gracefully when nothing on the canvas feeds them.
+            value = inst.sensor_state.get(parts[1], 0.0)
+            await self._reply_gpio(inst, f'SENS {parts[1]} {value:g}')
+            return
+
+        if op == 'DISP' and len(parts) == 2:
+            # Guest display command (opaque base64 payload). Forwarded
+            # verbatim to the frontend, which renders it on the board
+            # element (overlay boards with built-in screens).
+            await inst.emit('display', {'data': parts[1]})
+            return
+
         if op == 'GPIO_IN' and len(parts) == 2:
-            # Reply with the last known state of the pin. For Phase 2
-            # we just echo 0 — the canvas-side input wiring fans in
-            # through SET commands which the shim caches on the guest.
-            # When canvas-driven inputs land in Phase 2.5 this will
-            # query the gpio event bus' last-state map.
+            # Reply with the last externally-driven level of the pin
+            # (canvas buttons / PIR / a wired board's output, delivered
+            # through set_pin_state). Unknown pins read 0.
             try:
                 pin = int(parts[1])
-                await self._reply_gpio(inst, f'VAL {pin} 0')
+                await self._reply_gpio(
+                    inst, f'VAL {pin} {inst.pin_levels.get(pin, 0)}')
             except ValueError:
                 pass
             return
@@ -705,8 +924,28 @@ class QemuManager:
                 await self._reply_gpio(
                     inst, f'SPI_DATA {parts[1]} {parts[2]} {"00" * length}')
                 return
+            # No slave model on this UART: the port is wired to another
+            # BOARD on the canvas. TX goes out to it and RX comes back
+            # from the queue the frontend fills — the guest shim already
+            # speaks this, it just used to talk into the void.
+            if op == 'UART' and len(parts) >= 4 and parts[2] == 'TX':
+                try:
+                    payload = bytes.fromhex(parts[3])
+                except ValueError:
+                    return
+                await inst.emit('uart_tx', {
+                    'port': parts[1],
+                    'data': base64.b64encode(payload).decode('ascii'),
+                })
+                return
             if op == 'UART' and len(parts) >= 3 and parts[2] == 'RX_REQ':
-                await self._reply_gpio(inst, f'UART_RX {parts[1]}')
+                pending = bytes(inst.uart_rx)
+                inst.uart_rx.clear()
+                await self._reply_gpio(
+                    inst,
+                    f'UART_RX {parts[1]} {pending.hex()}' if pending
+                    else f'UART_RX {parts[1]}',
+                )
             return
 
         # Unknown — log at debug level (not a hot path)

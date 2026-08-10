@@ -241,3 +241,204 @@ def test_find_filesystem_partition_prefers_spiffs(compiler: ESPIDFCompiler) -> N
     assert fs is not None
     assert fs['name'] == 'spiffs'
     assert fs['offset'] == 0x290000
+
+
+# ── ESP32-C6 target support ───────────────────────────────────────────────
+
+
+def test_idf_target_maps_c6_fqbn(compiler: ESPIDFCompiler) -> None:
+    # Before this mapping existed, esp32:esp32:esp32c6 silently fell through
+    # to the 'esp32' (Xtensa LX6) target.
+    assert compiler._idf_target('esp32:esp32:esp32c6') == 'esp32c6'
+    # Existing families are unaffected.
+    assert compiler._idf_target('esp32:esp32:esp32') == 'esp32'
+    assert compiler._idf_target('esp32:esp32:esp32c3') == 'esp32c3'
+    assert compiler._idf_target('esp32:esp32:esp32s3') == 'esp32s3'
+
+
+def test_normalize_options_strips_psram_on_c6(compiler: ESPIDFCompiler) -> None:
+    opts = compiler._normalize_options(
+        {'psram': 'enabled'}, idf_target='esp32c6',
+    )
+    # C6 has no external PSRAM controller — silently disabled, like C3.
+    assert opts['psram'] == 'disabled'
+
+
+def test_normalize_options_clamps_cpu_freq_on_c6(compiler: ESPIDFCompiler) -> None:
+    # The historical default (240 MHz) exceeds the C6's 160 MHz maximum.
+    opts = compiler._normalize_options(None, idf_target='esp32c6')
+    assert opts['cpuFreqMHz'] == 160
+    # A valid lower value is kept as-is.
+    opts = compiler._normalize_options({'cpuFreqMHz': 80}, idf_target='esp32c6')
+    assert opts['cpuFreqMHz'] == 80
+
+
+def test_render_sdkconfig_c6_adapts_to_idf5(compiler: ESPIDFCompiler) -> None:
+    from app.services.espidf_compiler import _TEMPLATE_DIR
+    opts = compiler._normalize_options(None, idf_target='esp32c6')
+    text = compiler._render_sdkconfig(opts, _TEMPLATE_DIR, idf_target='esp32c6')
+    # Arduino component / classic-BT / PSRAM symbols don't exist in a C6
+    # pure-IDF v5.x build — they must be dropped, not emitted as unknowns.
+    assert 'CONFIG_ARDUHAL_' not in text
+    assert 'CONFIG_ARDUINO_RUNNING_CORE' not in text
+    assert 'CONFIG_AUTOSTART_ARDUINO' not in text
+    assert 'CONFIG_BT_ENABLED' not in text
+    assert 'CONFIG_SPIRAM' not in text
+    assert 'CONFIG_ESPTOOLPY_FLASHFREQ_26M' not in text
+    assert 'CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240' not in text
+    # IDF 5.0 renamed ESP_TASK_WDT → ESP_TASK_WDT_EN.
+    assert 'CONFIG_ESP_TASK_WDT_EN=n' in text
+    assert 'CONFIG_ESP_TASK_WDT=n' not in text
+    # The clamped CPU frequency is rendered.
+    assert 'CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y' in text
+    # Non-C6 rendering is unchanged (regression guard).
+    esp32_opts = compiler._normalize_options(None, idf_target='esp32')
+    esp32_text = compiler._render_sdkconfig(esp32_opts, _TEMPLATE_DIR)
+    assert 'CONFIG_ARDUHAL_LOG_DEFAULT_LEVEL=0' in esp32_text
+    assert 'CONFIG_ESP_TASK_WDT=n' in esp32_text
+
+
+def test_bootloader_offsets_per_target(compiler: ESPIDFCompiler) -> None:
+    # Classic ESP32/S2 boot from 0x1000; S3/C3/C6 (and newer) from 0x0.
+    offsets = compiler._BOOTLOADER_OFFSETS
+    assert offsets.get('esp32', 0x0) == 0x1000
+    assert offsets.get('esp32s2', 0x0) == 0x1000
+    for target in ('esp32s3', 'esp32c3', 'esp32c6'):
+        assert offsets.get(target, 0x0) == 0x0
+
+
+def test_arduino_supports_target_requires_3x_core_for_c6(
+    compiler: ESPIDFCompiler,
+) -> None:
+    # esp32c6 needs the 3.x core (IDF 5.x based); the 2.x core can never
+    # build it. Classic targets build with either core.
+    compiler.has_arduino = True       # 2.x core present
+    compiler.has_arduino5 = False     # no 3.x core
+    assert compiler._arduino_supports_target('esp32') is True
+    assert compiler._arduino_supports_target('esp32c3') is True
+    assert compiler._arduino_supports_target('esp32c6') is False
+
+    compiler.has_arduino5 = True      # 3.x core present -> C6 buildable
+    assert compiler._arduino_supports_target('esp32c6') is True
+
+    # No core at all -> nothing Arduino-buildable.
+    compiler.has_arduino = False
+    compiler.has_arduino5 = False
+    assert compiler._arduino_supports_target('esp32') is False
+    assert compiler._arduino_supports_target('esp32c6') is False
+
+
+def test_arduino_path_for_picks_core_by_idf_major(
+    compiler: ESPIDFCompiler,
+) -> None:
+    compiler.arduino_path = r'C:\v2\arduino-esp32'
+    compiler.arduino5_path = r'C:\v5\arduino-esp32'
+    assert compiler._arduino_path_for(use_idf5=True) == r'C:\v5\arduino-esp32'
+    assert compiler._arduino_path_for(use_idf5=False) == r'C:\v2\arduino-esp32'
+    # Falls back to whichever exists when the preferred one is absent.
+    compiler.arduino5_path = ''
+    assert compiler._arduino_path_for(use_idf5=True) == r'C:\v2\arduino-esp32'
+    compiler.arduino5_path = r'C:\v5\arduino-esp32'
+    compiler.arduino_path = ''
+    assert compiler._arduino_path_for(use_idf5=False) == r'C:\v5\arduino-esp32'
+
+
+def test_contains_app_main_detection(compiler: ESPIDFCompiler) -> None:
+    assert compiler._contains_app_main('void app_main(void) { }')
+    assert compiler._contains_app_main('void  app_main () {\n}')
+    # Arduino sketches and mere mentions must not match.
+    assert not compiler._contains_app_main('void setup() {} void loop() {}')
+    assert not compiler._contains_app_main('// call app_main() later')
+
+
+def test_use_idf5_policy(
+    compiler: ESPIDFCompiler, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """IDF v5 is the default toolchain for the family; v4.4 remains only
+    where the arduino-esp32 2.x core forces it (and as the no-v5 fallback).
+    """
+    monkeypatch.delenv('VELXIO_ARDUINO_IDF5', raising=False)
+    compiler.idf5_path = str(tmp_path)  # pretend a v5 install exists
+
+    # esp32c6 requires v5 regardless of mode.
+    assert compiler._use_idf5('esp32c6', arduino_mode=False) is True
+    # Pure-IDF builds default to v5 for the whole family.
+    for target in ('esp32', 'esp32s3', 'esp32c3'):
+        assert compiler._use_idf5(target, arduino_mode=False) is True
+
+    # Arduino sketches without a 3.x core fall back to v4.4 (2.x core).
+    compiler.has_arduino5 = False
+    for target in ('esp32', 'esp32s3', 'esp32c3'):
+        assert compiler._use_idf5(target, arduino_mode=True) is False
+    # With a 3.x core present, Arduino builds move to v5 by default.
+    compiler.has_arduino5 = True
+    for target in ('esp32', 'esp32s3', 'esp32c3'):
+        assert compiler._use_idf5(target, arduino_mode=True) is True
+    # Escape hatch: force v4.4 even with a 3.x core present.
+    monkeypatch.setenv('VELXIO_ARDUINO_IDF5', '0')
+    assert compiler._use_idf5('esp32', arduino_mode=True) is False
+    # ... or force v5 explicitly.
+    monkeypatch.setenv('VELXIO_ARDUINO_IDF5', '1')
+    assert compiler._use_idf5('esp32', arduino_mode=True) is True
+    monkeypatch.delenv('VELXIO_ARDUINO_IDF5')
+
+    # Without a v5 install, pure-IDF builds fall back to v4.4 (OSS
+    # self-host) — except esp32c6, which has no v4.4 to fall back to
+    # (compile() returns a structured error for it in that case).
+    compiler.idf5_path = ''
+    assert compiler._use_idf5('esp32', arduino_mode=False) is False
+    assert compiler._use_idf5('esp32c6', arduino_mode=False) is True
+
+
+def test_render_sdkconfig_idf5_arduino_keeps_component_symbols(
+    compiler: ESPIDFCompiler,
+) -> None:
+    """A v5 ARDUINO build (3.x core) keeps the Arduino/BT symbols the 3.x
+    component's Kconfig defines; a v5 PURE-IDF build drops them."""
+    from app.services.espidf_compiler import _TEMPLATE_DIR
+    opts = compiler._normalize_options(None, idf_target='esp32')
+    ard = compiler._render_sdkconfig(
+        opts, _TEMPLATE_DIR, idf_target='esp32', use_idf5=True, arduino_mode=True
+    )
+    assert 'CONFIG_AUTOSTART_ARDUINO=n' in ard
+    assert 'CONFIG_ARDUHAL_LOG_DEFAULT_LEVEL=0' in ard
+    assert 'CONFIG_BT_ENABLED=y' in ard
+    assert 'CONFIG_ESP_TASK_WDT_EN=n' in ard  # WDT rename still applies
+
+    pure = compiler._render_sdkconfig(
+        opts, _TEMPLATE_DIR, idf_target='esp32', use_idf5=True, arduino_mode=False
+    )
+    assert 'CONFIG_AUTOSTART_ARDUINO' not in pure
+    assert 'CONFIG_BT_ENABLED' not in pure
+
+    # On a single-core RISC-V C6 Arduino build the running-core options are
+    # dropped (hidden by FREERTOS_UNICORE) but the rest of Arduino stays.
+    c6 = compiler._render_sdkconfig(
+        compiler._normalize_options(None, idf_target='esp32c6'),
+        _TEMPLATE_DIR, idf_target='esp32c6', use_idf5=True, arduino_mode=True,
+    )
+    assert 'CONFIG_ARDUINO_RUNNING_CORE' not in c6
+    assert 'CONFIG_AUTOSTART_ARDUINO=n' in c6
+    assert 'CONFIG_SPIRAM' not in c6  # no PSRAM controller on C6
+
+
+def test_render_sdkconfig_idf5_per_target_drops(compiler: ESPIDFCompiler) -> None:
+    """v5 fixup is target-aware: esp32/s3 keep SPIRAM + 240 MHz symbols,
+    only classic esp32 keeps the 26 MHz flash-freq choice."""
+    from app.services.espidf_compiler import _TEMPLATE_DIR
+    opts = compiler._normalize_options({'psram': 'enabled'}, idf_target='esp32')
+    text = compiler._render_sdkconfig(
+        opts, _TEMPLATE_DIR, idf_target='esp32', use_idf5=True
+    )
+    assert 'CONFIG_SPIRAM=y' in text                      # kept on esp32
+    assert 'CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y' in text  # kept on esp32
+    assert 'CONFIG_ESPTOOLPY_FLASHFREQ_26M' in text       # kept on esp32
+    assert 'CONFIG_ARDUHAL_' not in text                  # no Arduino on v5
+    assert 'CONFIG_BT_ENABLED' not in text                # no Bluedroid on v5
+    assert 'CONFIG_ESP_TASK_WDT_EN=n' in text             # renamed in v5
+
+    s3_text = compiler._render_sdkconfig(
+        compiler._normalize_options(None, idf_target='esp32s3'),
+        _TEMPLATE_DIR, idf_target='esp32s3', use_idf5=True,
+    )
+    assert 'CONFIG_ESPTOOLPY_FLASHFREQ_26M' not in s3_text  # S3 has no 26M

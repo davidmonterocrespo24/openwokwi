@@ -296,6 +296,13 @@ describe('Dual Pico W — Serial1 passthrough across wires', () => {
     // Wire the Pi3B's UART0 TX (BCM14, physical pin 8) to Uno.D0 (USART0 RX).
     // This is now the only path — the previous broadcast behaviour has been
     // replaced by wire-aware routing.
+    //
+    // A QEMU-Linux board has TWO serial streams and only one of them is on
+    // the header: `onUartTx` is what the script writes to /dev/serial0, while
+    // `onSerialData` is the console (boot chatter, the shell prompt, the
+    // script's stdout). This test used to feed the console and expect the
+    // peer to see it, which is exactly the leak that got fixed — the Uno was
+    // being handed the guest's login banner as if it were data.
     fullReset();
     const store = useSimulatorStore.getState();
     const arduinoId = store.boards[0].id;
@@ -306,15 +313,37 @@ describe('Dual Pico W — Serial1 passthrough across wires', () => {
 
     const arduinoSim = getBoardSimulator(arduinoId) as any;
     const piBridge = getBoardBridge(piId) as any;
-    expect(typeof piBridge.onSerialData).toBe('function');
+    expect(typeof piBridge.onUartTx).toBe('function');
 
-    piBridge.onSerialData('A');
+    piBridge.onUartTx('A');
 
-    const fed =
+    const fedFromUart = () =>
       (arduinoSim.feedUart as any).mock.calls.some(
         (c: any[]) => c[0] === 0 && c[1] === 'A',
       ) || (arduinoSim.serialWrite as any).mock.calls.some((c: any[]) => c[0] === 'A');
-    expect(fed).toBe(true);
+    expect(fedFromUart()).toBe(true);
+  });
+
+  it("the Pi's console output stays off the wire", () => {
+    fullReset();
+    const store = useSimulatorStore.getState();
+    const arduinoId = store.boards[0].id;
+    const piId = store.addBoard('raspberry-pi-3', 300, 100);
+    setWires(useSimulatorStore, [
+      { fromBoard: piId, fromPin: '8', toBoard: arduinoId, toPin: 'D0' },
+    ]);
+
+    const arduinoSim = getBoardSimulator(arduinoId) as any;
+    const piBridge = getBoardBridge(piId) as any;
+
+    // What the guest prints to its terminal ('login:' during boot) must not
+    // reach the peer board, even though the TX wire is there.
+    piBridge.onSerialData?.('Q');
+
+    const leaked =
+      (arduinoSim.feedUart as any).mock.calls.some((c: any[]) => c[1] === 'Q') ||
+      (arduinoSim.serialWrite as any).mock.calls.some((c: any[]) => c[0] === 'Q');
+    expect(leaked).toBe(false);
   });
 });
 

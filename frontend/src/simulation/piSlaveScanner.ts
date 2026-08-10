@@ -30,11 +30,16 @@ type CanvasComponent = {
 //   - SDA1/SCL1 → I2C bus 1
 //   - MOSI/MISO/SCLK → SPI bus 0 (CE0/CE1 distinguish slaves)
 //   - TXD/RXD → primary UART (port 0)
-const I2C_PINS = new Set(['3', '5']);
-const SPI_DATA_PINS = new Set(['19', '21', '23']);
-const SPI_CE0_PIN = '24';
-const SPI_CE1_PIN = '26';
-const UART_PINS = new Set(['8', '10']);
+// Both namings are accepted: the wire may carry the PHYSICAL pin number
+// ('3') or the BCM label the board art actually exposes ('GPIO2'). The
+// scanner shipped matching only physical numbers while every element
+// names its pads GPIOxx — so no wire ever classified and the whole
+// slave-attach path was dead.
+const I2C_PINS = new Set(['3', '5', 'GPIO2', 'GPIO3', 'SDA', 'SCL', 'SDA1', 'SCL1']);
+const SPI_DATA_PINS = new Set(['19', '21', '23', 'GPIO10', 'GPIO9', 'GPIO11', 'MOSI', 'MISO', 'SCLK', 'SCK']);
+const SPI_CE0_PINS = new Set(['24', 'GPIO8', 'CE0']);
+const SPI_CE1_PINS = new Set(['26', 'GPIO7', 'CE1']);
+const UART_PINS = new Set(['8', '10', 'GPIO14', 'GPIO15', 'TXD', 'RXD', 'TX', 'RX']);
 
 // Map wokwi component metadata IDs / element types → backend model_id.
 // Lowercase. Components not in this table get skipped silently.
@@ -83,7 +88,7 @@ function classifyPiPin(pinName: string): {
   bus_num: number;
 } | null {
   if (I2C_PINS.has(pinName)) return { bus_kind: 'i2c', bus_num: 1 };
-  if (SPI_DATA_PINS.has(pinName) || pinName === SPI_CE0_PIN || pinName === SPI_CE1_PIN)
+  if (SPI_DATA_PINS.has(pinName) || SPI_CE0_PINS.has(pinName) || SPI_CE1_PINS.has(pinName))
     return { bus_kind: 'spi', bus_num: 0 };
   if (UART_PINS.has(pinName)) return { bus_kind: 'uart', bus_num: 0 };
   return null;
@@ -142,8 +147,8 @@ export function attachSlavesFromCanvas(
       // wires as informational only — the CE wire is the one that
       // pins down which slave gets attached.
       let cs: number;
-      if (piEndpoint.pinName === SPI_CE0_PIN) cs = 0;
-      else if (piEndpoint.pinName === SPI_CE1_PIN) cs = 1;
+      if (SPI_CE0_PINS.has(piEndpoint.pinName)) cs = 0;
+      else if (SPI_CE1_PINS.has(piEndpoint.pinName)) cs = 1;
       else continue;
       spec = {
         bus_kind: 'spi',

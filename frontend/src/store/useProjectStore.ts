@@ -13,8 +13,16 @@ interface CurrentProject {
 
 interface ProjectState {
   currentProject: CurrentProject | null;
+  /**
+   * Gallery example currently loaded in the editor (null when the workspace
+   * came from a project, a file or scratch). Set by loadExample, cleared
+   * whenever a project takes over — analytics only: compiles/runs stamp it
+   * so "which examples get compiled most" is answerable.
+   */
+  currentExampleId: string | null;
   setCurrentProject: (project: CurrentProject) => void;
   clearCurrentProject: () => void;
+  setCurrentExampleId: (id: string | null) => void;
   // Updated to accept either the legacy boolean OR the new enum so the
   // ShareModal callsite and any older callers keep working uniformly.
   setVisibility: (next: boolean | ProjectVisibility) => void;
@@ -22,8 +30,14 @@ interface ProjectState {
 
 export const useProjectStore = create<ProjectState>((set) => ({
   currentProject: null,
-  setCurrentProject: (project) => set({ currentProject: project }),
-  clearCurrentProject: () => set({ currentProject: null }),
+  currentExampleId: null,
+  // Loading a real project supersedes the example context.
+  setCurrentProject: (project) => set({ currentProject: project, currentExampleId: null }),
+  // Also drops the example context: every caller (new project, blank
+  // workspace, logout cleanup) means "this workspace is no longer that".
+  // loadExample re-stamps its id right after calling this.
+  clearCurrentProject: () => set({ currentProject: null, currentExampleId: null }),
+  setCurrentExampleId: (id) => set({ currentExampleId: id }),
   setVisibility: (next) =>
     set((s) => {
       if (!s.currentProject) return s;

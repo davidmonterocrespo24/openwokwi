@@ -7,7 +7,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { getBoardBridge } from '../../store/useSimulatorStore';
+import { getBoardBridge, useSimulatorStore } from '../../store/useSimulatorStore';
 import '@xterm/xterm/css/xterm.css';
 
 interface PiTerminalProps {
@@ -57,6 +57,13 @@ export const PiTerminal: React.FC<PiTerminalProps> = ({ boardId }) => {
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
+
+    // Seed with the session's accumulated output so mounting mid-boot (the
+    // panel opens on demand) shows the boot log instead of a blank screen.
+    const history = useSimulatorStore
+      .getState()
+      .boards.find((b) => b.id === boardId)?.serialOutput;
+    if (history) term.write(history.slice(-8000));
 
     // Wire terminal input → Pi bridge
     const onDataDispose = term.onData((data) => {

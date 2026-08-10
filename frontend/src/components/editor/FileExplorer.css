@@ -283,5 +283,57 @@
 }
 
 .fe-file-item {
-  padding-left: 26px !important;
+  /* --fe-depth: nesting level inside the board's folder tree (0 = root). */
+  padding-left: calc(26px + var(--fe-depth, 0) * 14px) !important;
+}
+
+/* ── Folder rows ────────────────────────────────────────────────────────── */
+
+.fe-folder-item {
+  user-select: none;
+}
+
+.fe-folder-chevron {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+  color: #9d9d9d;
+}
+
+.fe-folder-icon {
+  color: #d8a12a;
+}
+
+.fe-folder-actions {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.fe-folder-item:hover .fe-folder-actions {
+  display: inline-flex;
+}
+
+.fe-folder-actions button {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 1px;
+  cursor: pointer;
+  color: #9d9d9d;
+}
+
+.fe-folder-actions button:hover {
+  color: #fff;
+}
+
+.fe-folder-actions button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.fe-folder-actions .fe-folder-delete:hover {
+  color: #f87171;
 }

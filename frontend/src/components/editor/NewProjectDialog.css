@@ -1,0 +1,187 @@
+/* NewProjectDialog — starter-template picker (dark, matches the picker/modals) */
+
+.new-project-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Above every floating panel, including the pro AI chat (8000/8001). */
+  z-index: 9000;
+  animation: newProjectFadeIn 0.15s ease;
+}
+
+@keyframes newProjectFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.new-project-dialog {
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 10px;
+  width: min(840px, 94vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.new-project-head {
+  padding: 20px 24px 10px;
+  flex-shrink: 0;
+}
+
+.new-project-title {
+  margin: 0;
+  color: #e8e8e8;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.new-project-sub {
+  margin: 6px 0 0;
+  color: #8f949c;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.new-project-body {
+  padding: 4px 24px 16px;
+  overflow-y: auto;
+}
+
+.new-project-section-title {
+  margin: 16px 0 8px;
+  color: #8a8f98;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.new-project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 8px;
+}
+
+.new-project-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  background: #2b2b2b;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+  color: #ddd;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+.new-project-card:hover {
+  background: #343434;
+  border-color: #5a5a5a;
+}
+
+/* Circuit thumbnail — same 300x180 (5:3) frame as the gallery cards. */
+.new-project-card-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  background: #0a0a0c;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.new-project-card-thumb img,
+.new-project-card-thumb svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.new-project-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px 9px;
+}
+
+.new-project-card-blank {
+  border-style: dashed;
+  border-color: #4a4f58;
+  margin-top: 12px;
+}
+
+.new-project-card-thumb-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  font-weight: 300;
+  color: #4a9eff;
+  background: transparent;
+}
+
+.new-project-card-name {
+  font-weight: 600;
+  font-size: 12px;
+  /* Keep clear of the PRO pill in the corner. */
+  padding-right: 40px;
+}
+
+.new-project-card-desc {
+  font-size: 10.5px;
+  color: #8f949c;
+  line-height: 1.35;
+}
+
+/* Gold PRO pill — same look as the component picker's badge. */
+.new-project-pro {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #1a1205;
+  background: linear-gradient(180deg, #ffd566, #f5a623);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.new-project-foot {
+  padding: 12px 24px 16px;
+  border-top: 1px solid #333;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.new-project-cancel {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #999;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.new-project-cancel:hover {
+  color: #ccc;
+  border-color: #777;
+}

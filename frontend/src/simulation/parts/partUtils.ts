@@ -37,6 +37,25 @@ export function getADC(avrSimulator: AnySimulator): any | null {
 }
 
 /**
+ * Supply rail the analog front end of THIS board runs on, in volts.
+ *
+ * A part that builds a resistive divider has to use the rail it is actually
+ * wired to. Assuming 5 V everywhere is not a small error on a 3.3 V board: it
+ * pushes the computed node voltage above the ADC's full scale, so the reading
+ * saturates and a whole stretch of the control slider reports the same value.
+ * (An NTC divider assumed at 5 V reads 1.4 C on an ESP32 when the slider says
+ * 25 C, and pins at full scale for everything below ~11 C — issue #233.)
+ *
+ * The split matches setAdcVoltage's own branches: AVR converts against a 5 V
+ * reference, RP2040 and the ESP32 bridge against 3.3 V.
+ */
+export function analogRailVolts(simulator: AnySimulator): number {
+  if (typeof (simulator as any).setAdcVoltage === 'function') return 3.3; // ESP32 bridge
+  if (simulator instanceof RP2040Simulator) return 3.3;
+  return 5.0; // AVR
+}
+
+/**
  * Write an analog voltage to an ADC channel, supporting AVR, RP2040, and ESP32.
  *
  * AVR:    pins 14-19 → ADC channels 0-5, voltage stored directly (0-5V)

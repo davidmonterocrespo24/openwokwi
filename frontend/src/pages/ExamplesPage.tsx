@@ -8,6 +8,8 @@
  */
 
 import React from 'react';
+import { useSyncExternalStore } from 'react';
+import { subscribeProExamples, getProExamplesVersion } from '../data/examples';
 import { useNavigate } from 'react-router-dom';
 import { ExamplesGallery } from '../components/examples/ExamplesGallery';
 import { CommunityProjectsGrid } from '../components/examples/CommunityProjectsGrid';
@@ -18,6 +20,9 @@ import { getSeoMeta } from '../seoRoutes';
 import type { ExampleProject } from '../data/examples';
 
 export const ExamplesPage: React.FC = () => {
+  // Re-render when the pro overlay registers late examples (dynamic import).
+  useSyncExternalStore(subscribeProExamples, getProExamplesVersion, getProExamplesVersion);
+
   const localize = useLocalizedHref();
   useSEO(getSeoMeta('/examples')!);
 

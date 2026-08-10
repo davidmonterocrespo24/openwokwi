@@ -163,6 +163,14 @@ class CompileRequest(BaseModel):
     board_fqbn: str = "arduino:avr:uno"
     # Optional: associate this compile with a project for analytics
     project_id: str | None = None
+    # Optional: the editor's BoardKind (e.g. 'badger-2350'). Purely for
+    # analytics — several distinct boards can share one FQBN (the Pimoroni
+    # RP2350 boards all compile as rpipico2), and only the kind can tell
+    # them apart. Rides into the metric hook's `extra`.
+    board_kind: str | None = None
+    # Optional: gallery example the workspace was loaded from. Analytics
+    # only ("which examples get compiled most"); rides in `extra` too.
+    example_id: str | None = None
     # Per-board ESP32 build options (Partition Scheme, CPU Freq, Flash Mode,
     # PSRAM, etc.). Loose dict so the frontend can add fields without a
     # backend deploy — espidf_compiler.compile validates known keys and
@@ -514,6 +522,8 @@ async def _compile_job(
                 "has_wifi": response.has_wifi,
                 "async": True,
                 "initiated_by": request.initiated_by,
+                "board_kind": request.board_kind,
+                "example_id": request.example_id,
                 "partition_scheme": (request.board_options or {}).get("partitionScheme"),
                 "spiffs_file_count": len(request.spiffs_files or []),
             },
@@ -535,7 +545,7 @@ async def _compile_job(
             success=False,
             duration_ms=int((time.monotonic() - started) * 1000),
             error_kind="exception",
-            extra={"file_count": len(files), "exception": str(exc)[:200], "async": True, "initiated_by": request.initiated_by},
+            extra={"file_count": len(files), "exception": str(exc)[:200], "async": True, "initiated_by": request.initiated_by, "board_kind": request.board_kind, "example_id": request.example_id},
         )
 
 
@@ -568,7 +578,7 @@ async def compile_sketch(
             success=False,
             duration_ms=int((time.monotonic() - started) * 1000),
             error_kind="exception",
-            extra={"file_count": len(files), "exception": str(e)[:200], "initiated_by": request.initiated_by},
+            extra={"file_count": len(files), "exception": str(e)[:200], "initiated_by": request.initiated_by, "board_kind": request.board_kind, "example_id": request.example_id},
             request=http_request,
         )
         raise HTTPException(status_code=500, detail=str(e))
@@ -585,6 +595,8 @@ async def compile_sketch(
             "file_count": len(files),
             "has_wifi": response.has_wifi,
             "initiated_by": request.initiated_by,
+                "board_kind": request.board_kind,
+                "example_id": request.example_id,
             "partition_scheme": (request.board_options or {}).get("partitionScheme"),
             "spiffs_file_count": len(request.spiffs_files or []),
         },

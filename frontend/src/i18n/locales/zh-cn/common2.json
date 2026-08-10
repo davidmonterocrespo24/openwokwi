@@ -31,7 +31,15 @@
         "dismiss": "忽略"
       },
       "exportBom": "导出物料清单 (CSV — Pro)",
-      "exportScreenshot": "导出原理图为图片 (PNG — Pro)"
+      "exportScreenshot": "导出原理图为图片 (PNG — Pro)",
+      "importLabel": "导入项目",
+      "exportLabel": "导出项目 (.zip)",
+      "exportBomLabel": "物料清单 (CSV)",
+      "exportScreenshotLabel": "原理图图片 (PNG)",
+      "shareLabel": "分享 / 嵌入",
+      "githubSyncLabel": "同步到 GitHub",
+      "uploadFirmwareLabel": "上传固件",
+      "recordLabel": "录制仿真"
     },
     "fileExplorer": {
       "workspace": "工作区",
@@ -156,7 +164,9 @@
         "bodyWithWires_other": "这将从工作区中移除该板以及 {{count}} 根连接的导线。此操作无法撤销。",
         "cancel": "取消",
         "remove": "移除"
-      }
+      },
+      "boardOptions": "开发板选项...",
+      "flashToBoard": "烧录到实体板"
     },
     "componentPicker": {
       "title": "添加元件",
@@ -353,6 +363,37 @@
         "cr": "回车",
         "both": "换行和回车"
       }
+    },
+    "menu": {
+      "file": "文件",
+      "edit": "编辑",
+      "view": "视图",
+      "language": "语言",
+      "help": "帮助",
+      "newProject": "新建工作区",
+      "newFile": "新建文件",
+      "open": "打开项目…",
+      "save": "保存项目",
+      "undo": "撤销",
+      "redo": "重做",
+      "centerView": "居中画布视图",
+      "toggleExplorer": "文件资源管理器",
+      "toggleConsole": "输出控制台",
+      "toggleScope": "示波器 / 逻辑分析仪",
+      "home": "Velxio 主页",
+      "about": "关于 Velxio",
+      "discord": "Discord 社区",
+      "github": "GitHub 仓库",
+      "compile": "编译",
+      "run": "运行",
+      "hideExplorer": "隐藏文件资源管理器",
+      "showExplorer": "显示文件资源管理器"
+    },
+    "inspector": {
+      "propertiesTab": "属性",
+      "datasheetTab": "数据手册",
+      "examplesTitle": "示例项目",
+      "productPage": "产品页面"
     }
   },
   "about": {

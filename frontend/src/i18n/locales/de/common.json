@@ -23,7 +23,8 @@
       "signOut": "Abmelden"
     },
     "language": "Sprache",
-    "search": "Suche"
+    "search": "Suche",
+    "shareProject": "Projekt teilen"
   },
   "footer": {
     "about": "Velxio ist ein kostenloser, quelloffener Schaltkreis- und Mikrocontroller-Simulator, der vollständig in Ihrem Browser läuft. Arduino, ESP32, RP2040 und ATtiny85, mit SPICE-genauer analoger Co-Simulation. Entwickelt für Maker, Studenten und Embedded-Ingenieure, die durch praktisches Lernen lernen. AGPLv3."

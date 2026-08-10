@@ -51,6 +51,12 @@ export interface ComponentMetadata {
   // ComponentRegistry sorts featured components first after loading the
   // metadata, keeping the original order within each group.
   featured?: boolean;
+  // The part carries a microSD/TF slot of its own (e.g. the Seeed Round
+  // Display shield). The property dialog shows the same "SD Card" upload
+  // panel the standalone microsd-card gets, and the part's simulation reads
+  // `properties.sdFiles` when it builds the card image. Without this flag a
+  // built-in slot exists electrically but there is no way to put files on it.
+  sdSlot?: boolean;
 }
 
 export interface ComponentMetadataCollection {

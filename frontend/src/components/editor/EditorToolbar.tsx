@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { registerEditorCommand } from '../../lib/editorCommands';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
-import { useSimulatorStore } from '../../store/useSimulatorStore';
+import { useSimulatorStore, piRerunScript } from '../../store/useSimulatorStore';
+import { decideEngine } from '../../lib/instantEngine';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { type VerificationResult } from '../../simulation/verify/circuitVerifier';
 import { verifyCircuitFromStore } from '../../simulation/verify/verifyFromStore';
@@ -23,7 +25,7 @@ import { useProjectStore } from '../../store/useProjectStore';
 import { LibraryManagerModal } from '../simulator/LibraryManagerModal';
 import { InstallLibrariesModal } from '../simulator/InstallLibrariesModal';
 import { mergeSuggestedLibraries } from '../../utils/libraryManifest';
-import { parseCompileResult } from '../../utils/compilationLogger';
+import { parseCompileResult, isNoiseBuildLine } from '../../utils/compilationLogger';
 import type { CompilationLog, CompileTarget } from '../../utils/compilationLogger';
 import { exportToWokwiZip } from '../../utils/wokwiZip';
 import { importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
@@ -228,11 +230,14 @@ export const EditorToolbar = ({
   // Helper: report a Run event to the backend for analytics. Resolves the
   // FQBN from the board kind so the backend can group by family/fqbn.
   const reportRun = useCallback(
-    (boardKind: BoardKind | undefined) => {
+    (boardKind: BoardKind | undefined, engine?: 'instant' | 'linux') => {
       const fqbn = boardKind ? BOARD_KIND_FQBN[boardKind] : null;
       void reportRunEvent({
         project_id: currentProject?.id ?? null,
         board_fqbn: fqbn ?? null,
+        board_kind: boardKind ?? null,
+        example_id: useProjectStore.getState().currentExampleId,
+        engine: engine ?? null,
       });
     },
     [currentProject],
@@ -253,8 +258,6 @@ export const EditorToolbar = ({
   const firmwareInputRef = useRef<HTMLInputElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [missingLibHint, setMissingLibHint] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
   // Split-button menu for the multi-board Run control ("Run all" / "Run active only").
   const [runMenuOpen, setRunMenuOpen] = useState(false);
   const runMenuRef = useRef<HTMLDivElement>(null);
@@ -289,23 +292,6 @@ export const EditorToolbar = ({
     return () => window.removeEventListener('velxio-circuit-fault', onFault);
   }, [setCompileLogs]);
 
-  useEffect(() => {
-    if (!moreMenuOpen) return;
-    const onClickOutside = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setMoreMenuOpen(false);
-      }
-    };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    document.addEventListener('keydown', onEsc);
-    return () => {
-      document.removeEventListener('mousedown', onClickOutside);
-      document.removeEventListener('keydown', onEsc);
-    };
-  }, [moreMenuOpen]);
 
   // Close the Run split-menu on outside click / Escape (mirrors the more-menu).
   useEffect(() => {
@@ -503,9 +489,9 @@ export const EditorToolbar = ({
     const blog = (type: CompilationLog['type'], message: string) =>
       addLog({ timestamp: new Date(), type, message, target: boardTarget });
 
-    // Raspberry Pi 3B doesn't need arduino-cli compilation
+    // QEMU-Linux boards don't need arduino-cli compilation
     if (isPiBoardKind(kind)) {
-      blog('info', 'Raspberry Pi 3B: no compilation needed — run Python scripts directly.');
+      blog('info', `${boardLabel}: no compilation needed — run Python scripts directly.`);
       setMessage({ type: 'success', text: 'Ready (no compilation needed)' });
       setCompiling(false);
       return;
@@ -568,7 +554,9 @@ export const EditorToolbar = ({
           if (stdout.length <= lastStreamedLen) return;
           const delta = stdout.slice(lastStreamedLen);
           lastStreamedLen = stdout.length;
-          const newLines = delta.split('\n').filter((s) => s.trim());
+          const newLines = delta
+            .split('\n')
+            .filter((s) => s.trim() && !isNoiseBuildLine(s));
           if (!newLines.length) return;
           const now = new Date();
           setCompileLogs((prev: CompilationLog[]) => [
@@ -586,6 +574,8 @@ export const EditorToolbar = ({
         {
           boardOptions: activeBoard?.boardOptions,
           spiffsFiles: activeBoard?.spiffsFiles,
+          boardKind: kind ?? undefined,
+          exampleId: useProjectStore.getState().currentExampleId,
           // P2.4 — THIS board's declared manifest (compile scope). Per-board so
           // two boards can use different libraries without clashing.
           libraries: activeBoard?.libraries?.length ? activeBoard.libraries : null,
@@ -598,8 +588,10 @@ export const EditorToolbar = ({
       // After the build settles, append the structured analysis on top of
       // the live stream — parseCompileResult highlights FAILED blocks and
       // tags compiler errors with type='error', which the console uses for
-      // colour + the auto-switch-to-errors filter.
-      const resultLogs = parseCompileResult(result, boardLabel, boardTarget);
+      // colour + the auto-switch-to-errors filter. streamedLive tells it not
+      // to reprint the stdout the stream (final 'done' flush included)
+      // already showed.
+      const resultLogs = parseCompileResult(result, boardLabel, boardTarget, lastStreamedLen > 0);
       setCompileLogs((prev: CompilationLog[]) => [...prev, ...resultLogs]);
 
       if (result.success) {
@@ -827,6 +819,31 @@ export const EditorToolbar = ({
       // QEMU boards: auto-compile if no firmware available yet
       if (isQemuBoard) {
         console.log('[handleRun] QEMU path');
+        // QEMU-Linux boards (Raspberry Pi family + overlay piFamily kinds)
+        // boot straight from the rootfs — there is no firmware to compile,
+        // and handleCompile's Pi early-return never sets compiledProgram, so
+        // the gate below would surface a bogus "Compilation produced no
+        // firmware" error. Power the board on directly (Run follows the
+        // standard disabled-while-running convention; RESET is the fast
+        // re-run-without-reboot on a booted guest). Must stay ABOVE the
+        // generic stop-then-boot restart below.
+        if (isPiBoardKind(board?.boardKind ?? '')) {
+          trackRunSimulation(board?.boardKind);
+          reportRun(
+            board?.boardKind,
+            decideEngine(activeBoardId, board?.enginePinned).engine,
+          );
+          if (board?.running) {
+            // Zombie/edge case (Run is normally disabled while running):
+            // power-cycle for a clean boot.
+            stopBoard(activeBoardId);
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+          console.log('[handleRun] → startBoard (QEMU-Linux, no firmware)', activeBoardId);
+          startBoard(activeBoardId);
+          setMessage(null);
+          return;
+        }
         // Clean restart when the board is already running. Esp32Bridge.connect()
         // is a no-op while the socket is non-CLOSED, so startBoard() on a live
         // session does NOTHING — and if the backend QEMU session has since died
@@ -960,6 +977,15 @@ export const EditorToolbar = ({
 
   const handleReset = () => {
     trackResetSimulation();
+    // QEMU-Linux boards: Reset = re-upload the edited files and re-run the
+    // script on the live guest (no ~45 s reboot). Mirrors what Reset means
+    // elsewhere — restart the program — while Run keeps the standard
+    // disabled-while-running behaviour.
+    if (activeBoard && isPiBoardKind(activeBoard.boardKind) && activeBoard.piBooted) {
+      void piRerunScript(activeBoard.id, activeBoard.boardKind);
+      setMessage(null);
+      return;
+    }
     if (activeBoardId) resetBoard(activeBoardId);
     else resetSimulation();
     setMessage(null);
@@ -1052,7 +1078,9 @@ export const EditorToolbar = ({
             if (stdout.length <= lastStreamedLen) return;
             const delta = stdout.slice(lastStreamedLen);
             lastStreamedLen = stdout.length;
-            const newLines = delta.split('\n').filter((s) => s.trim());
+            const newLines = delta
+            .split('\n')
+            .filter((s) => s.trim() && !isNoiseBuildLine(s));
             if (!newLines.length) return;
             const now = new Date();
             setCompileLogs((prev: CompilationLog[]) => [
@@ -1066,10 +1094,10 @@ export const EditorToolbar = ({
               })),
             ]);
           },
-          { boardOptions: board.boardOptions, spiffsFiles: board.spiffsFiles, libraries: board.libraries?.length ? board.libraries : null, language: board.languageMode === 'espidf' ? 'espidf' : undefined },
+          { boardOptions: board.boardOptions, spiffsFiles: board.spiffsFiles, boardKind: board.boardKind, exampleId: useProjectStore.getState().currentExampleId, libraries: board.libraries?.length ? board.libraries : null, language: board.languageMode === 'espidf' ? 'espidf' : undefined },
         );
 
-        const resultLogs = parseCompileResult(result, label, boardTarget);
+        const resultLogs = parseCompileResult(result, label, boardTarget, lastStreamedLen > 0);
         setCompileLogs((prev: CompilationLog[]) => [...prev, ...resultLogs]);
 
         if (result.success) {
@@ -1366,6 +1394,57 @@ export const EditorToolbar = ({
     }
   };
 
+    // File-menu commands owned by this toolbar (the handlers close over its
+  // state). Registered through a latest-ref so the one-time registration
+  // always invokes the current render's closure, never a stale one.
+  const makeMenuCommands = () => ({
+    import: () => importInputRef.current?.click(),
+    export: () => void handleExport(),
+    bom: () => void handleExportBom(),
+    screenshot: () => void handleExportScreenshot(),
+    firmware: () => firmwareInputRef.current?.click(),
+    // Pro actions fire the same window events the old "..." menu items
+    // fired; without the overlay they are silent no-ops, which is fine —
+    // OSS builds cannot have linked repos or shared projects anyway.
+    share: () =>
+      window.dispatchEvent(new CustomEvent('velxio-pro-share-prompt', {
+        detail: { projectId: currentProject?.id ?? null },
+      })),
+    githubSync: () =>
+      window.dispatchEvent(new CustomEvent('velxio-pro-github-sync-prompt', {
+        detail: { projectId: currentProject?.id ?? null },
+      })),
+    record: () =>
+      window.dispatchEvent(new CustomEvent('velxio-pro-replay-record-toggle', {
+        detail: { projectId: currentProject?.id ?? null },
+      })),
+    compile: () => void handleCompile(),
+    run: () => void handleRun(),
+    stop: () => handleStop(),
+    resetBoard: () => handleReset(),
+    toggleConsole: () => setConsoleOpen((v) => !v),
+  });
+  const menuCommandsRef = useRef(makeMenuCommands());
+  menuCommandsRef.current = makeMenuCommands();
+  useEffect(() => {
+    const offs = [
+      registerEditorCommand('project.import', () => menuCommandsRef.current.import()),
+      registerEditorCommand('project.export', () => menuCommandsRef.current.export()),
+      registerEditorCommand('project.exportBom', () => menuCommandsRef.current.bom()),
+      registerEditorCommand('project.exportScreenshot', () => menuCommandsRef.current.screenshot()),
+      registerEditorCommand('firmware.upload', () => menuCommandsRef.current.firmware()),
+      registerEditorCommand('project.share', () => menuCommandsRef.current.share()),
+      registerEditorCommand('project.githubSync', () => menuCommandsRef.current.githubSync()),
+      registerEditorCommand('sim.record', () => menuCommandsRef.current.record()),
+      registerEditorCommand('sim.compile', () => menuCommandsRef.current.compile()),
+      registerEditorCommand('sim.run', () => menuCommandsRef.current.run()),
+      registerEditorCommand('sim.stop', () => menuCommandsRef.current.stop()),
+      registerEditorCommand('sim.resetBoard', () => menuCommandsRef.current.resetBoard()),
+      registerEditorCommand('view.toggleConsole', () => menuCommandsRef.current.toggleConsole()),
+    ];
+    return () => offs.forEach((off) => off());
+  }, []);
+
   return (
     <>
       <div className="editor-toolbar-wrapper" style={{ position: 'relative' }}>
@@ -1389,8 +1468,10 @@ export const EditorToolbar = ({
                 color: '#ccc',
                 border: '1px solid #444',
                 borderRadius: 4,
-                padding: '2px 4px',
-                fontSize: 11,
+                height: 28,
+                alignSelf: 'center',
+                padding: '0 6px',
+                fontSize: 12,
                 cursor: 'pointer',
                 outline: 'none',
                 marginRight: 4,
@@ -1568,12 +1649,24 @@ export const EditorToolbar = ({
               </svg>
             </button>
 
-            {/* Reset */}
+            {/* Reset — for a booted QEMU-Linux guest this re-uploads the
+                edited files and re-runs the script without rebooting. */}
             <button
               onClick={handleReset}
-              disabled={!compiledHex && !activeBoard?.compiledProgram}
+              disabled={
+                isPiBoardKind(activeBoard?.boardKind ?? '')
+                  ? !activeBoard?.piBooted
+                  : !compiledHex && !activeBoard?.compiledProgram
+              }
               className="tb-btn tb-btn-reset"
-              title={t('editor.toolbar.reset')}
+              title={
+                isPiBoardKind(activeBoard?.boardKind ?? '')
+                  ? t(
+                      'editor.toolbar.rerunScript',
+                      'Re-run script with your latest edits (no reboot)',
+                    )
+                  : t('editor.toolbar.reset')
+              }
             >
               <svg
                 width="18"
@@ -1687,199 +1780,17 @@ export const EditorToolbar = ({
               <span className="tb-libraries-label">{t('editor.toolbar.libraries.label')}</span>
             </button>
 
-            {/* Import zip — inline by default; container query at narrow
-                widths swaps this for the corresponding overflow-menu item. */}
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="tb-btn tb-btn-import-inline"
-              title={t('editor.toolbar.import')}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
-            <button
-              onClick={() => handleExport()}
-              className="tb-btn tb-btn-export-inline"
-              title={t('editor.toolbar.export')}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-            </button>
+            {/* Import / Export moved to the File menu in the header — the
+                hidden input above stays because the File-menu command
+                clicks it through the editorCommands registry. */}
             {/* Overflow "More" menu — collects the secondary actions
                 (BOM, Schematic image, Upload firmware) so the toolbar no
                 longer overflows on narrow widths.  The two Pro items show
                 a small "PRO" pill in the menu so users know they're
                 premium BEFORE clicking, instead of being surprised by an
                 upgrade prompt. */}
-            <div className="tb-overflow-wrap" ref={moreMenuRef}>
-              <button
-                onClick={() => setMoreMenuOpen((v) => !v)}
-                className={`tb-btn tb-btn-overflow${moreMenuOpen ? ' tb-btn-overflow-active' : ''}`}
-                title={t('editor.toolbar.more', 'More')}
-                aria-haspopup="true"
-                aria-expanded={moreMenuOpen}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="12" r="1.8" />
-                  <circle cx="12" cy="12" r="1.8" />
-                  <circle cx="19" cy="12" r="1.8" />
-                </svg>
-              </button>
-              {moreMenuOpen && (
-                <div className="tb-overflow-menu" role="menu">
-                  {/* Responsive items — hidden by default, shown via
-                      container query when the toolbar is too narrow to
-                      keep their inline twins.  Keeps mobile users from
-                      losing access to Import / Export entirely. */}
-                  <button
-                    className="tb-overflow-item tb-overflow-import"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      importInputRef.current?.click();
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.importLabel', 'Import project')}</span>
-                  </button>
-                  <button
-                    className="tb-overflow-item tb-overflow-export"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      handleExport();
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.exportLabel', 'Export project (.zip)')}</span>
-                  </button>
-                  <button
-                    className="tb-overflow-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      handleExportBom();
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="16" rx="2" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                      <line x1="9" y1="4" x2="9" y2="20" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.exportBomLabel', 'Bill of Materials (CSV)')}</span>
-                    <span className="tb-overflow-pro">PRO</span>
-                  </button>
-                  <button
-                    className="tb-overflow-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      handleExportScreenshot();
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                      <circle cx="12" cy="13" r="4" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.exportScreenshotLabel', 'Schematic image (PNG)')}</span>
-                    <span className="tb-overflow-pro">PRO</span>
-                  </button>
-                  <button
-                    className="tb-overflow-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      firmwareInputRef.current?.click();
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                      <line x1="12" y1="15" x2="12" y2="22" />
-                      <polyline points="8 18 12 22 16 18" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.uploadFirmwareLabel', 'Upload firmware')}</span>
-                  </button>
-                  {/* Sync to GitHub — Pro feature.  Fires a window event the
-                      pro overlay listens for; if no overlay is loaded (OSS
-                      build) the click is a silent no-op which is fine —
-                      OSS users can't have linked repos anyway. */}
-                  <button
-                    className="tb-overflow-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      window.dispatchEvent(new CustomEvent('velxio-pro-github-sync-prompt', {
-                        detail: { projectId: currentProject?.id ?? null },
-                      }));
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.72-4.04-1.61-4.04-1.61-.55-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.72.08-.72 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.62-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.11-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.8c1.02.01 2.05.14 3.01.4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.githubSyncLabel', 'Sync to GitHub')}</span>
-                    <span className="tb-overflow-pro">PRO</span>
-                  </button>
-                  {/* Share / Embed — free for all users with a public project.
-                      Watermark removal on the embed is the Pro perk; the
-                      Share modal itself is open to everyone so they can
-                      copy the link / iframe snippet. */}
-                  <button
-                    className="tb-overflow-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      window.dispatchEvent(new CustomEvent('velxio-pro-share-prompt', {
-                        detail: { projectId: currentProject?.id ?? null },
-                      }));
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="18" cy="5" r="3" />
-                      <circle cx="6" cy="12" r="3" />
-                      <circle cx="18" cy="19" r="3" />
-                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.shareLabel', 'Share / Embed')}</span>
-                  </button>
-                  {/* Record simulation — Pro feature. Dispatches a toggle the
-                      pro overlay handles (plan check, board-type check,
-                      start/stop the recorder). OSS build → no listener →
-                      silent no-op. */}
-                  <button
-                    className="tb-overflow-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      window.dispatchEvent(new CustomEvent('velxio-pro-replay-record-toggle', {
-                        detail: { projectId: currentProject?.id ?? null },
-                      }));
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="12" r="7" />
-                    </svg>
-                    <span className="tb-overflow-label">{t('editor.toolbar.recordLabel', 'Record simulation')}</span>
-                    <span className="tb-overflow-pro">PRO</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
+            {/* The "..." menu is gone: every item it held now lives in the
+                File menu (with PRO pills where they apply). */}
             <div className="tb-divider" />
 
             {/* Output Console toggle */}

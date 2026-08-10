@@ -31,7 +31,15 @@
         "dismiss": "Закрыть"
       },
       "exportBom": "Экспорт спецификации (CSV — Pro)",
-      "exportScreenshot": "Экспорт схемы как изображение (PNG — Pro)"
+      "exportScreenshot": "Экспорт схемы как изображение (PNG — Pro)",
+      "importLabel": "Импортировать проект",
+      "exportLabel": "Экспортировать проект (.zip)",
+      "exportBomLabel": "Спецификация (CSV)",
+      "exportScreenshotLabel": "Изображение схемы (PNG)",
+      "shareLabel": "Поделиться / Встроить",
+      "githubSyncLabel": "Синхронизировать с GitHub",
+      "uploadFirmwareLabel": "Загрузить прошивку",
+      "recordLabel": "Записать симуляцию"
     },
     "fileExplorer": {
       "workspace": "РАБОЧАЯ ОБЛАСТЬ",
@@ -156,7 +164,9 @@
         "bodyWithWires_other": "Это удалит плату из рабочей области и {{count}} подключённых проводов. Это действие нельзя отменить.",
         "cancel": "Отмена",
         "remove": "Удалить"
-      }
+      },
+      "boardOptions": "Параметры платы...",
+      "flashToBoard": "Прошить реальную плату"
     },
     "componentPicker": {
       "title": "Добавить компонент",
@@ -353,6 +363,37 @@
         "cr": "Возврат каретки",
         "both": "NL и CR"
       }
+    },
+    "menu": {
+      "file": "Файл",
+      "edit": "Правка",
+      "view": "Вид",
+      "language": "Язык",
+      "help": "Справка",
+      "newProject": "Новое рабочее пространство",
+      "newFile": "Новый файл",
+      "open": "Открыть проект…",
+      "save": "Сохранить проект",
+      "undo": "Отменить",
+      "redo": "Повторить",
+      "centerView": "Центрировать вид холста",
+      "toggleExplorer": "Проводник файлов",
+      "toggleConsole": "Консоль вывода",
+      "toggleScope": "Осциллограф / Логический анализатор",
+      "home": "Главная Velxio",
+      "about": "О Velxio",
+      "discord": "Сообщество в Discord",
+      "github": "Репозиторий на GitHub",
+      "compile": "Компилировать",
+      "run": "Запустить",
+      "hideExplorer": "Скрыть проводник файлов",
+      "showExplorer": "Показать проводник файлов"
+    },
+    "inspector": {
+      "propertiesTab": "Свойства",
+      "datasheetTab": "Спецификация",
+      "examplesTitle": "Примеры проектов",
+      "productPage": "Страница товара"
     }
   },
   "about": {

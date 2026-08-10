@@ -190,3 +190,8 @@ MANIFEST.sha256
 *.sqlite-backup
 
 backend/.venv/*
+# Pro-only ESP32 JS-emulator mask ROMs (esp32/c3/c6/s3 + s3 drom). Paid assets
+# served ONLY from the velxio-prod pro overlay's public/firmware/; they must
+# never land in the OSS repo. (micropython-*.bin are the legitimate OSS firmwares.)
+frontend/public/firmware/esp32*-rom.bin
+frontend/public/firmware/esp32*-drom.bin

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
+import type { WorkspaceFile } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import {
   isProgrammableChip,
@@ -9,10 +10,20 @@ import {
   DEFAULT_CHIP_PROGRAM_C,
 } from '../../services/romCompileService';
 import type { BoardKind } from '../../types/board';
-import { boardDisplayName } from '../../types/board';
+import { boardDisplayName, isPiBoardKind } from '../../types/board';
 import { importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
 import { showMessageDialog, showConfirmDialog } from '../../store/useMessageDialogStore';
+import { registerEditorCommand } from '../../lib/editorCommands';
 import './FileExplorer.css';
+
+/** Neutral chip glyph for overlay-registered boards without a bespoke icon. */
+const PRO_FALLBACK_ICON = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="3" y="3" width="10" height="10" rx="2" fill="#8b5cf6" />
+    <rect x="5.5" y="5.5" width="5" height="5" rx="1" fill="#1e1b2e" />
+  </svg>
+);
+
 
 // SVG icons — same style as EditorToolbar (stroke-based, 16x16)
 const IcoFile = () => (
@@ -120,6 +131,58 @@ const IcoOpen = () => (
   </svg>
 );
 
+const IcoFolder = ({ open }: { open: boolean }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {open ? (
+      <path d="M6 14l1.5-5.5A2 2 0 0 1 9.44 7H20a2 2 0 0 1 1.94 2.5l-1.2 4.5A2 2 0 0 1 18.8 15.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2" />
+    ) : (
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    )}
+  </svg>
+);
+
+const IcoNewFolder = () => (
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    <line x1="12" y1="10" x2="12" y2="16" />
+    <line x1="9" y1="13" x2="15" y2="13" />
+  </svg>
+);
+
+const IcoTrashSmall = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
 const IcoChevron = ({ open }: { open: boolean }) => (
   <svg
     width="12"
@@ -224,6 +287,55 @@ function FileIcon({ name }: { name: string }) {
   return <IcoFile />;
 }
 
+/**
+ * One row of a board group's file tree, flattened for rendering. Folders come
+ * from file-name '/' prefixes plus the group's tracked EMPTY folders; a
+ * collapsed folder hides everything beneath it.
+ */
+type TreeRow =
+  | { kind: 'folder'; path: string; name: string; depth: number; open: boolean }
+  | { kind: 'file'; file: WorkspaceFile; depth: number };
+
+function buildTreeRows(
+  files: WorkspaceFile[],
+  emptyFolders: string[],
+  isFolderCollapsed: (path: string) => boolean,
+): TreeRow[] {
+  const folderSet = new Set<string>();
+  const addWithAncestors = (path: string) => {
+    const segs = path.split('/');
+    for (let i = 1; i <= segs.length; i++) folderSet.add(segs.slice(0, i).join('/'));
+  };
+  for (const f of files) {
+    const idx = f.name.lastIndexOf('/');
+    if (idx > 0) addWithAncestors(f.name.slice(0, idx));
+  }
+  for (const p of emptyFolders) if (p) addWithAncestors(p);
+
+  const parentOf = (p: string) => {
+    const idx = p.lastIndexOf('/');
+    return idx === -1 ? '' : p.slice(0, idx);
+  };
+  const rows: TreeRow[] = [];
+  const walk = (parent: string, depth: number) => {
+    const childFolders = [...folderSet].filter((p) => parentOf(p) === parent).sort();
+    for (const p of childFolders) {
+      const open = !isFolderCollapsed(p);
+      rows.push({ kind: 'folder', path: p, name: p.slice(p.lastIndexOf('/') + 1), depth, open });
+      if (open) walk(p, depth + 1);
+    }
+    // Files keep their group order (the first file is the main sketch).
+    for (const f of files) {
+      if (parentOf(f.name) === parent) rows.push({ kind: 'file', file: f, depth });
+    }
+  };
+  walk('', 0);
+  return rows;
+}
+
+/** Display name of a possibly-nested file: its basename. */
+const fileBasename = (name: string) => name.slice(name.lastIndexOf('/') + 1);
+
 interface ContextMenu {
   fileId: string;
   boardGroupId: string;
@@ -295,12 +407,15 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
 
   const {
     fileGroups,
+    folderGroups,
     activeFileId,
     activeGroupId,
     openFile,
     createFile,
     deleteFile,
     renameFile,
+    createFolder,
+    deleteFolder,
     setActiveGroup,
     manifestViewBoardId,
     setManifestView,
@@ -365,11 +480,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
     kind: 'board' | 'chip';
   } | null>(null);
   const [sectionRenameValue, setSectionRenameValue] = useState('');
-  // Track which board group is creating a file: boardGroupId or null
+  // Track which board group is creating a file: boardGroupId or null.
+  // creatingParentPath prefixes the new file into a folder ('' = group root).
   const [creatingInGroup, setCreatingInGroup] = useState<string | null>(null);
+  const [creatingParentPath, setCreatingParentPath] = useState('');
   const [newFileName, setNewFileName] = useState('');
+  // Inline new-folder input: which group + parent folder ('' = root).
+  const [creatingFolderInGroup, setCreatingFolderInGroup] = useState<string | null>(null);
+  const [creatingFolderParent, setCreatingFolderParent] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
   // Collapsed state per board ID
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Collapsed folders, keyed `${groupId}:${folderPath}`
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
   const renameInputRef = useRef<HTMLInputElement>(null);
   const sectionRenameInputRef = useRef<HTMLInputElement>(null);
@@ -377,6 +500,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
   // the input) discards instead of committing the typed value.
   const sectionRenameCancelledRef = useRef(false);
   const newFileInputRef = useRef<HTMLInputElement>(null);
+  const newFolderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (creatingFolderInGroup && newFolderInputRef.current) {
+      newFolderInputRef.current.focus();
+    }
+  }, [creatingFolderInGroup]);
 
   useEffect(() => {
     if (renamingId && renameInputRef.current) {
@@ -521,20 +651,86 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
     deleteFile(fileId);
   };
 
-  const startCreateFile = (boardId: string, groupId: string) => {
+  // File-menu commands owned by the explorer: Open project… and New file
+  // (which targets the ACTIVE board's file group, same as its + button).
+  useEffect(() => {
+    const offOpen = registerEditorCommand('project.open', handleOpenProjectClick);
+    const offNewFile = registerEditorCommand('file.new', () => {
+      const st = useSimulatorStore.getState();
+      const board = st.boards.find((b) => b.id === st.activeBoardId) ?? st.boards[0];
+      if (!board) return;
+      switchToBoard(board.id, board.activeFileGroupId);
+      setCreatingInGroup(board.activeFileGroupId);
+      setNewFileName('');
+    });
+    return () => {
+      offOpen();
+      offNewFile();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleOpenProjectClick]);
+
+  const startCreateFile = (boardId: string, groupId: string, parentPath = '') => {
     // Switch to this board first so createFile targets the right group
     switchToBoard(boardId, groupId);
     setCreatingInGroup(groupId);
+    setCreatingParentPath(parentPath);
     setNewFileName('');
+    setCreatingFolderInGroup(null);
     setContextMenu(null);
   };
 
-  const commitCreateFile = useCallback(() => {
-    const name = newFileName.trim();
-    if (name) createFile(name);
+  const startCreateFolder = (boardId: string, groupId: string, parentPath = '') => {
+    switchToBoard(boardId, groupId);
+    setCreatingFolderInGroup(groupId);
+    setCreatingFolderParent(parentPath);
+    setNewFolderName('');
     setCreatingInGroup(null);
+    setContextMenu(null);
+  };
+
+  const commitCreateFolder = useCallback(() => {
+    const name = newFolderName.trim().replace(/^\/+|\/+$/g, '');
+    if (name) createFolder(creatingFolderParent ? `${creatingFolderParent}/${name}` : name);
+    setCreatingFolderInGroup(null);
+    setNewFolderName('');
+  }, [newFolderName, creatingFolderParent, createFolder]);
+
+  const toggleFolder = (groupId: string, path: string) => {
+    const key = `${groupId}:${path}`;
+    setCollapsedFolders((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleDeleteFolder = (boardId: string, groupId: string, path: string) => {
+    switchToBoard(boardId, groupId);
+    const inside = (fileGroups[groupId] ?? []).filter((f) => f.name.startsWith(path + '/'));
+    // Never allow a folder delete to empty the group completely — the group
+    // must keep at least one file (same invariant as single-file delete).
+    if (inside.length >= (fileGroups[groupId] ?? []).length) {
+      showMessageDialog(t('editor.fileExplorer.folderHoldsEverything', 'The folder holds every file of this board — a board needs at least one file.'), { kind: 'info' });
+      return;
+    }
+    if (inside.length === 0) {
+      deleteFolder(path);
+      return;
+    }
+    void showConfirmDialog(
+      t(
+        'editor.fileExplorer.confirmDeleteFolder',
+        `Delete the folder "${path}" and the ${inside.length} file(s) inside it?`,
+      ),
+    ).then((ok) => {
+      if (ok) deleteFolder(path);
+    });
+  };
+
+  const commitCreateFile = useCallback(() => {
+    const name = newFileName.trim().replace(/^\/+/, '');
+    if (name) createFile(creatingParentPath ? `${creatingParentPath}/${name}` : name);
+    setCreatingInGroup(null);
+    setCreatingParentPath('');
     setNewFileName('');
-  }, [newFileName, createFile]);
+  }, [newFileName, creatingParentPath, createFile]);
 
   const toggleCollapse = (boardId: string) => {
     setCollapsed((prev) => ({ ...prev, [boardId]: !prev[boardId] }));
@@ -582,7 +778,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
           const groupFiles = fileGroups[groupId] ?? [];
           const isActiveBoard = board.id === activeBoardId;
           const isOpen = !collapsed[board.id];
-          const color = BOARD_COLOR[board.boardKind];
+          const color = BOARD_COLOR[board.boardKind] ?? '#8b5cf6';
 
           // Status dot color
           const statusColor = board.running
@@ -614,7 +810,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                 </button>
 
                 <span className="fe-board-icon" style={{ color }}>
-                  {BOARD_ICON[board.boardKind]}
+                  {BOARD_ICON[board.boardKind] ?? PRO_FALLBACK_ICON}
                 </span>
 
                 {renamingSection?.id === board.id && renamingSection.kind === 'board' ? (
@@ -676,17 +872,82 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                 >
                   <IcoNewFile />
                 </button>
+                <button
+                  className="fe-board-new-btn"
+                  title={t('editor.fileExplorer.newFolderInBoard', 'New folder')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startCreateFolder(board.id, groupId);
+                  }}
+                >
+                  <IcoNewFolder />
+                </button>
               </div>
 
-              {/* Files under this board */}
+              {/* Files under this board, as a folder tree */}
               {isOpen && (
                 <div className="fe-board-files">
-                  {groupFiles.map((file) => {
+                  {buildTreeRows(
+                    groupFiles,
+                    folderGroups[groupId] ?? [],
+                    (p) => !!collapsedFolders[`${groupId}:${p}`],
+                  ).map((row) => {
+                    if (row.kind === 'folder') {
+                      return (
+                        <div
+                          key={`folder:${row.path}`}
+                          className="file-explorer-item fe-file-item fe-folder-item"
+                          style={{ '--fe-depth': row.depth } as React.CSSProperties}
+                          onClick={() => toggleFolder(groupId, row.path)}
+                          title={row.path}
+                        >
+                          <span className="fe-folder-chevron">
+                            <IcoChevron open={row.open} />
+                          </span>
+                          <span className="file-explorer-icon fe-folder-icon">
+                            <IcoFolder open={row.open} />
+                          </span>
+                          <span className="file-explorer-name">{row.name}</span>
+                          <span className="fe-folder-actions">
+                            <button
+                              title={t('editor.fileExplorer.newFileInFolder', 'New file here')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startCreateFile(board.id, groupId, row.path);
+                              }}
+                            >
+                              <IcoNewFile />
+                            </button>
+                            <button
+                              title={t('editor.fileExplorer.newSubfolder', 'New subfolder')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startCreateFolder(board.id, groupId, row.path);
+                              }}
+                            >
+                              <IcoNewFolder />
+                            </button>
+                            <button
+                              className="fe-folder-delete"
+                              title={t('editor.fileExplorer.deleteFolder', 'Delete folder')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteFolder(board.id, groupId, row.path);
+                              }}
+                            >
+                              <IcoTrashSmall />
+                            </button>
+                          </span>
+                        </div>
+                      );
+                    }
+                    const file = row.file;
                     const isActiveFile = isActiveBoard && file.id === activeFileId;
                     return (
                       <div
                         key={file.id}
                         className={`file-explorer-item fe-file-item${isActiveFile ? ' file-explorer-item-active' : ''}`}
+                        style={{ '--fe-depth': row.depth } as React.CSSProperties}
                         onClick={() => handleFileClick(file.id, board.id, groupId)}
                         onContextMenu={(e) => handleContextMenu(e, file.id, groupId)}
                         onDoubleClick={() => {
@@ -713,7 +974,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                             onClick={(e) => e.stopPropagation()}
                           />
                         ) : (
-                          <span className="file-explorer-name">{file.name}</span>
+                          <span className="file-explorer-name">{fileBasename(file.name)}</span>
                         )}
 
                         {file.modified && (
@@ -725,7 +986,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
 
                   {/* Inline new-file input for this group */}
                   {creatingInGroup === groupId && (
-                    <div className="file-explorer-item file-explorer-item-new fe-file-item">
+                    <div
+                      className="file-explorer-item file-explorer-item-new fe-file-item"
+                      style={
+                        creatingParentPath
+                          ? ({ '--fe-depth': creatingParentPath.split('/').length } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
                       <span className="file-explorer-icon">
                         <IcoFile />
                       </span>
@@ -733,14 +1001,49 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                         ref={newFileInputRef}
                         className="file-explorer-rename-input"
                         value={newFileName}
-                        placeholder="filename.ino"
+                        placeholder={
+                          creatingParentPath ? `${creatingParentPath}/…` : 'filename.ino'
+                        }
                         onChange={(e) => setNewFileName(e.target.value)}
                         onBlur={commitCreateFile}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') commitCreateFile();
                           if (e.key === 'Escape') {
                             setCreatingInGroup(null);
+                            setCreatingParentPath('');
                             setNewFileName('');
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+
+                  {/* Inline new-folder input for this group */}
+                  {creatingFolderInGroup === groupId && (
+                    <div
+                      className="file-explorer-item file-explorer-item-new fe-file-item"
+                      style={
+                        creatingFolderParent
+                          ? ({ '--fe-depth': creatingFolderParent.split('/').length } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <span className="file-explorer-icon fe-folder-icon">
+                        <IcoFolder open={true} />
+                      </span>
+                      <input
+                        ref={newFolderInputRef}
+                        className="file-explorer-rename-input"
+                        value={newFolderName}
+                        placeholder={t('editor.fileExplorer.folderNamePlaceholder', 'folder name')}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        onBlur={commitCreateFolder}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitCreateFolder();
+                          if (e.key === 'Escape') {
+                            setCreatingFolderInGroup(null);
+                            setNewFolderName('');
                           }
                         }}
                         onClick={(e) => e.stopPropagation()}
@@ -752,7 +1055,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                       (compile scope), grouped with the board's code so it is
                       clear which board it belongs to. There is one per board.
                       Clicking switches to the board and opens the Library
-                      Manager on its list. */}
+                      Manager on its list. QEMU-Linux boards run Python in a
+                      guest OS — no arduino-cli manifest, so no row. */}
+                  {!isPiBoardKind(board.boardKind) && (
                   <div
                     className={`file-explorer-item fe-file-item${
                       manifestViewBoardId === board.id ? ' file-explorer-item-active' : ''
@@ -787,6 +1092,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onSaveClick, onNewCl
                       {board.libraries?.length ?? 0}
                     </span>
                   </div>
+                  )}
                 </div>
               )}
             </div>

@@ -273,7 +273,23 @@ export class ComponentRegistry {
       byId.set(extra.id, extra);
     }
     this.processMetadata(Array.from(byId.values()));
+    // The overlay merges AFTER its dynamic import lands - notify subscribers so
+    // an already-open picker recomputes (ONLINE ad cards vs real components).
+    this._version++;
+    for (const l of this._changeListeners) l();
   }
+
+  private _version = 0;
+  private _changeListeners = new Set<() => void>();
+
+  /** Monotonic counter bumped on every mergeComponents() - pair with subscribe
+   *  in useSyncExternalStore so late overlay merges re-render consumers. */
+  getVersion = (): number => this._version;
+
+  subscribe = (cb: () => void): (() => void) => {
+    this._changeListeners.add(cb);
+    return () => this._changeListeners.delete(cb);
+  };
 
   /**
    * Get components by category

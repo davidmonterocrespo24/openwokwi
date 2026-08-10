@@ -11,17 +11,34 @@
  */
 
 import { useEffect, type ReactNode } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { i18n, loadLocale } from "./index";
-import { LOCALE_META, DEFAULT_LOCALE } from "./config";
-import { getLocaleFromPath } from "./path";
+import { LOCALE_META, DEFAULT_LOCALE, type Locale } from "./config";
+import { getLocaleFromPath, switchLocale } from "./path";
 import { writeLocaleCookie } from "./cookie";
 
 type Props = { children: ReactNode };
 
 export function LocaleSync({ children }: Props) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const target = getLocaleFromPath(pathname);
+
+  // Locale switching for UI that lives OUTSIDE the Router: the pro account
+  // menu is injected into its own React root, so it cannot call
+  // useNavigate() — its language rows dispatch this event instead, and the
+  // switch happens here as a normal SPA navigation (no reload, workspace
+  // intact). Same path the header globe takes.
+  useEffect(() => {
+    const onSwitch = (e: Event): void => {
+      const locale = (e as CustomEvent<{ locale?: string }>).detail?.locale;
+      if (!locale) return;
+      const next = switchLocale(window.location.pathname, locale as Locale);
+      navigate(next + window.location.search + window.location.hash);
+    };
+    window.addEventListener('velxio-locale-switch', onSwitch);
+    return () => window.removeEventListener('velxio-locale-switch', onSwitch);
+  }, [navigate]);
 
   useEffect(() => {
     let cancelled = false;

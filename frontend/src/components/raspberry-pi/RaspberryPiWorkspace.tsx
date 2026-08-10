@@ -75,6 +75,15 @@ export const RaspberryPiWorkspace: React.FC<RaspberryPiWorkspaceProps> = ({ boar
   // Display the active board's real name (Pi 3B / 4B / 5 / Zero / …) instead of
   // a hardcoded "Raspberry Pi 3B" — the workspace serves the whole Pi family.
   const boardLabel = board ? boardDisplayName(board) : 'Raspberry Pi';
+  // Overlay QEMU-Linux boards (piFamily kinds) are not Raspberry Pis — their
+  // start button / power title must carry the board's own name.
+  const isRaspberry = !board || board.boardKind.startsWith('raspberry-pi');
+  const startLabel = isRaspberry
+    ? t('editor.pi.startPi')
+    : t('editor.pi.startBoard', { board: boardLabel, defaultValue: 'Start {{board}}' });
+  const powerOnTitle = isRaspberry
+    ? t('editor.pi.powerOnTitle')
+    : t('editor.pi.powerOnBoardTitle', { board: boardLabel, defaultValue: 'Power on {{board}}' });
 
   // Three display states: offline (!running) → booting (running, guest Linux
   // still coming up) → ready (running + booted shell). `running` flips on click
@@ -193,9 +202,9 @@ export const RaspberryPiWorkspace: React.FC<RaspberryPiWorkspaceProps> = ({ boar
               <button
                 style={{ ...styles.toolbarBtn, color: '#4caf50', borderColor: '#4caf50' }}
                 onClick={() => startBoard(boardId)}
-                title={t('editor.pi.powerOnTitle')}
+                title={powerOnTitle}
               >
-                <PlayIcon />{t('editor.pi.startPi')}
+                <PlayIcon />{startLabel}
               </button>
             ) : (
               <>
@@ -268,7 +277,7 @@ export const RaspberryPiWorkspace: React.FC<RaspberryPiWorkspaceProps> = ({ boar
                 <div style={styles.offlineTitle}>{t('editor.pi.offlineTitle', { board: boardLabel })}</div>
                 <div style={styles.offlineSubtitle}>{t('editor.pi.offlineSubtitle')}</div>
                 <button style={styles.startBtn} onClick={() => startBoard(boardId)}>
-                  <PlayIcon />{t('editor.pi.startPi')}
+                  <PlayIcon />{startLabel}
                 </button>
                 <div style={styles.offlineNote}>
                   {t('editor.pi.offlineNote1')}

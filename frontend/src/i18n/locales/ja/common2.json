@@ -31,7 +31,15 @@
         "dismiss": "閉じる"
       },
       "exportBom": "部品表をエクスポート (CSV — Pro)",
-      "exportScreenshot": "回路図を画像としてエクスポート (PNG — Pro)"
+      "exportScreenshot": "回路図を画像としてエクスポート (PNG — Pro)",
+      "importLabel": "プロジェクトをインポート",
+      "exportLabel": "プロジェクトをエクスポート (.zip)",
+      "exportBomLabel": "部品表 (CSV)",
+      "exportScreenshotLabel": "回路図画像 (PNG)",
+      "shareLabel": "共有 / 埋め込み",
+      "githubSyncLabel": "GitHub と同期",
+      "uploadFirmwareLabel": "ファームウェアをアップロード",
+      "recordLabel": "シミュレーションを録画"
     },
     "fileExplorer": {
       "workspace": "ワークスペース",
@@ -156,7 +164,9 @@
         "bodyWithWires_other": "このボードと{{count}}本の接続配線をワークスペースから削除します。この操作は元に戻せません。",
         "cancel": "キャンセル",
         "remove": "削除"
-      }
+      },
+      "boardOptions": "ボード設定...",
+      "flashToBoard": "実機に書き込む"
     },
     "componentPicker": {
       "title": "コンポーネントを追加",
@@ -353,6 +363,37 @@
         "cr": "キャリッジリターン",
         "both": "NL と CR の両方"
       }
+    },
+    "menu": {
+      "file": "ファイル",
+      "edit": "編集",
+      "view": "表示",
+      "language": "言語",
+      "help": "ヘルプ",
+      "newProject": "新しいワークスペース",
+      "newFile": "新規ファイル",
+      "open": "プロジェクトを開く…",
+      "save": "プロジェクトを保存",
+      "undo": "元に戻す",
+      "redo": "やり直す",
+      "centerView": "キャンバス表示を中央に",
+      "toggleExplorer": "ファイルエクスプローラー",
+      "toggleConsole": "出力コンソール",
+      "toggleScope": "オシロスコープ / ロジックアナライザー",
+      "home": "Velxio ホーム",
+      "about": "Velxio について",
+      "discord": "Discord コミュニティ",
+      "github": "GitHub リポジトリ",
+      "compile": "コンパイル",
+      "run": "実行",
+      "hideExplorer": "ファイルエクスプローラーを隠す",
+      "showExplorer": "ファイルエクスプローラーを表示"
+    },
+    "inspector": {
+      "propertiesTab": "プロパティ",
+      "datasheetTab": "データシート",
+      "examplesTitle": "サンプルプロジェクト",
+      "productPage": "製品ページ"
     }
   },
   "about": {

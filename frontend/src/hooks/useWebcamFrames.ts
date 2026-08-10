@@ -130,17 +130,19 @@ function downscaleCanvas(
 }
 
 /** Encode the canvas to JPEG with progressively lower quality until
- *  the result fits in MAX_FRAME_BYTES. Falls back to a 240×180
- *  downscale if even quality 0.1 at full resolution is too large.
- *  Returns null only when the canvas is invalid or the browser
- *  refuses to encode at any quality (very rare). */
+ *  the result fits in `maxBytes`. Falls back to a 240×180 downscale
+ *  (with its own quality ladder) if full resolution cannot fit.
+ *  Returns null when the canvas is invalid, the browser refuses to
+ *  encode, or nothing fits the budget — a skipped frame is recoverable,
+ *  an oversized one corrupts the guest's frame buffer (truncated EOI). */
 async function encodeBoundedJpeg(
   c: OffscreenCanvas | HTMLCanvasElement,
+  maxBytes: number,
 ): Promise<EncodedFrame | null> {
   for (const q of QUALITY_LADDER) {
     const blob = await canvasToJpeg(c, q);
     if (!blob) return null;
-    if (blob.size <= MAX_FRAME_BYTES) {
+    if (blob.size <= maxBytes) {
       return {
         buf: await blob.arrayBuffer(),
         bytes: blob.size,
@@ -149,26 +151,41 @@ async function encodeBoundedJpeg(
       };
     }
   }
-  // Worst case: HD/4K webcam, ultra-detailed scene, quality 0.1
-  // still overshoots even the 23 KiB cap. Downscale + medium quality.
+  // Worst case: HD/4K webcam, ultra-detailed scene — quality 0.1 at full
+  // resolution still overshoots the budget. Downscale and re-run the ladder.
   const small = downscaleCanvas(c, FALLBACK_W, FALLBACK_H);
-  const blob = await canvasToJpeg(small, 0.4);
-  if (!blob) return null;
-  return {
-    buf: await blob.arrayBuffer(),
-    bytes: blob.size,
-    quality: 0.4,
-    downscaled: true,
-  };
+  for (const q of [0.4, 0.3, 0.2, 0.1]) {
+    const blob = await canvasToJpeg(small, q);
+    if (!blob) return null;
+    if (blob.size <= maxBytes) {
+      return {
+        buf: await blob.arrayBuffer(),
+        bytes: blob.size,
+        quality: q,
+        downscaled: true,
+      };
+    }
+  }
+  return null;
 }
 
-export function useWebcamFrames(): UseWebcamFramesResult {
+export function useWebcamFrames(
+  /** Per-board frame byte budget. The default fits the QEMU ESP32-CAM's
+   *  32 KiB walker; boards whose camera driver allocates a smaller frame
+   *  buffer (the S3's esp32-camera build: width*height/5 for JPEG) must
+   *  pass a tighter bound or the JPEG tail — including the EOI marker the
+   *  driver scans for — is truncated on copy (cam_hal "NO-EOI"). */
+  maxFrameBytes: number = MAX_FRAME_BYTES,
+): UseWebcamFramesResult {
   const [status, setStatus] = useState<WebcamStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [framesSent, setFramesSent] = useState(0);
   const [lastFrameBytes, setLastFrameBytes] = useState(0);
   const [lastQualityUsed, setLastQualityUsed] = useState(0.5);
   const [lastDownscaled, setLastDownscaled] = useState(false);
+
+  const maxBytesRef = useRef(maxFrameBytes);
+  maxBytesRef.current = maxFrameBytes;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -280,7 +297,7 @@ export function useWebcamFrames(): UseWebcamFramesResult {
 
       // Use the bounded encoder so the JPEG always fits in the
       // emulator's per-frame budget regardless of webcam hardware.
-      const encoded = await encodeBoundedJpeg(c);
+      const encoded = await encodeBoundedJpeg(c, maxBytesRef.current);
       if (!encoded) return;
       const id = boardIdRef.current;
       if (!id) return;

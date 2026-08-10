@@ -33,11 +33,19 @@
         "dismiss": "Descartar"
       },
       "exportBom": "Exportar lista de materiales (CSV — Pro)",
-      "exportScreenshot": "Exportar esquemático como imagen (PNG — Pro)"
+      "exportScreenshot": "Exportar esquemático como imagen (PNG — Pro)",
+      "importLabel": "Importar proyecto",
+      "exportLabel": "Exportar proyecto (.zip)",
+      "exportBomLabel": "Lista de materiales (CSV)",
+      "exportScreenshotLabel": "Imagen del esquema (PNG)",
+      "shareLabel": "Compartir / Insertar",
+      "githubSyncLabel": "Sincronizar con GitHub",
+      "uploadFirmwareLabel": "Subir firmware",
+      "recordLabel": "Grabar simulación"
     },
     "fileExplorer": {
       "workspace": "ESPACIO DE TRABAJO",
-      "newWorkspace": "Nuevo espacio de trabajo (borra placas, componentes, cables y archivos)",
+      "newWorkspace": "Nuevo espacio de trabajo (elige una plantilla inicial)",
       "confirmNew": {
         "title": "¿Iniciar un nuevo espacio de trabajo?",
         "message": "Esto borra todas las placas, componentes, cables y archivos. No se puede deshacer.",
@@ -158,7 +166,9 @@
         "bodyWithWires_other": "Esto eliminará la placa del espacio de trabajo y {{count}} cables conectados. Esta acción no se puede deshacer.",
         "cancel": "Cancelar",
         "remove": "Eliminar"
-      }
+      },
+      "boardOptions": "Opciones de la placa...",
+      "flashToBoard": "Grabar en placa real"
     },
     "componentPicker": {
       "title": "Añadir componente",
@@ -275,6 +285,13 @@
       "close": "Cerrar",
       "empty": "Aún no hay salida de compilación. Haz clic en Compilar para empezar."
     },
+    "newProject": {
+      "title": "Comienza un proyecto nuevo",
+      "subtitle": "Elige un espacio en blanco o una placa con un ejemplo Blink listo para ejecutar. Esto reemplaza todo el contenido del espacio de trabajo actual.",
+      "blankTitle": "Proyecto en blanco",
+      "blankDesc": "Espacio vacío — añade tus propias placas y componentes",
+      "cancel": "Cancelar"
+    },
     "boardPicker": {
       "title": "Añadir placa"
     },
@@ -355,6 +372,38 @@
         "cr": "Retorno de carro",
         "both": "Ambos NL y CR"
       }
+    },
+    "menu": {
+      "file": "Archivo",
+      "edit": "Edición",
+      "view": "Ver",
+      "language": "Idioma",
+      "account": "Cuenta",
+      "help": "Ayuda",
+      "newProject": "Nuevo espacio de trabajo",
+      "newFile": "Nuevo archivo",
+      "open": "Abrir proyecto…",
+      "save": "Guardar proyecto",
+      "undo": "Deshacer",
+      "redo": "Rehacer",
+      "centerView": "Centrar vista del lienzo",
+      "toggleExplorer": "Explorador de archivos",
+      "toggleConsole": "Consola de salida",
+      "toggleScope": "Osciloscopio / Analizador lógico",
+      "home": "Inicio de Velxio",
+      "about": "Acerca de Velxio",
+      "discord": "Comunidad de Discord",
+      "github": "Repositorio en GitHub",
+      "compile": "Compilar",
+      "run": "Ejecutar",
+      "hideExplorer": "Ocultar explorador de archivos",
+      "showExplorer": "Mostrar explorador de archivos"
+    },
+    "inspector": {
+      "propertiesTab": "Propiedades",
+      "datasheetTab": "Ficha técnica",
+      "examplesTitle": "Proyectos de ejemplo",
+      "productPage": "Ver producto"
     }
   },
   "about": {

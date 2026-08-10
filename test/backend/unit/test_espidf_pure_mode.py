@@ -25,6 +25,14 @@ def make_compiler(has_arduino: bool = True) -> ESPIDFCompiler:
     comp.idf_path = '/opt/esp-idf'
     comp.arduino_path = '/opt/arduino-esp32' if has_arduino else ''
     comp.has_arduino = has_arduino
+    # Per-compile IDF selection: _build_env picks the IDF tree and the
+    # matching arduino-esp32 core, so a bare __new__ object needs the v5
+    # half of that pair too. Only a v4.4 + 2.x core is declared here, which
+    # keeps these tests on the legacy path and leaves the choice itself to
+    # the tests that actually cover it.
+    comp.idf5_path = ''
+    comp.arduino5_path = ''
+    comp.has_arduino5 = False
     return comp
 
 

@@ -59,8 +59,10 @@ jobs:
             // deepseek-v4-flash is a REASONING model: max_tokens caps the
             // reasoning trace + the visible answer TOGETHER, so a stingy budget
             // makes `content` come back empty (which once made us POST an empty
-            // Discord message). Give it generous budgets.
-            async function callDeepSeek(prompt, maxTokens, temperature = 0.3) {
+            // Discord message, and once killed the v3.0.2 announce outright).
+            // Give it generous budgets, and retry with double when the model
+            // spends the whole budget reasoning.
+            async function deepSeekRequest(prompt, maxTokens, temperature) {
               const apiKey = process.env.DAVEAGENT_API_KEY;
               if (!apiKey) throw new Error('DAVEAGENT_API_KEY not set');
               const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -81,7 +83,21 @@ jobs:
                 throw new Error(`DeepSeek ${res.status}: ${err}`);
               }
               const data = await res.json();
-              return (data.choices?.[0]?.message?.content ?? '').trim();
+              const choice = data.choices?.[0] ?? {};
+              console.log(
+                `DeepSeek: max_tokens=${maxTokens} finish_reason=${choice.finish_reason} ` +
+                `completion_tokens=${data.usage?.completion_tokens ?? '?'}`
+              );
+              return (choice.message?.content ?? '').trim();
+            }
+
+            async function callDeepSeek(prompt, maxTokens, temperature = 0.3) {
+              let content = await deepSeekRequest(prompt, maxTokens, temperature);
+              if (!content) {
+                console.log('Empty content — retrying once with double the token budget');
+                content = await deepSeekRequest(prompt, maxTokens * 2, temperature);
+              }
+              return content;
             }
 
             // ── Version (read from release's package.json) ────────────────────
@@ -120,15 +136,27 @@ jobs:
             console.log(`Event: ${context.eventName}  PR: #${prNumber} "${prTitle}"`);
             console.log(`Range: ${baseSha.slice(0,7)}..${headSha.slice(0,7)} (${sourceBranch} → release)`);
 
-            const commits = git(
+            // Full detail (subject + BODY + author) reads best for a small
+            // release, but a 45-commit range blows the prompt up and the model
+            // burns its whole budget reasoning over it. Past the threshold,
+            // drop the bodies and send subjects only.
+            const MAX_COMMIT_CHARS = 8000;
+            const commitsFull = git(
               `log ${baseSha}..${headSha} --pretty=format:"%h||%s||%b||%an|||" --no-merges`
             ) || git(`log -50 --pretty=format:"%h||%s||%b||%an|||" --no-merges`);
             const commitLines = git(
               `log ${baseSha}..${headSha} --pretty=format:"%h %s" --no-merges`
             ) || git(`log -50 --pretty=format:"%h %s" --no-merges`);
+            const commitCount = commitLines.split('\n').filter(Boolean).length;
+            const compact = commitsFull.length > MAX_COMMIT_CHARS;
+            // Subjects alone can still be huge on a monster range — hard cap.
+            const commits = (compact ? commitLines : commitsFull).slice(0, 4 * MAX_COMMIT_CHARS);
             const changedFiles = git(`diff --name-only ${baseSha}..${headSha}`)
               .split('\n').filter(Boolean);
-            console.log(`Commits found: ${commitLines.split('\n').filter(Boolean).length}`);
+            console.log(
+              `Commits found: ${commitCount} — sending ${compact ? 'SUBJECTS ONLY' : 'full detail'} ` +
+              `(${commits.length} chars, full detail would be ${commitsFull.length})`
+            );
             console.log(`Files changed: ${changedFiles.length}`);
 
             // ──────────────────────────────────────────────────────────────────
@@ -142,7 +170,7 @@ jobs:
             PR DESCRIPTION: ${prBody}
             SOURCE BRANCH: ${sourceBranch}
 
-            GIT COMMITS (hash||subject||body||author):
+            GIT COMMITS (${compact ? 'hash subject' : 'hash||subject||body||author'}):
             ${commits}
 
             Generate a changelog entry using EXACTLY this format:
@@ -167,8 +195,11 @@ jobs:
             6. Only include sections that have real content
             7. Output ONLY the changelog entry block, nothing else`;
 
-            console.log('Generating CHANGELOG entry...');
-            const changelogEntry = await callDeepSeek(changelogPrompt, 6000, 0.3);
+            console.log(`Generating CHANGELOG entry... (prompt: ${changelogPrompt.length} chars)`);
+            // 16000 was measured to still hit finish_reason=length (all of it
+            // spent reasoning, empty content) on a 45-commit range. 32000 lands
+            // comfortably; the retry doubles to 64000, which the API accepts.
+            const changelogEntry = await callDeepSeek(changelogPrompt, 32000, 0.3);
             if (!changelogEntry) {
               core.setFailed('CHANGELOG generation returned empty content — aborting before any side effects');
               return;
@@ -189,7 +220,7 @@ jobs:
             ${changelogEntry}
 
             RECENT COMMITS (for additional context):
-            ${commitLines}
+            ${commitLines.slice(0, MAX_COMMIT_CHARS)}
 
             STYLE EXAMPLES:
 
@@ -232,7 +263,7 @@ jobs:
             - Write in English`;
 
             console.log('Generating Discord announcement...');
-            let announcement = await callDeepSeek(announcementPrompt, 4000, 0.7);
+            let announcement = await callDeepSeek(announcementPrompt, 16000, 0.7);
 
             // Limpiar markdown residual
             announcement = announcement

@@ -33,11 +33,19 @@
         "dismiss": "Dismiss"
       },
       "exportBom": "Export Bill of Materials (CSV — Pro)",
-      "exportScreenshot": "Export schematic as image (PNG — Pro)"
+      "exportScreenshot": "Export schematic as image (PNG — Pro)",
+      "importLabel": "Import project",
+      "exportLabel": "Export project (.zip)",
+      "exportBomLabel": "Bill of Materials (CSV)",
+      "exportScreenshotLabel": "Schematic image (PNG)",
+      "shareLabel": "Share / Embed",
+      "githubSyncLabel": "Sync to GitHub",
+      "uploadFirmwareLabel": "Upload firmware",
+      "recordLabel": "Record simulation"
     },
     "fileExplorer": {
       "workspace": "WORKSPACE",
-      "newWorkspace": "New workspace (clears boards, components, wires and files)",
+      "newWorkspace": "New workspace (choose a starter template)",
       "confirmNew": {
         "title": "Start a new workspace?",
         "message": "This clears every board, component, wire and file. This cannot be undone.",
@@ -158,7 +166,9 @@
         "bodyWithWires_other": "This will remove the board from the workspace and {{count}} connected wires. This action cannot be undone.",
         "cancel": "Cancel",
         "remove": "Remove"
-      }
+      },
+      "boardOptions": "Board Options...",
+      "flashToBoard": "Flash to real board"
     },
     "componentPicker": {
       "title": "Add Component",
@@ -275,6 +285,13 @@
       "close": "Close",
       "empty": "No compilation output yet. Click Compile to start."
     },
+    "newProject": {
+      "title": "Start a new project",
+      "subtitle": "Pick a blank workspace or a board with a ready-to-run Blink example. This replaces everything in the current workspace.",
+      "blankTitle": "Blank project",
+      "blankDesc": "Empty workspace — add your own boards and parts",
+      "cancel": "Cancel"
+    },
     "boardPicker": {
       "title": "Add Board"
     },
@@ -355,6 +372,38 @@
         "cr": "Carriage return",
         "both": "Both NL & CR"
       }
+    },
+    "menu": {
+      "file": "File",
+      "edit": "Edit",
+      "view": "View",
+      "language": "Language",
+      "account": "Account",
+      "help": "Help",
+      "newProject": "New workspace",
+      "newFile": "New file",
+      "open": "Open project…",
+      "save": "Save project",
+      "undo": "Undo",
+      "redo": "Redo",
+      "centerView": "Center canvas view",
+      "toggleExplorer": "File Explorer",
+      "toggleConsole": "Output Console",
+      "toggleScope": "Oscilloscope / Logic Analyzer",
+      "home": "Velxio Home",
+      "about": "About Velxio",
+      "discord": "Discord Community",
+      "github": "GitHub Repository",
+      "compile": "Compile",
+      "run": "Run",
+      "hideExplorer": "Hide file explorer",
+      "showExplorer": "Show file explorer"
+    },
+    "inspector": {
+      "propertiesTab": "Properties",
+      "datasheetTab": "Datasheet",
+      "examplesTitle": "Example projects",
+      "productPage": "Product page"
     }
   },
   "about": {

@@ -447,3 +447,20 @@ export const SENSOR_CONTROLS: Record<string, SensorControlDef> = {
     defaultValues: { xAxis: 0, yAxis: 0 },
   },
 };
+
+// ── Overlay seam ─────────────────────────────────────────────────────────────
+// A private build (velxio.com) registers sensor-control definitions for the
+// sensors it ships outside the OSS tree (e.g. the DFRobot Gravity analog
+// family). Same contract as proBoardRegistry / registerComponentDoc: dead code
+// in a pure OSS build. Read every SENSOR_CONTROLS lookup through
+// getSensorControl() so overlay-registered sensors surface their slider panel.
+const proSensorControls: Record<string, SensorControlDef> = {};
+
+export function registerSensorControls(defs: Record<string, SensorControlDef>): void {
+  Object.assign(proSensorControls, defs);
+}
+
+export function getSensorControl(id: string | null | undefined): SensorControlDef | undefined {
+  if (!id) return undefined;
+  return SENSOR_CONTROLS[id] ?? proSensorControls[id];
+}

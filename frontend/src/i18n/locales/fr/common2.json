@@ -31,7 +31,15 @@
         "dismiss": "Ignorer"
       },
       "exportBom": "Exporter la nomenclature (CSV — Pro)",
-      "exportScreenshot": "Exporter le schéma en image (PNG — Pro)"
+      "exportScreenshot": "Exporter le schéma en image (PNG — Pro)",
+      "importLabel": "Importer un projet",
+      "exportLabel": "Exporter le projet (.zip)",
+      "exportBomLabel": "Nomenclature (CSV)",
+      "exportScreenshotLabel": "Image du schéma (PNG)",
+      "shareLabel": "Partager / Intégrer",
+      "githubSyncLabel": "Synchroniser avec GitHub",
+      "uploadFirmwareLabel": "Téléverser le firmware",
+      "recordLabel": "Enregistrer la simulation"
     },
     "fileExplorer": {
       "workspace": "ESPACE DE TRAVAIL",
@@ -156,7 +164,9 @@
         "bodyWithWires_other": "Cela supprimera la carte de l'espace de travail ainsi que {{count}} fils connectés. Cette action est irréversible.",
         "cancel": "Annuler",
         "remove": "Supprimer"
-      }
+      },
+      "boardOptions": "Options de la carte...",
+      "flashToBoard": "Flasher la carte reelle"
     },
     "componentPicker": {
       "title": "Ajouter un composant",
@@ -353,6 +363,37 @@
         "cr": "Retour chariot",
         "both": "NL et CR"
       }
+    },
+    "menu": {
+      "file": "Fichier",
+      "edit": "Édition",
+      "view": "Affichage",
+      "language": "Langue",
+      "help": "Aide",
+      "newProject": "Nouvel espace de travail",
+      "newFile": "Nouveau fichier",
+      "open": "Ouvrir un projet…",
+      "save": "Enregistrer le projet",
+      "undo": "Annuler",
+      "redo": "Rétablir",
+      "centerView": "Centrer la vue du canevas",
+      "toggleExplorer": "Explorateur de fichiers",
+      "toggleConsole": "Console de sortie",
+      "toggleScope": "Oscilloscope / Analyseur logique",
+      "home": "Accueil Velxio",
+      "about": "À propos de Velxio",
+      "discord": "Communauté Discord",
+      "github": "Dépôt GitHub",
+      "compile": "Compiler",
+      "run": "Exécuter",
+      "hideExplorer": "Masquer l'explorateur de fichiers",
+      "showExplorer": "Afficher l'explorateur de fichiers"
+    },
+    "inspector": {
+      "propertiesTab": "Propriétés",
+      "datasheetTab": "Fiche technique",
+      "examplesTitle": "Projets d’exemple",
+      "productPage": "Page produit"
     }
   },
   "about": {

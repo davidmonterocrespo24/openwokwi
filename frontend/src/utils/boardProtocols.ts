@@ -191,6 +191,13 @@ function normalizePinName(boardKind: string, pinName: string): string | null {
     boardKind.startsWith('raspberry-pi-4') ||
     boardKind.startsWith('raspberry-pi-5')
   ) {
+    // The header pads are LABELLED 'GPIO14' (that is what the board art
+    // and every example wire use); only physical numbers were accepted
+    // here, so parseInt('GPIO14') was NaN and the pin classified as
+    // nothing at all — a Pi TX wired to an Arduino RX was never seen as a
+    // UART link, and the two boards could not talk.
+    const bcm = trimmed.match(/^(?:GPIO|BCM)(\d+)$/);
+    if (bcm) return bcm[1];
     const phys = parseInt(trimmed, 10);
     if (!isNaN(phys)) {
       const bcm = PI3_PHYSICAL_TO_BCM[phys];

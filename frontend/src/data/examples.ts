@@ -20,6 +20,7 @@ import { robotDesktopExamples } from './examples-robot-desktop';
 import { microsdExamples } from './examples-storage-microsd';
 import { esp32MqttExamples } from './examples-esp32-mqtt';
 import { esp32s3TftExamples } from './examples-esp32s3-tft';
+import { jsemuChipExamples } from './examples-jsemu-chips';
 
 /** Per-board setup for multi-board examples */
 export interface ExampleBoard {
@@ -29,8 +30,17 @@ export interface ExampleBoard {
   y: number;
   /** Arduino/firmware code loaded into this board's file group */
   code?: string;
+  /** Full multi-file workspace for this board's file group. Names may carry
+   *  '/' folder paths ("apps/badge/__init__.py") — the explorer renders them
+   *  as a tree. Takes precedence over `code`; the FIRST entry becomes the
+   *  active/main file, so lead with the sketch. */
+  files?: Array<{ name: string; content: string }>;
   /** Files pre-loaded into the Pi VFS (path → content). Only used for raspberry-pi-3. */
   vfsFiles?: Record<string, string>;
+  /** Uploads pre-loaded onto a board's BUILT-IN microSD slot (a ProBoardDef
+   *  with builtInSdCsPin, e.g. the XIAO ESP32S3 Sense) — the same shape the
+   *  SD Card panel persists on board.sdFiles. */
+  sdFiles?: Array<{ name: string; contentB64: string }>;
 }
 
 export interface ExampleProject {
@@ -47,8 +57,11 @@ export interface ExampleProject {
     | 'raspberry-pi-pico'
     | 'pi-pico-w'
     | 'esp32'
+    | 'esp32-s3'
     | 'esp32-c3'
-    | 'esp32-cam';
+    | 'esp32-cam'
+    // Overlay-registered boards (proBoardRegistry) use their kind string.
+    | (string & {});
   /** Board filter key used in the gallery board selector. Derived from boardType if omitted. */
   boardFilter?: string;
   /**
@@ -149,10 +162,30 @@ void loop() {
     code: '',
     components: [{ type: 'velxio-ssd1306-i2c-4pin', id: 'oled', x: 470, y: 100, properties: {} }],
     wires: [
-      { id: 'w-vcc', start: { componentId: 'arduino-uno', pinName: '5V' }, end: { componentId: 'oled', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'w-gnd', start: { componentId: 'arduino-uno', pinName: 'GND.2' }, end: { componentId: 'oled', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-sda', start: { componentId: 'arduino-uno', pinName: 'A4' }, end: { componentId: 'oled', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'w-scl', start: { componentId: 'arduino-uno', pinName: 'A5' }, end: { componentId: 'oled', pinName: 'SCL' }, color: '#ff8800' },
+      {
+        id: 'w-vcc',
+        start: { componentId: 'arduino-uno', pinName: '5V' },
+        end: { componentId: 'oled', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'arduino-uno', pinName: 'GND.2' },
+        end: { componentId: 'oled', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-sda',
+        start: { componentId: 'arduino-uno', pinName: 'A4' },
+        end: { componentId: 'oled', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'w-scl',
+        start: { componentId: 'arduino-uno', pinName: 'A5' },
+        end: { componentId: 'oled', pinName: 'SCL' },
+        color: '#ff8800',
+      },
     ],
   },
   {
@@ -208,10 +241,30 @@ void loop() {
     code: '',
     components: [{ type: 'velxio-ssd1306-i2c-4pin', id: 'oled', x: 470, y: 100, properties: {} }],
     wires: [
-      { id: 'w-vcc', start: { componentId: 'esp32', pinName: '3V3' }, end: { componentId: 'oled', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'w-gnd', start: { componentId: 'esp32', pinName: 'GND' }, end: { componentId: 'oled', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-sda', start: { componentId: 'esp32', pinName: '21' }, end: { componentId: 'oled', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'w-scl', start: { componentId: 'esp32', pinName: '22' }, end: { componentId: 'oled', pinName: 'SCL' }, color: '#ff8800' },
+      {
+        id: 'w-vcc',
+        start: { componentId: 'esp32', pinName: '3V3' },
+        end: { componentId: 'oled', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'esp32', pinName: 'GND' },
+        end: { componentId: 'oled', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-sda',
+        start: { componentId: 'esp32', pinName: '21' },
+        end: { componentId: 'oled', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'w-scl',
+        start: { componentId: 'esp32', pinName: '22' },
+        end: { componentId: 'oled', pinName: 'SCL' },
+        color: '#ff8800',
+      },
     ],
   },
   // ── Pure ESP-IDF (issue #139): user app_main(), no Arduino core. ──
@@ -264,9 +317,24 @@ void app_main(void)
       { type: 'wokwi-led', id: 'led-ext', x: 470, y: 100, properties: { color: 'red' } },
     ],
     wires: [
-      { id: 'w-gpio2-r', start: { componentId: 'esp32', pinName: '2' }, end: { componentId: 'r-led', pinName: '1' }, color: '#e74c3c' },
-      { id: 'w-r-led', start: { componentId: 'r-led', pinName: '2' }, end: { componentId: 'led-ext', pinName: 'A' }, color: '#e74c3c' },
-      { id: 'w-gnd', start: { componentId: 'led-ext', pinName: 'C' }, end: { componentId: 'esp32', pinName: 'GND' }, color: '#2c3e50' },
+      {
+        id: 'w-gpio2-r',
+        start: { componentId: 'esp32', pinName: '2' },
+        end: { componentId: 'r-led', pinName: '1' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-r-led',
+        start: { componentId: 'r-led', pinName: '2' },
+        end: { componentId: 'led-ext', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'led-ext', pinName: 'C' },
+        end: { componentId: 'esp32', pinName: 'GND' },
+        color: '#2c3e50',
+      },
     ],
   },
   {
@@ -325,10 +393,30 @@ void loop() {
     code: '',
     components: [{ type: 'velxio-ssd1306-i2c-4pin', id: 'oled', x: 470, y: 100, properties: {} }],
     wires: [
-      { id: 'w-vcc', start: { componentId: 'raspberry-pi-pico', pinName: '3V3' }, end: { componentId: 'oled', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'w-gnd', start: { componentId: 'raspberry-pi-pico', pinName: 'GND.3' }, end: { componentId: 'oled', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-sda', start: { componentId: 'raspberry-pi-pico', pinName: 'GP4' }, end: { componentId: 'oled', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'w-scl', start: { componentId: 'raspberry-pi-pico', pinName: 'GP5' }, end: { componentId: 'oled', pinName: 'SCL' }, color: '#ff8800' },
+      {
+        id: 'w-vcc',
+        start: { componentId: 'raspberry-pi-pico', pinName: '3V3' },
+        end: { componentId: 'oled', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GND.3' },
+        end: { componentId: 'oled', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-sda',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP4' },
+        end: { componentId: 'oled', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'w-scl',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP5' },
+        end: { componentId: 'oled', pinName: 'SCL' },
+        color: '#ff8800',
+      },
     ],
   },
   {
@@ -385,10 +473,30 @@ void loop() {
     code: '',
     components: [{ type: 'velxio-ssd1306-i2c-4pin', id: 'oled', x: 470, y: 100, properties: {} }],
     wires: [
-      { id: 'w-vcc', start: { componentId: 'stm32-bluepill', pinName: '3V3' }, end: { componentId: 'oled', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'w-gnd', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'oled', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-sda', start: { componentId: 'stm32-bluepill', pinName: 'PB7' }, end: { componentId: 'oled', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'w-scl', start: { componentId: 'stm32-bluepill', pinName: 'PB6' }, end: { componentId: 'oled', pinName: 'SCL' }, color: '#ff8800' },
+      {
+        id: 'w-vcc',
+        start: { componentId: 'stm32-bluepill', pinName: '3V3' },
+        end: { componentId: 'oled', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'oled', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-sda',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB7' },
+        end: { componentId: 'oled', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'w-scl',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB6' },
+        end: { componentId: 'oled', pinName: 'SCL' },
+        color: '#ff8800',
+      },
     ],
   },
   {
@@ -438,15 +546,38 @@ void loop() {
     delay(200);                             // simple debounce
   }
 }`,
-    components: [
-      { type: 'wokwi-ky-040', id: 'enc1', x: 360, y: 90, properties: {} },
-    ],
+    components: [{ type: 'wokwi-ky-040', id: 'enc1', x: 360, y: 90, properties: {} }],
     wires: [
-      { id: 'w-enc-clk', start: { componentId: 'enc1', pinName: 'CLK' }, end: { componentId: 'arduino-uno', pinName: '2' }, color: '#f59e0b' },
-      { id: 'w-enc-dt', start: { componentId: 'enc1', pinName: 'DT' }, end: { componentId: 'arduino-uno', pinName: '3' }, color: '#10b981' },
-      { id: 'w-enc-sw', start: { componentId: 'enc1', pinName: 'SW' }, end: { componentId: 'arduino-uno', pinName: '4' }, color: '#3b82f6' },
-      { id: 'w-enc-vcc', start: { componentId: 'enc1', pinName: 'VCC' }, end: { componentId: 'arduino-uno', pinName: '5V' }, color: '#ef4444' },
-      { id: 'w-enc-gnd', start: { componentId: 'enc1', pinName: 'GND' }, end: { componentId: 'arduino-uno', pinName: 'GND' }, color: '#1f2937' },
+      {
+        id: 'w-enc-clk',
+        start: { componentId: 'enc1', pinName: 'CLK' },
+        end: { componentId: 'arduino-uno', pinName: '2' },
+        color: '#f59e0b',
+      },
+      {
+        id: 'w-enc-dt',
+        start: { componentId: 'enc1', pinName: 'DT' },
+        end: { componentId: 'arduino-uno', pinName: '3' },
+        color: '#10b981',
+      },
+      {
+        id: 'w-enc-sw',
+        start: { componentId: 'enc1', pinName: 'SW' },
+        end: { componentId: 'arduino-uno', pinName: '4' },
+        color: '#3b82f6',
+      },
+      {
+        id: 'w-enc-vcc',
+        start: { componentId: 'enc1', pinName: 'VCC' },
+        end: { componentId: 'arduino-uno', pinName: '5V' },
+        color: '#ef4444',
+      },
+      {
+        id: 'w-enc-gnd',
+        start: { componentId: 'enc1', pinName: 'GND' },
+        end: { componentId: 'arduino-uno', pinName: 'GND' },
+        color: '#1f2937',
+      },
     ],
     tags: ['rotary', 'encoder', 'ky-040', 'input', 'knob', 'arduino'],
   },
@@ -1269,14 +1400,32 @@ void loop() {
       },
     ],
     code: '',
-    components: [
-      { type: 'wokwi-mpu6050', id: 'mpu1', x: 460, y: 150, properties: {} },
-    ],
+    components: [{ type: 'wokwi-mpu6050', id: 'mpu1', x: 460, y: 150, properties: {} }],
     wires: [
-      { id: 'mpu-vcc', start: { componentId: 'stm32-bluepill', pinName: '3V3' }, end: { componentId: 'mpu1', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'mpu-gnd', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'mpu1', pinName: 'GND' }, color: '#000000' },
-      { id: 'mpu-sda', start: { componentId: 'stm32-bluepill', pinName: 'PB7' }, end: { componentId: 'mpu1', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'mpu-scl', start: { componentId: 'stm32-bluepill', pinName: 'PB6' }, end: { componentId: 'mpu1', pinName: 'SCL' }, color: '#ff8800' },
+      {
+        id: 'mpu-vcc',
+        start: { componentId: 'stm32-bluepill', pinName: '3V3' },
+        end: { componentId: 'mpu1', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'mpu-gnd',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'mpu1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'mpu-sda',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB7' },
+        end: { componentId: 'mpu1', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'mpu-scl',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB6' },
+        end: { componentId: 'mpu1', pinName: 'SCL' },
+        color: '#ff8800',
+      },
     ],
     tags: ['stm32', 'blue pill', 'i2c', 'mpu6050', 'imu', 'sensor', 'qemu'],
   },
@@ -1326,14 +1475,32 @@ void loop() {
       },
     ],
     code: '',
-    components: [
-      { type: 'wokwi-ds1307', id: 'rtc1', x: 460, y: 150, properties: {} },
-    ],
+    components: [{ type: 'wokwi-ds1307', id: 'rtc1', x: 460, y: 150, properties: {} }],
     wires: [
-      { id: 'rtc-vcc', start: { componentId: 'stm32-bluepill', pinName: '3V3' }, end: { componentId: 'rtc1', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'rtc-gnd', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'rtc1', pinName: 'GND' }, color: '#000000' },
-      { id: 'rtc-sda', start: { componentId: 'stm32-bluepill', pinName: 'PB7' }, end: { componentId: 'rtc1', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'rtc-scl', start: { componentId: 'stm32-bluepill', pinName: 'PB6' }, end: { componentId: 'rtc1', pinName: 'SCL' }, color: '#ff8800' },
+      {
+        id: 'rtc-vcc',
+        start: { componentId: 'stm32-bluepill', pinName: '3V3' },
+        end: { componentId: 'rtc1', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'rtc-gnd',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'rtc1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'rtc-sda',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB7' },
+        end: { componentId: 'rtc1', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'rtc-scl',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB6' },
+        end: { componentId: 'rtc1', pinName: 'SCL' },
+        color: '#ff8800',
+      },
     ],
     tags: ['stm32', 'blue pill', 'i2c', 'ds1307', 'rtc', 'clock', 'qemu'],
   },
@@ -1391,10 +1558,30 @@ void loop() {
     code: '',
     components: [{ type: 'wokwi-ssd1306', id: 'bpoled1', x: 460, y: 120, properties: {} }],
     wires: [
-      { id: 'bpo-vcc', start: { componentId: 'stm32-blackpill', pinName: '3V3' }, end: { componentId: 'bpoled1', pinName: 'VIN' }, color: '#ff4444' },
-      { id: 'bpo-gnd', start: { componentId: 'stm32-blackpill', pinName: 'GND' }, end: { componentId: 'bpoled1', pinName: 'GND' }, color: '#000000' },
-      { id: 'bpo-sda', start: { componentId: 'stm32-blackpill', pinName: 'PB7' }, end: { componentId: 'bpoled1', pinName: 'DATA' }, color: '#22aaff' },
-      { id: 'bpo-scl', start: { componentId: 'stm32-blackpill', pinName: 'PB6' }, end: { componentId: 'bpoled1', pinName: 'CLK' }, color: '#ff8800' },
+      {
+        id: 'bpo-vcc',
+        start: { componentId: 'stm32-blackpill', pinName: '3V3' },
+        end: { componentId: 'bpoled1', pinName: 'VIN' },
+        color: '#ff4444',
+      },
+      {
+        id: 'bpo-gnd',
+        start: { componentId: 'stm32-blackpill', pinName: 'GND' },
+        end: { componentId: 'bpoled1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'bpo-sda',
+        start: { componentId: 'stm32-blackpill', pinName: 'PB7' },
+        end: { componentId: 'bpoled1', pinName: 'DATA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'bpo-scl',
+        start: { componentId: 'stm32-blackpill', pinName: 'PB6' },
+        end: { componentId: 'bpoled1', pinName: 'CLK' },
+        color: '#ff8800',
+      },
     ],
     tags: ['stm32', 'black pill', 'f411', 'i2c', 'ssd1306', 'oled', 'qemu'],
   },
@@ -1403,7 +1590,12 @@ void loop() {
     title: 'STM32: Weather Station (BMP280 + OLED)',
     description:
       'A complete I2C dashboard on the STM32 Blue Pill: read temperature and pressure from a BMP280 and render them live on an SSD1306 OLED, both sharing the same I2C1 bus (BMP280 0x76, OLED 0x3C, SCL=PB6/SDA=PB7). Exercises I2C read and write on one bus.',
-    libraries: ['Adafruit BMP280 Library', 'Adafruit Unified Sensor', 'Adafruit SSD1306', 'Adafruit GFX Library'],
+    libraries: [
+      'Adafruit BMP280 Library',
+      'Adafruit Unified Sensor',
+      'Adafruit SSD1306',
+      'Adafruit GFX Library',
+    ],
     category: 'sensors',
     difficulty: 'intermediate',
     boardFilter: 'stm32-bluepill',
@@ -1450,18 +1642,64 @@ void loop() {
     ],
     code: '',
     components: [
-      { type: 'velxio-bmp280', id: 'wbmp1', x: 470, y: 80, properties: { temperature: '23.5', pressure: '1011.2' } },
+      {
+        type: 'velxio-bmp280',
+        id: 'wbmp1',
+        x: 470,
+        y: 80,
+        properties: { temperature: '23.5', pressure: '1011.2' },
+      },
       { type: 'wokwi-ssd1306', id: 'woled1', x: 470, y: 250, properties: {} },
     ],
     wires: [
-      { id: 'w-bmp-vcc', start: { componentId: 'stm32-bluepill', pinName: '3V3' }, end: { componentId: 'wbmp1', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'w-bmp-gnd', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'wbmp1', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-bmp-sda', start: { componentId: 'stm32-bluepill', pinName: 'PB7' }, end: { componentId: 'wbmp1', pinName: 'SDA' }, color: '#22aaff' },
-      { id: 'w-bmp-scl', start: { componentId: 'stm32-bluepill', pinName: 'PB6' }, end: { componentId: 'wbmp1', pinName: 'SCL' }, color: '#ff8800' },
-      { id: 'w-oled-vcc', start: { componentId: 'wbmp1', pinName: 'VCC' }, end: { componentId: 'woled1', pinName: 'VIN' }, color: '#ff4444' },
-      { id: 'w-oled-gnd', start: { componentId: 'wbmp1', pinName: 'GND' }, end: { componentId: 'woled1', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-oled-sda', start: { componentId: 'wbmp1', pinName: 'SDA' }, end: { componentId: 'woled1', pinName: 'DATA' }, color: '#22aaff' },
-      { id: 'w-oled-scl', start: { componentId: 'wbmp1', pinName: 'SCL' }, end: { componentId: 'woled1', pinName: 'CLK' }, color: '#ff8800' },
+      {
+        id: 'w-bmp-vcc',
+        start: { componentId: 'stm32-bluepill', pinName: '3V3' },
+        end: { componentId: 'wbmp1', pinName: 'VCC' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-bmp-gnd',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'wbmp1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-bmp-sda',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB7' },
+        end: { componentId: 'wbmp1', pinName: 'SDA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'w-bmp-scl',
+        start: { componentId: 'stm32-bluepill', pinName: 'PB6' },
+        end: { componentId: 'wbmp1', pinName: 'SCL' },
+        color: '#ff8800',
+      },
+      {
+        id: 'w-oled-vcc',
+        start: { componentId: 'wbmp1', pinName: 'VCC' },
+        end: { componentId: 'woled1', pinName: 'VIN' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-oled-gnd',
+        start: { componentId: 'wbmp1', pinName: 'GND' },
+        end: { componentId: 'woled1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-oled-sda',
+        start: { componentId: 'wbmp1', pinName: 'SDA' },
+        end: { componentId: 'woled1', pinName: 'DATA' },
+        color: '#22aaff',
+      },
+      {
+        id: 'w-oled-scl',
+        start: { componentId: 'wbmp1', pinName: 'SCL' },
+        end: { componentId: 'woled1', pinName: 'CLK' },
+        color: '#ff8800',
+      },
     ],
     tags: ['stm32', 'blue pill', 'i2c', 'bmp280', 'ssd1306', 'weather', 'dashboard', 'qemu'],
   },
@@ -1506,14 +1744,54 @@ void loop() {
       { type: 'wokwi-7segment', id: 'seg1', x: 470, y: 140, properties: { common: 'cathode' } },
     ],
     wires: [
-      { id: 's-a', start: { componentId: 'stm32-bluepill', pinName: 'PA0' }, end: { componentId: 'seg1', pinName: 'A' }, color: '#ff5555' },
-      { id: 's-b', start: { componentId: 'stm32-bluepill', pinName: 'PA1' }, end: { componentId: 'seg1', pinName: 'B' }, color: '#ff9955' },
-      { id: 's-c', start: { componentId: 'stm32-bluepill', pinName: 'PA2' }, end: { componentId: 'seg1', pinName: 'C' }, color: '#ffdd55' },
-      { id: 's-d', start: { componentId: 'stm32-bluepill', pinName: 'PA3' }, end: { componentId: 'seg1', pinName: 'D' }, color: '#88dd55' },
-      { id: 's-e', start: { componentId: 'stm32-bluepill', pinName: 'PA4' }, end: { componentId: 'seg1', pinName: 'E' }, color: '#55ddcc' },
-      { id: 's-f', start: { componentId: 'stm32-bluepill', pinName: 'PA5' }, end: { componentId: 'seg1', pinName: 'F' }, color: '#5599ff' },
-      { id: 's-g', start: { componentId: 'stm32-bluepill', pinName: 'PA6' }, end: { componentId: 'seg1', pinName: 'G' }, color: '#aa77ff' },
-      { id: 's-com', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'seg1', pinName: 'COM' }, color: '#000000' },
+      {
+        id: 's-a',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA0' },
+        end: { componentId: 'seg1', pinName: 'A' },
+        color: '#ff5555',
+      },
+      {
+        id: 's-b',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA1' },
+        end: { componentId: 'seg1', pinName: 'B' },
+        color: '#ff9955',
+      },
+      {
+        id: 's-c',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA2' },
+        end: { componentId: 'seg1', pinName: 'C' },
+        color: '#ffdd55',
+      },
+      {
+        id: 's-d',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA3' },
+        end: { componentId: 'seg1', pinName: 'D' },
+        color: '#88dd55',
+      },
+      {
+        id: 's-e',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA4' },
+        end: { componentId: 'seg1', pinName: 'E' },
+        color: '#55ddcc',
+      },
+      {
+        id: 's-f',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA5' },
+        end: { componentId: 'seg1', pinName: 'F' },
+        color: '#5599ff',
+      },
+      {
+        id: 's-g',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA6' },
+        end: { componentId: 'seg1', pinName: 'G' },
+        color: '#aa77ff',
+      },
+      {
+        id: 's-com',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'seg1', pinName: 'COM' },
+        color: '#000000',
+      },
     ],
     tags: ['stm32', 'blue pill', 'gpio', '7-segment', 'display', 'counter'],
   },
@@ -1557,13 +1835,53 @@ void loop() {
     ],
     code: '',
     components: [
-      { type: 'wokwi-rgb-led', id: 'rgb1', x: 470, y: 150, properties: {} },
-    ],
+      { type: 'wokwi-resistor', id: 'r-rgb1-r', x: 320, y: 160, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-rgb1-g', x: 320, y: 186, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-rgb1-b', x: 320, y: 212, properties: { value: '220' } },
+      { type: 'wokwi-rgb-led', id: 'rgb1', x: 470, y: 150, properties: {} }],
     wires: [
-      { id: 'rgb-r', start: { componentId: 'stm32-bluepill', pinName: 'PA0' }, end: { componentId: 'rgb1', pinName: 'R' }, color: '#ff3333' },
-      { id: 'rgb-g', start: { componentId: 'stm32-bluepill', pinName: 'PA1' }, end: { componentId: 'rgb1', pinName: 'G' }, color: '#33cc33' },
-      { id: 'rgb-b', start: { componentId: 'stm32-bluepill', pinName: 'PA2' }, end: { componentId: 'rgb1', pinName: 'B' }, color: '#3366ff' },
-      { id: 'rgb-com', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'rgb1', pinName: 'COM' }, color: '#000000' },
+      {
+        id: 'rgb-r',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA0' },
+        end: { componentId: 'r-rgb1-r', pinName: '1' },
+        color: '#ff3333',
+      },
+      {
+        id: 'w-r-rgb1-r',
+        start: { componentId: 'r-rgb1-r', pinName: '2' },
+        end: { componentId: 'rgb1', pinName: 'R' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'rgb-g',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA1' },
+        end: { componentId: 'r-rgb1-g', pinName: '1' },
+        color: '#33cc33',
+      },
+      {
+        id: 'w-r-rgb1-g',
+        start: { componentId: 'r-rgb1-g', pinName: '2' },
+        end: { componentId: 'rgb1', pinName: 'G' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'rgb-b',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA2' },
+        end: { componentId: 'r-rgb1-b', pinName: '1' },
+        color: '#3366ff',
+      },
+      {
+        id: 'w-r-rgb1-b',
+        start: { componentId: 'r-rgb1-b', pinName: '2' },
+        end: { componentId: 'rgb1', pinName: 'B' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'rgb-com',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'rgb1', pinName: 'COM' },
+        color: '#000000',
+      },
     ],
     tags: ['stm32', 'blue pill', 'gpio', 'rgb-led', 'led'],
   },
@@ -1610,8 +1928,18 @@ void loop() {
       { type: 'wokwi-pushbutton', id: 'btn1', x: 470, y: 160, properties: { color: 'green' } },
     ],
     wires: [
-      { id: 'btn-sig', start: { componentId: 'stm32-bluepill', pinName: 'PA0' }, end: { componentId: 'btn1', pinName: '1.l' }, color: '#22aaff' },
-      { id: 'btn-gnd', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'btn1', pinName: '2.l' }, color: '#000000' },
+      {
+        id: 'btn-sig',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA0' },
+        end: { componentId: 'btn1', pinName: '1.l' },
+        color: '#22aaff',
+      },
+      {
+        id: 'btn-gnd',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'btn1', pinName: '2.l' },
+        color: '#000000',
+      },
     ],
     tags: ['stm32', 'blue pill', 'gpio', 'button', 'input', 'pushbutton'],
   },
@@ -1653,13 +1981,26 @@ void loop() {
       },
     ],
     code: '',
-    components: [
-      { type: 'wokwi-slide-switch', id: 'sw1', x: 470, y: 160, properties: {} },
-    ],
+    components: [{ type: 'wokwi-slide-switch', id: 'sw1', x: 470, y: 160, properties: {} }],
     wires: [
-      { id: 'sw-sig', start: { componentId: 'stm32-bluepill', pinName: 'PA0' }, end: { componentId: 'sw1', pinName: '2' }, color: '#22aaff' },
-      { id: 'sw-gnd', start: { componentId: 'stm32-bluepill', pinName: 'GND' }, end: { componentId: 'sw1', pinName: '1' }, color: '#000000' },
-      { id: 'sw-vcc', start: { componentId: 'stm32-bluepill', pinName: '3V3' }, end: { componentId: 'sw1', pinName: '3' }, color: '#ff4444' },
+      {
+        id: 'sw-sig',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA0' },
+        end: { componentId: 'sw1', pinName: '2' },
+        color: '#22aaff',
+      },
+      {
+        id: 'sw-gnd',
+        start: { componentId: 'stm32-bluepill', pinName: 'GND' },
+        end: { componentId: 'sw1', pinName: '1' },
+        color: '#000000',
+      },
+      {
+        id: 'sw-vcc',
+        start: { componentId: 'stm32-bluepill', pinName: '3V3' },
+        end: { componentId: 'sw1', pinName: '3' },
+        color: '#ff4444',
+      },
     ],
     tags: ['stm32', 'blue pill', 'gpio', 'switch', 'input', 'slide-switch'],
   },
@@ -1706,14 +2047,32 @@ void loop() {
       },
     ],
     code: '',
-    components: [
-      { type: 'wokwi-stepper-motor', id: 'stp1', x: 470, y: 150, properties: {} },
-    ],
+    components: [{ type: 'wokwi-stepper-motor', id: 'stp1', x: 470, y: 150, properties: {} }],
     wires: [
-      { id: 'stp-ap', start: { componentId: 'stm32-bluepill', pinName: 'PA0' }, end: { componentId: 'stp1', pinName: 'A+' }, color: '#ff5555' },
-      { id: 'stp-an', start: { componentId: 'stm32-bluepill', pinName: 'PA1' }, end: { componentId: 'stp1', pinName: 'A-' }, color: '#ff9955' },
-      { id: 'stp-bp', start: { componentId: 'stm32-bluepill', pinName: 'PA2' }, end: { componentId: 'stp1', pinName: 'B+' }, color: '#55aaff' },
-      { id: 'stp-bn', start: { componentId: 'stm32-bluepill', pinName: 'PA3' }, end: { componentId: 'stp1', pinName: 'B-' }, color: '#aa77ff' },
+      {
+        id: 'stp-ap',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA0' },
+        end: { componentId: 'stp1', pinName: 'A+' },
+        color: '#ff5555',
+      },
+      {
+        id: 'stp-an',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA1' },
+        end: { componentId: 'stp1', pinName: 'A-' },
+        color: '#ff9955',
+      },
+      {
+        id: 'stp-bp',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA2' },
+        end: { componentId: 'stp1', pinName: 'B+' },
+        color: '#55aaff',
+      },
+      {
+        id: 'stp-bn',
+        start: { componentId: 'stm32-bluepill', pinName: 'PA3' },
+        end: { componentId: 'stp1', pinName: 'B-' },
+        color: '#aa77ff',
+      },
     ],
     tags: ['stm32', 'blue pill', 'gpio', 'stepper', 'motor'],
   },
@@ -1756,12 +2115,42 @@ void loop() {
       { type: 'wokwi-stepper-motor', id: 'stp1', x: 560, y: 120, properties: {} },
     ],
     wires: [
-      { id: 'u-step', start: { componentId: 'arduino-uno', pinName: '3' }, end: { componentId: 'drv1', pinName: 'STEP' }, color: '#f59e0b' },
-      { id: 'u-dir', start: { componentId: 'arduino-uno', pinName: '4' }, end: { componentId: 'drv1', pinName: 'DIR' }, color: '#10b981' },
-      { id: 'u-1a', start: { componentId: 'drv1', pinName: '1A' }, end: { componentId: 'stp1', pinName: 'B+' }, color: '#ff5555' },
-      { id: 'u-1b', start: { componentId: 'drv1', pinName: '1B' }, end: { componentId: 'stp1', pinName: 'B-' }, color: '#ff9955' },
-      { id: 'u-2a', start: { componentId: 'drv1', pinName: '2A' }, end: { componentId: 'stp1', pinName: 'A+' }, color: '#55aaff' },
-      { id: 'u-2b', start: { componentId: 'drv1', pinName: '2B' }, end: { componentId: 'stp1', pinName: 'A-' }, color: '#aa77ff' },
+      {
+        id: 'u-step',
+        start: { componentId: 'arduino-uno', pinName: '3' },
+        end: { componentId: 'drv1', pinName: 'STEP' },
+        color: '#f59e0b',
+      },
+      {
+        id: 'u-dir',
+        start: { componentId: 'arduino-uno', pinName: '4' },
+        end: { componentId: 'drv1', pinName: 'DIR' },
+        color: '#10b981',
+      },
+      {
+        id: 'u-1a',
+        start: { componentId: 'drv1', pinName: '1A' },
+        end: { componentId: 'stp1', pinName: 'B+' },
+        color: '#ff5555',
+      },
+      {
+        id: 'u-1b',
+        start: { componentId: 'drv1', pinName: '1B' },
+        end: { componentId: 'stp1', pinName: 'B-' },
+        color: '#ff9955',
+      },
+      {
+        id: 'u-2a',
+        start: { componentId: 'drv1', pinName: '2A' },
+        end: { componentId: 'stp1', pinName: 'A+' },
+        color: '#55aaff',
+      },
+      {
+        id: 'u-2b',
+        start: { componentId: 'drv1', pinName: '2B' },
+        end: { componentId: 'stp1', pinName: 'A-' },
+        color: '#aa77ff',
+      },
     ],
     tags: ['arduino', 'uno', 'stepper', 'motor', 'a4988', 'driver'],
   },
@@ -1804,12 +2193,42 @@ void loop() {
       { type: 'wokwi-stepper-motor', id: 'stp1', x: 560, y: 120, properties: {} },
     ],
     wires: [
-      { id: 'e-step', start: { componentId: 'esp32', pinName: '26' }, end: { componentId: 'drv1', pinName: 'STEP' }, color: '#f59e0b' },
-      { id: 'e-dir', start: { componentId: 'esp32', pinName: '27' }, end: { componentId: 'drv1', pinName: 'DIR' }, color: '#10b981' },
-      { id: 'e-1a', start: { componentId: 'drv1', pinName: '1A' }, end: { componentId: 'stp1', pinName: 'B+' }, color: '#ff5555' },
-      { id: 'e-1b', start: { componentId: 'drv1', pinName: '1B' }, end: { componentId: 'stp1', pinName: 'B-' }, color: '#ff9955' },
-      { id: 'e-2a', start: { componentId: 'drv1', pinName: '2A' }, end: { componentId: 'stp1', pinName: 'A+' }, color: '#55aaff' },
-      { id: 'e-2b', start: { componentId: 'drv1', pinName: '2B' }, end: { componentId: 'stp1', pinName: 'A-' }, color: '#aa77ff' },
+      {
+        id: 'e-step',
+        start: { componentId: 'esp32', pinName: '26' },
+        end: { componentId: 'drv1', pinName: 'STEP' },
+        color: '#f59e0b',
+      },
+      {
+        id: 'e-dir',
+        start: { componentId: 'esp32', pinName: '27' },
+        end: { componentId: 'drv1', pinName: 'DIR' },
+        color: '#10b981',
+      },
+      {
+        id: 'e-1a',
+        start: { componentId: 'drv1', pinName: '1A' },
+        end: { componentId: 'stp1', pinName: 'B+' },
+        color: '#ff5555',
+      },
+      {
+        id: 'e-1b',
+        start: { componentId: 'drv1', pinName: '1B' },
+        end: { componentId: 'stp1', pinName: 'B-' },
+        color: '#ff9955',
+      },
+      {
+        id: 'e-2a',
+        start: { componentId: 'drv1', pinName: '2A' },
+        end: { componentId: 'stp1', pinName: 'A+' },
+        color: '#55aaff',
+      },
+      {
+        id: 'e-2b',
+        start: { componentId: 'drv1', pinName: '2B' },
+        end: { componentId: 'stp1', pinName: 'A-' },
+        color: '#aa77ff',
+      },
     ],
     tags: ['esp32', 'stepper', 'motor', 'a4988', 'driver'],
   },
@@ -1852,12 +2271,42 @@ void loop() {
       { type: 'wokwi-stepper-motor', id: 'stp1', x: 560, y: 120, properties: {} },
     ],
     wires: [
-      { id: 'p-step', start: { componentId: 'raspberry-pi-pico', pinName: 'GP3' }, end: { componentId: 'drv1', pinName: 'STEP' }, color: '#f59e0b' },
-      { id: 'p-dir', start: { componentId: 'raspberry-pi-pico', pinName: 'GP4' }, end: { componentId: 'drv1', pinName: 'DIR' }, color: '#10b981' },
-      { id: 'p-1a', start: { componentId: 'drv1', pinName: '1A' }, end: { componentId: 'stp1', pinName: 'B+' }, color: '#ff5555' },
-      { id: 'p-1b', start: { componentId: 'drv1', pinName: '1B' }, end: { componentId: 'stp1', pinName: 'B-' }, color: '#ff9955' },
-      { id: 'p-2a', start: { componentId: 'drv1', pinName: '2A' }, end: { componentId: 'stp1', pinName: 'A+' }, color: '#55aaff' },
-      { id: 'p-2b', start: { componentId: 'drv1', pinName: '2B' }, end: { componentId: 'stp1', pinName: 'A-' }, color: '#aa77ff' },
+      {
+        id: 'p-step',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP3' },
+        end: { componentId: 'drv1', pinName: 'STEP' },
+        color: '#f59e0b',
+      },
+      {
+        id: 'p-dir',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP4' },
+        end: { componentId: 'drv1', pinName: 'DIR' },
+        color: '#10b981',
+      },
+      {
+        id: 'p-1a',
+        start: { componentId: 'drv1', pinName: '1A' },
+        end: { componentId: 'stp1', pinName: 'B+' },
+        color: '#ff5555',
+      },
+      {
+        id: 'p-1b',
+        start: { componentId: 'drv1', pinName: '1B' },
+        end: { componentId: 'stp1', pinName: 'B-' },
+        color: '#ff9955',
+      },
+      {
+        id: 'p-2a',
+        start: { componentId: 'drv1', pinName: '2A' },
+        end: { componentId: 'stp1', pinName: 'A+' },
+        color: '#55aaff',
+      },
+      {
+        id: 'p-2b',
+        start: { componentId: 'drv1', pinName: '2B' },
+        end: { componentId: 'stp1', pinName: 'A-' },
+        color: '#aa77ff',
+      },
     ],
     tags: ['raspberry pi pico', 'rp2040', 'stepper', 'motor', 'a4988', 'driver'],
   },
@@ -2296,6 +2745,9 @@ void loop() {
   delay(1000);
 }`,
     components: [
+      { type: 'wokwi-resistor', id: 'r-rgb-led-1-r', x: 180, y: 260, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-rgb-led-1-g', x: 180, y: 286, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-rgb-led-1-b', x: 180, y: 312, properties: { value: '220' } },
       {
         type: 'wokwi-arduino-uno',
         id: 'arduino-uno',
@@ -2315,20 +2767,38 @@ void loop() {
       {
         id: 'wire-red',
         start: { componentId: 'arduino-uno', pinName: '9' },
-        end: { componentId: 'rgb-led-1', pinName: 'R' },
+        end: { componentId: 'r-rgb-led-1-r', pinName: '1' },
         color: '#ff0000',
+      },
+      {
+        id: 'w-r-rgb-led-1-r',
+        start: { componentId: 'r-rgb-led-1-r', pinName: '2' },
+        end: { componentId: 'rgb-led-1', pinName: 'R' },
+        color: '#e74c3c',
       },
       {
         id: 'wire-green',
         start: { componentId: 'arduino-uno', pinName: '10' },
-        end: { componentId: 'rgb-led-1', pinName: 'G' },
+        end: { componentId: 'r-rgb-led-1-g', pinName: '1' },
         color: '#00ff00',
+      },
+      {
+        id: 'w-r-rgb-led-1-g',
+        start: { componentId: 'r-rgb-led-1-g', pinName: '2' },
+        end: { componentId: 'rgb-led-1', pinName: 'G' },
+        color: '#e74c3c',
       },
       {
         id: 'wire-blue',
         start: { componentId: 'arduino-uno', pinName: '11' },
-        end: { componentId: 'rgb-led-1', pinName: 'B' },
+        end: { componentId: 'r-rgb-led-1-b', pinName: '1' },
         color: '#0000ff',
+      },
+      {
+        id: 'w-r-rgb-led-1-b',
+        start: { componentId: 'r-rgb-led-1-b', pinName: '2' },
+        end: { componentId: 'rgb-led-1', pinName: 'B' },
+        color: '#e74c3c',
       },
       {
         id: 'wire-rgb-gnd',
@@ -2854,37 +3324,146 @@ void loop() {
 }
 `,
     components: [
-      { type: 'wokwi-ili9341',    id: 'tft1',      x: 460, y: 60,  properties: {} },
-      { type: 'wokwi-pushbutton', id: 'btn-fwd',   x: 220, y: 420, properties: { color: 'red',   label: 'FWD'   } },
-      { type: 'wokwi-pushbutton', id: 'btn-back',  x: 220, y: 520, properties: { color: 'blue',  label: 'BACK'  } },
-      { type: 'wokwi-pushbutton', id: 'btn-left',  x: 130, y: 470, properties: { color: 'green', label: 'LEFT'  } },
-      { type: 'wokwi-pushbutton', id: 'btn-right', x: 310, y: 470, properties: { color: 'green', label: 'RIGHT' } },
+      { type: 'wokwi-ili9341', id: 'tft1', x: 460, y: 60, properties: {} },
+      {
+        type: 'wokwi-pushbutton',
+        id: 'btn-fwd',
+        x: 220,
+        y: 420,
+        properties: { color: 'red', label: 'FWD' },
+      },
+      {
+        type: 'wokwi-pushbutton',
+        id: 'btn-back',
+        x: 220,
+        y: 520,
+        properties: { color: 'blue', label: 'BACK' },
+      },
+      {
+        type: 'wokwi-pushbutton',
+        id: 'btn-left',
+        x: 130,
+        y: 470,
+        properties: { color: 'green', label: 'LEFT' },
+      },
+      {
+        type: 'wokwi-pushbutton',
+        id: 'btn-right',
+        x: 310,
+        y: 470,
+        properties: { color: 'green', label: 'RIGHT' },
+      },
     ],
     wires: [
       // Power
-      { id: 'w-tft-vcc',  start: { componentId: 'raspberry-pi-pico', pinName: '3V3'   }, end: { componentId: 'tft1', pinName: 'VCC'  }, color: '#ff0000' },
-      { id: 'w-tft-gnd',  start: { componentId: 'raspberry-pi-pico', pinName: 'GND.5' }, end: { componentId: 'tft1', pinName: 'GND'  }, color: '#000000' },
+      {
+        id: 'w-tft-vcc',
+        start: { componentId: 'raspberry-pi-pico', pinName: '3V3' },
+        end: { componentId: 'tft1', pinName: 'VCC' },
+        color: '#ff0000',
+      },
+      {
+        id: 'w-tft-gnd',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GND.5' },
+        end: { componentId: 'tft1', pinName: 'GND' },
+        color: '#000000',
+      },
       // SPI bus + control lines to the ILI9341. MISO is GP16 — the
       // sketch's 3-arg Adafruit_ILI9341(CS, DC, RST) constructor uses
       // hardware SPI0, whose MISO pin is GP16. The driver writes only
       // (no register reads), so MISO is electrically idle, but the
       // wire is included so the circuit is didactically complete.
-      { id: 'w-tft-sck',  start: { componentId: 'raspberry-pi-pico', pinName: 'GP18' }, end: { componentId: 'tft1', pinName: 'SCK'  }, color: '#ff8800' },
-      { id: 'w-tft-mosi', start: { componentId: 'raspberry-pi-pico', pinName: 'GP19' }, end: { componentId: 'tft1', pinName: 'MOSI' }, color: '#ff8800' },
-      { id: 'w-tft-miso', start: { componentId: 'raspberry-pi-pico', pinName: 'GP16' }, end: { componentId: 'tft1', pinName: 'MISO' }, color: '#ffaa44' },
-      { id: 'w-tft-cs',   start: { componentId: 'raspberry-pi-pico', pinName: 'GP17' }, end: { componentId: 'tft1', pinName: 'CS'   }, color: '#00aaff' },
-      { id: 'w-tft-dc',   start: { componentId: 'raspberry-pi-pico', pinName: 'GP20' }, end: { componentId: 'tft1', pinName: 'D/C'  }, color: '#00cc00' },
-      { id: 'w-tft-rst',  start: { componentId: 'raspberry-pi-pico', pinName: 'GP21' }, end: { componentId: 'tft1', pinName: 'RST'  }, color: '#cc0000' },
-      { id: 'w-tft-led',  start: { componentId: 'raspberry-pi-pico', pinName: 'GP22' }, end: { componentId: 'tft1', pinName: 'LED'  }, color: '#ffffff' },
+      {
+        id: 'w-tft-sck',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP18' },
+        end: { componentId: 'tft1', pinName: 'SCK' },
+        color: '#ff8800',
+      },
+      {
+        id: 'w-tft-mosi',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP19' },
+        end: { componentId: 'tft1', pinName: 'MOSI' },
+        color: '#ff8800',
+      },
+      {
+        id: 'w-tft-miso',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP16' },
+        end: { componentId: 'tft1', pinName: 'MISO' },
+        color: '#ffaa44',
+      },
+      {
+        id: 'w-tft-cs',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP17' },
+        end: { componentId: 'tft1', pinName: 'CS' },
+        color: '#00aaff',
+      },
+      {
+        id: 'w-tft-dc',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP20' },
+        end: { componentId: 'tft1', pinName: 'D/C' },
+        color: '#00cc00',
+      },
+      {
+        id: 'w-tft-rst',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP21' },
+        end: { componentId: 'tft1', pinName: 'RST' },
+        color: '#cc0000',
+      },
+      {
+        id: 'w-tft-led',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP22' },
+        end: { componentId: 'tft1', pinName: 'LED' },
+        color: '#ffffff',
+      },
       // Buttons signal + GND each
-      { id: 'w-btn-fwd',   start: { componentId: 'raspberry-pi-pico', pinName: 'GP10' }, end: { componentId: 'btn-fwd',   pinName: '1.l' }, color: '#ff4444' },
-      { id: 'w-btn-back',  start: { componentId: 'raspberry-pi-pico', pinName: 'GP11' }, end: { componentId: 'btn-back',  pinName: '1.l' }, color: '#4477ff' },
-      { id: 'w-btn-left',  start: { componentId: 'raspberry-pi-pico', pinName: 'GP12' }, end: { componentId: 'btn-left',  pinName: '1.l' }, color: '#44cc44' },
-      { id: 'w-btn-right', start: { componentId: 'raspberry-pi-pico', pinName: 'GP13' }, end: { componentId: 'btn-right', pinName: '1.l' }, color: '#cccc44' },
-      { id: 'w-gnd-fwd',   start: { componentId: 'btn-fwd',   pinName: '2.l' }, end: { componentId: 'raspberry-pi-pico', pinName: 'GND.1' }, color: '#000000' },
-      { id: 'w-gnd-back',  start: { componentId: 'btn-back',  pinName: '2.l' }, end: { componentId: 'raspberry-pi-pico', pinName: 'GND.2' }, color: '#000000' },
-      { id: 'w-gnd-left',  start: { componentId: 'btn-left',  pinName: '2.l' }, end: { componentId: 'raspberry-pi-pico', pinName: 'GND.3' }, color: '#000000' },
-      { id: 'w-gnd-right', start: { componentId: 'btn-right', pinName: '2.l' }, end: { componentId: 'raspberry-pi-pico', pinName: 'GND.4' }, color: '#000000' },
+      {
+        id: 'w-btn-fwd',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP10' },
+        end: { componentId: 'btn-fwd', pinName: '1.l' },
+        color: '#ff4444',
+      },
+      {
+        id: 'w-btn-back',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP11' },
+        end: { componentId: 'btn-back', pinName: '1.l' },
+        color: '#4477ff',
+      },
+      {
+        id: 'w-btn-left',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP12' },
+        end: { componentId: 'btn-left', pinName: '1.l' },
+        color: '#44cc44',
+      },
+      {
+        id: 'w-btn-right',
+        start: { componentId: 'raspberry-pi-pico', pinName: 'GP13' },
+        end: { componentId: 'btn-right', pinName: '1.l' },
+        color: '#cccc44',
+      },
+      {
+        id: 'w-gnd-fwd',
+        start: { componentId: 'btn-fwd', pinName: '2.l' },
+        end: { componentId: 'raspberry-pi-pico', pinName: 'GND.1' },
+        color: '#000000',
+      },
+      {
+        id: 'w-gnd-back',
+        start: { componentId: 'btn-back', pinName: '2.l' },
+        end: { componentId: 'raspberry-pi-pico', pinName: 'GND.2' },
+        color: '#000000',
+      },
+      {
+        id: 'w-gnd-left',
+        start: { componentId: 'btn-left', pinName: '2.l' },
+        end: { componentId: 'raspberry-pi-pico', pinName: 'GND.3' },
+        color: '#000000',
+      },
+      {
+        id: 'w-gnd-right',
+        start: { componentId: 'btn-right', pinName: '2.l' },
+        end: { componentId: 'raspberry-pi-pico', pinName: 'GND.4' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -3240,6 +3819,7 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-1-a', x: 280, y: 120, properties: { value: '220' } },
       { type: 'wokwi-arduino-uno', id: 'arduino-uno', x: 100, y: 100, properties: {} },
       { type: 'wokwi-led', id: 'led-1', x: 400, y: 120, properties: { color: 'green' } },
     ],
@@ -3247,8 +3827,14 @@ void loop() {
       {
         id: 'w-led',
         start: { componentId: 'arduino-uno', pinName: '13' },
-        end: { componentId: 'led-1', pinName: 'A' },
+        end: { componentId: 'r-led-1-a', pinName: '1' },
         color: '#00cc00',
+      },
+      {
+        id: 'w-r-led-1-a',
+        start: { componentId: 'r-led-1-a', pinName: '2' },
+        end: { componentId: 'led-1', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-led-gnd',
@@ -3334,16 +3920,56 @@ void loop() {
     ],
     wires: [
       // SDA bus (shared)
-      { id: 'wire-sda', start: { componentId: 'arduino-uno', pinName: 'A4' }, end: { componentId: 'ssd1306-1', pinName: 'DATA' }, color: '#2196f3' },
-      { id: 'wire-sda-rtc', start: { componentId: 'ssd1306-1', pinName: 'DATA' }, end: { componentId: 'rtc1', pinName: 'SDA' }, color: '#2196f3' },
+      {
+        id: 'wire-sda',
+        start: { componentId: 'arduino-uno', pinName: 'A4' },
+        end: { componentId: 'ssd1306-1', pinName: 'DATA' },
+        color: '#2196f3',
+      },
+      {
+        id: 'wire-sda-rtc',
+        start: { componentId: 'ssd1306-1', pinName: 'DATA' },
+        end: { componentId: 'rtc1', pinName: 'SDA' },
+        color: '#2196f3',
+      },
       // SCL bus (shared)
-      { id: 'wire-scl', start: { componentId: 'arduino-uno', pinName: 'A5' }, end: { componentId: 'ssd1306-1', pinName: 'CLK' }, color: '#ff9800' },
-      { id: 'wire-scl-rtc', start: { componentId: 'ssd1306-1', pinName: 'CLK' }, end: { componentId: 'rtc1', pinName: 'SCL' }, color: '#ff9800' },
+      {
+        id: 'wire-scl',
+        start: { componentId: 'arduino-uno', pinName: 'A5' },
+        end: { componentId: 'ssd1306-1', pinName: 'CLK' },
+        color: '#ff9800',
+      },
+      {
+        id: 'wire-scl-rtc',
+        start: { componentId: 'ssd1306-1', pinName: 'CLK' },
+        end: { componentId: 'rtc1', pinName: 'SCL' },
+        color: '#ff9800',
+      },
       // Power + ground for both devices
-      { id: 'wire-gnd', start: { componentId: 'arduino-uno', pinName: 'GND.1' }, end: { componentId: 'ssd1306-1', pinName: 'GND' }, color: '#000000' },
-      { id: 'wire-gnd-rtc', start: { componentId: 'ssd1306-1', pinName: 'GND' }, end: { componentId: 'rtc1', pinName: 'GND' }, color: '#000000' },
-      { id: 'wire-vcc', start: { componentId: 'arduino-uno', pinName: '5V' }, end: { componentId: 'ssd1306-1', pinName: 'VIN' }, color: '#ff0000' },
-      { id: 'wire-vcc-rtc', start: { componentId: 'ssd1306-1', pinName: 'VIN' }, end: { componentId: 'rtc1', pinName: 'VCC' }, color: '#ff0000' },
+      {
+        id: 'wire-gnd',
+        start: { componentId: 'arduino-uno', pinName: 'GND.1' },
+        end: { componentId: 'ssd1306-1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'wire-gnd-rtc',
+        start: { componentId: 'ssd1306-1', pinName: 'GND' },
+        end: { componentId: 'rtc1', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'wire-vcc',
+        start: { componentId: 'arduino-uno', pinName: '5V' },
+        end: { componentId: 'ssd1306-1', pinName: 'VIN' },
+        color: '#ff0000',
+      },
+      {
+        id: 'wire-vcc-rtc',
+        start: { componentId: 'ssd1306-1', pinName: 'VIN' },
+        end: { componentId: 'rtc1', pinName: 'VCC' },
+        color: '#ff0000',
+      },
     ],
   },
   {
@@ -3425,10 +4051,30 @@ void loop() {
       { type: 'wokwi-ds1307', id: 'rtc1', x: 480, y: 200, properties: {} },
     ],
     wires: [
-      { id: 'w-sda', start: { componentId: 'arduino-uno', pinName: 'A4' }, end: { componentId: 'rtc1', pinName: 'SDA' }, color: '#0066cc' },
-      { id: 'w-scl', start: { componentId: 'arduino-uno', pinName: 'A5' }, end: { componentId: 'rtc1', pinName: 'SCL' }, color: '#ffaa00' },
-      { id: 'w-vcc', start: { componentId: 'arduino-uno', pinName: '5V' }, end: { componentId: 'rtc1', pinName: 'VCC' }, color: '#ff0000' },
-      { id: 'w-gnd', start: { componentId: 'arduino-uno', pinName: 'GND' }, end: { componentId: 'rtc1', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w-sda',
+        start: { componentId: 'arduino-uno', pinName: 'A4' },
+        end: { componentId: 'rtc1', pinName: 'SDA' },
+        color: '#0066cc',
+      },
+      {
+        id: 'w-scl',
+        start: { componentId: 'arduino-uno', pinName: 'A5' },
+        end: { componentId: 'rtc1', pinName: 'SCL' },
+        color: '#ffaa00',
+      },
+      {
+        id: 'w-vcc',
+        start: { componentId: 'arduino-uno', pinName: '5V' },
+        end: { componentId: 'rtc1', pinName: 'VCC' },
+        color: '#ff0000',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'arduino-uno', pinName: 'GND' },
+        end: { componentId: 'rtc1', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -3770,7 +4416,7 @@ void loop() {
 `,
     components: [
       { type: 'wokwi-led', id: 'led-blink', x: 400, y: 120, properties: { color: 'green' } },
-      { type: 'wokwi-resistor', id: 'r1', x: 400, y: 200, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'r1', x: 400, y: 200, properties: { value: '220' } },
     ],
     wires: [
       {
@@ -3832,14 +4478,21 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-rx-a', x: 280, y: 120, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'led-rx', x: 400, y: 120, properties: { color: 'yellow' } },
     ],
     wires: [
       {
         id: 'w1',
         start: { componentId: 'arduino-uno', pinName: 'TX' },
-        end: { componentId: 'led-rx', pinName: 'A' },
+        end: { componentId: 'r-led-rx-a', pinName: '1' },
         color: '#ff8800',
+      },
+      {
+        id: 'w-r-led-rx-a',
+        start: { componentId: 'r-led-rx-a', pinName: '2' },
+        end: { componentId: 'led-rx', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w2',
@@ -3896,7 +4549,7 @@ void loop() {
 `,
     components: [
       { type: 'wokwi-led', id: 'led-status', x: 400, y: 120, properties: { color: 'green' } },
-      { type: 'wokwi-resistor', id: 'r1', x: 400, y: 200, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'r1', x: 400, y: 200, properties: { value: '220' } },
     ],
     wires: [
       {
@@ -3976,6 +4629,8 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-scan-a', x: 280, y: 100, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-found-a', x: 280, y: 180, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'led-scan', x: 400, y: 100, properties: { color: 'blue' } },
       { type: 'wokwi-led', id: 'led-found', x: 400, y: 180, properties: { color: 'green' } },
     ],
@@ -3983,14 +4638,26 @@ void loop() {
       {
         id: 'w1',
         start: { componentId: 'arduino-uno', pinName: 'GP12' },
-        end: { componentId: 'led-scan', pinName: 'A' },
+        end: { componentId: 'r-led-scan-a', pinName: '1' },
         color: '#4488ff',
+      },
+      {
+        id: 'w-r-led-scan-a',
+        start: { componentId: 'r-led-scan-a', pinName: '2' },
+        end: { componentId: 'led-scan', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w2',
         start: { componentId: 'arduino-uno', pinName: 'GP10' },
-        end: { componentId: 'led-found', pinName: 'A' },
+        end: { componentId: 'r-led-found-a', pinName: '1' },
         color: '#00cc00',
+      },
+      {
+        id: 'w-r-led-found-a',
+        start: { componentId: 'r-led-found-a', pinName: '2' },
+        end: { componentId: 'led-found', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w3',
@@ -4068,6 +4735,8 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-i2c-a', x: 280, y: 80, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-rtc-a', x: 280, y: 180, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'led-i2c', x: 400, y: 100, properties: { color: 'blue' } },
       { type: 'wokwi-led', id: 'led-rtc', x: 400, y: 180, properties: { color: 'yellow' } },
     ],
@@ -4075,14 +4744,26 @@ void loop() {
       {
         id: 'w-sda',
         start: { componentId: 'arduino-uno', pinName: 'GP12' },
-        end: { componentId: 'led-i2c', pinName: 'A' },
+        end: { componentId: 'r-led-i2c-a', pinName: '1' },
         color: '#4488ff',
+      },
+      {
+        id: 'w-r-led-i2c-a',
+        start: { componentId: 'r-led-i2c-a', pinName: '2' },
+        end: { componentId: 'led-i2c', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-scl',
         start: { componentId: 'arduino-uno', pinName: 'GP10' },
-        end: { componentId: 'led-rtc', pinName: 'A' },
+        end: { componentId: 'r-led-rtc-a', pinName: '1' },
         color: '#ffaa00',
+      },
+      {
+        id: 'w-r-led-rtc-a',
+        start: { componentId: 'r-led-rtc-a', pinName: '2' },
+        end: { componentId: 'led-rtc', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-sda-gnd',
@@ -4178,6 +4859,8 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-write-a', x: 280, y: 100, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-read-a', x: 280, y: 180, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'led-write', x: 400, y: 100, properties: { color: 'red' } },
       { type: 'wokwi-led', id: 'led-read', x: 400, y: 180, properties: { color: 'green' } },
     ],
@@ -4185,14 +4868,26 @@ void loop() {
       {
         id: 'w-sda',
         start: { componentId: 'arduino-uno', pinName: 'GP12' },
-        end: { componentId: 'led-write', pinName: 'A' },
+        end: { componentId: 'r-led-write-a', pinName: '1' },
         color: '#ff4444',
+      },
+      {
+        id: 'w-r-led-write-a',
+        start: { componentId: 'r-led-write-a', pinName: '2' },
+        end: { componentId: 'led-write', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-scl',
         start: { componentId: 'arduino-uno', pinName: 'GP10' },
-        end: { componentId: 'led-read', pinName: 'A' },
+        end: { componentId: 'r-led-read-a', pinName: '1' },
         color: '#00cc00',
+      },
+      {
+        id: 'w-r-led-read-a',
+        start: { componentId: 'r-led-read-a', pinName: '2' },
+        end: { componentId: 'led-read', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-write-gnd',
@@ -4259,6 +4954,9 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-mosi-a', x: 280, y: 100, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-miso-a', x: 280, y: 180, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-sck-a', x: 280, y: 260, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'led-mosi', x: 400, y: 100, properties: { color: 'red' } },
       { type: 'wokwi-led', id: 'led-miso', x: 400, y: 180, properties: { color: 'green' } },
       { type: 'wokwi-led', id: 'led-sck', x: 400, y: 260, properties: { color: 'yellow' } },
@@ -4267,20 +4965,38 @@ void loop() {
       {
         id: 'w-mosi',
         start: { componentId: 'arduino-uno', pinName: 'GP7' },
-        end: { componentId: 'led-mosi', pinName: 'A' },
+        end: { componentId: 'r-led-mosi-a', pinName: '1' },
         color: '#ff4444',
+      },
+      {
+        id: 'w-r-led-mosi-a',
+        start: { componentId: 'r-led-mosi-a', pinName: '2' },
+        end: { componentId: 'led-mosi', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-miso',
         start: { componentId: 'arduino-uno', pinName: 'GP4' },
-        end: { componentId: 'led-miso', pinName: 'A' },
+        end: { componentId: 'r-led-miso-a', pinName: '1' },
         color: '#00cc00',
+      },
+      {
+        id: 'w-r-led-miso-a',
+        start: { componentId: 'r-led-miso-a', pinName: '2' },
+        end: { componentId: 'led-miso', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-sck',
         start: { componentId: 'arduino-uno', pinName: 'GP6' },
-        end: { componentId: 'led-sck', pinName: 'A' },
+        end: { componentId: 'r-led-sck-a', pinName: '1' },
         color: '#ffaa00',
+      },
+      {
+        id: 'w-r-led-sck-a',
+        start: { componentId: 'r-led-sck-a', pinName: '2' },
+        end: { componentId: 'led-sck', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-mosi-gnd',
@@ -4344,6 +5060,7 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-temp-a', x: 280, y: 320, properties: { value: '220' } },
       { type: 'wokwi-potentiometer', id: 'pot-a0', x: 400, y: 80, properties: {} },
       { type: 'wokwi-potentiometer', id: 'pot-a1', x: 400, y: 200, properties: {} },
       { type: 'wokwi-led', id: 'led-temp', x: 400, y: 320, properties: { color: 'red' } },
@@ -4364,8 +5081,14 @@ void loop() {
       {
         id: 'w-temp',
         start: { componentId: 'arduino-uno', pinName: 'GP2' },
-        end: { componentId: 'led-temp', pinName: 'A' },
+        end: { componentId: 'r-led-temp-a', pinName: '1' },
         color: '#ff4444',
+      },
+      {
+        id: 'w-r-led-temp-a',
+        start: { componentId: 'r-led-temp-a', pinName: '2' },
+        end: { componentId: 'led-temp', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-pot-a0-vcc',
@@ -4517,6 +5240,9 @@ void loop() {
 }
 `,
     components: [
+      { type: 'wokwi-resistor', id: 'r-led-i2c-a', x: 280, y: 80, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-spi-a', x: 280, y: 160, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-led-gpio-a', x: 280, y: 360, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'led-i2c', x: 400, y: 80, properties: { color: 'blue' } },
       { type: 'wokwi-led', id: 'led-spi', x: 400, y: 160, properties: { color: 'yellow' } },
       { type: 'wokwi-potentiometer', id: 'pot-adc', x: 400, y: 240, properties: {} },
@@ -4526,14 +5252,26 @@ void loop() {
       {
         id: 'w-i2c',
         start: { componentId: 'arduino-uno', pinName: 'GP12' },
-        end: { componentId: 'led-i2c', pinName: 'A' },
+        end: { componentId: 'r-led-i2c-a', pinName: '1' },
         color: '#4488ff',
+      },
+      {
+        id: 'w-r-led-i2c-a',
+        start: { componentId: 'r-led-i2c-a', pinName: '2' },
+        end: { componentId: 'led-i2c', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-spi',
         start: { componentId: 'arduino-uno', pinName: 'GP7' },
-        end: { componentId: 'led-spi', pinName: 'A' },
+        end: { componentId: 'r-led-spi-a', pinName: '1' },
         color: '#ffaa00',
+      },
+      {
+        id: 'w-r-led-spi-a',
+        start: { componentId: 'r-led-spi-a', pinName: '2' },
+        end: { componentId: 'led-spi', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-adc',
@@ -4544,8 +5282,14 @@ void loop() {
       {
         id: 'w-gpio',
         start: { componentId: 'arduino-uno', pinName: 'GP2' },
-        end: { componentId: 'led-gpio', pinName: 'A' },
+        end: { componentId: 'r-led-gpio-a', pinName: '1' },
         color: '#00cc00',
+      },
+      {
+        id: 'w-r-led-gpio-a',
+        start: { componentId: 'r-led-gpio-a', pinName: '2' },
+        end: { componentId: 'led-gpio', pinName: 'A' },
+        color: '#e74c3c',
       },
       {
         id: 'w-i2c-gnd',
@@ -4802,10 +5546,10 @@ void processCommand(const String& cmd) {
     components: [
       // Red LED + 220Ω resistor for LED1 (Arduino pin 8)
       { type: 'wokwi-led', id: 'led1', x: 840, y: 100, properties: { color: 'red' } },
-      { type: 'wokwi-resistor', id: 'res1', x: 840, y: 200, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'res1', x: 840, y: 200, properties: { value: '220' } },
       // Green LED + 220Ω resistor for LED2 (Arduino pin 9)
       { type: 'wokwi-led', id: 'led2', x: 840, y: 320, properties: { color: 'green' } },
-      { type: 'wokwi-resistor', id: 'res2', x: 840, y: 420, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'res2', x: 840, y: 420, properties: { value: '220' } },
     ],
     wires: [
       // ── Serial UART cross-connection ──────────────────────────────────────
@@ -5017,7 +5761,7 @@ void loop() {
     id: 'dual-pico-bidirectional-handshake',
     title: '[2× Pico W] Bidirectional Digital Handshake',
     description:
-      'Two Picos signal each other over independent digital lines. Pico A drives GP15 (data) and watches GP14 (ack); Pico B reads GP15 and pulses GP14 on every transition to acknowledge. Each board\'s Serial Monitor logs every event, so you can see the round-trip on both sides.',
+      "Two Picos signal each other over independent digital lines. Pico A drives GP15 (data) and watches GP14 (ack); Pico B reads GP15 and pulses GP14 on every transition to acknowledge. Each board's Serial Monitor logs every event, so you can see the round-trip on both sides.",
     category: 'communication',
     difficulty: 'beginner',
     boardFilter: 'raspberry-pi-pico',
@@ -5158,7 +5902,7 @@ void loop() {
     id: 'dual-pico-digital-mirror',
     title: '[2× Pico W] Digital GPIO Mirror',
     description:
-      'Simplest possible cross-board test. Pico A toggles GP15 every 500 ms; Pico B reads GP15 as a digital input and mirrors its state to its built-in LED. Watch each Pico\'s Serial Monitor to confirm the wire is alive.',
+      "Simplest possible cross-board test. Pico A toggles GP15 every 500 ms; Pico B reads GP15 as a digital input and mirrors its state to its built-in LED. Watch each Pico's Serial Monitor to confirm the wire is alive.",
     category: 'basics',
     difficulty: 'beginner',
     boardFilter: 'raspberry-pi-pico',
@@ -5339,6 +6083,10 @@ void loop() {
     components: [
       { type: 'wokwi-pushbutton', id: 'btn1', x: 420, y: 120, properties: {} },
       { type: 'wokwi-led', id: 'led1', x: 420, y: 260, properties: { color: 'red' } },
+      // 220 ohm between each GPIO and its LED — (5V - ~2V) / 220R ~= 14 mA,
+      // under the LED's 20 mA. This is the series resistor it was missing:
+      // without it the circuit checker computes a short and refuses to run.
+      { type: 'wokwi-resistor', id: 'r-led1', x: 420, y: 200, properties: { value: '220' } },
     ],
     wires: [
       {
@@ -5350,7 +6098,7 @@ void loop() {
       {
         id: 'w-led',
         start: { componentId: 'arduino-uno', pinName: '13' },
-        end: { componentId: 'led1', pinName: 'A' },
+        end: { componentId: 'r-led1', pinName: '1' },
         color: '#ff4444',
       },
       {
@@ -5364,6 +6112,12 @@ void loop() {
         start: { componentId: 'btn1', pinName: '2.l' },
         end: { componentId: 'arduino-uno', pinName: 'GND' },
         color: '#000000',
+      },
+      {
+        id: 'w-led-r',
+        start: { componentId: 'r-led1', pinName: '2' },
+        end: { componentId: 'led1', pinName: 'A' },
+        color: '#ff4444',
       },
     ],
   },
@@ -5399,7 +6153,7 @@ void loop() {
 }`,
     components: [
       { type: 'wokwi-led', id: 'led-fade', x: 420, y: 160, properties: { color: 'blue' } },
-      { type: 'wokwi-resistor', id: 'r-fade', x: 420, y: 240, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'r-fade', x: 420, y: 240, properties: { value: '220' } },
     ],
     wires: [
       {
@@ -5530,54 +6284,65 @@ void loop() {
       { type: 'wokwi-led', id: 'led7', x: 620, y: 80, properties: { color: 'purple' } },
       { type: 'wokwi-led', id: 'led8', x: 660, y: 80, properties: { color: 'white' } },
       { type: 'wokwi-led', id: 'led9', x: 700, y: 80, properties: { color: 'red' } },
+      // 220 ohm between each GPIO and its LED — (5V - ~2V) / 220R ~= 14 mA,
+      // under the LED's 20 mA. One series resistor per LED: without them the
+      // circuit checker sees a short and blocks Run for the whole example.
+      { type: 'wokwi-resistor', id: 'mr-led2', x: 420, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led3', x: 460, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led4', x: 500, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led5', x: 540, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led6', x: 580, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led7', x: 620, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led8', x: 660, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'mr-led9', x: 700, y: 20, properties: { value: '220' } },
     ],
     wires: [
       {
         id: 'w2',
         start: { componentId: 'arduino-uno', pinName: '2' },
-        end: { componentId: 'led2', pinName: 'A' },
+        end: { componentId: 'mr-led2', pinName: '1' },
         color: '#ff2222',
       },
       {
         id: 'w3',
         start: { componentId: 'arduino-uno', pinName: '3' },
-        end: { componentId: 'led3', pinName: 'A' },
+        end: { componentId: 'mr-led3', pinName: '1' },
         color: '#ff8800',
       },
       {
         id: 'w4',
         start: { componentId: 'arduino-uno', pinName: '4' },
-        end: { componentId: 'led4', pinName: 'A' },
+        end: { componentId: 'mr-led4', pinName: '1' },
         color: '#ffcc00',
       },
       {
         id: 'w5',
         start: { componentId: 'arduino-uno', pinName: '5' },
-        end: { componentId: 'led5', pinName: 'A' },
+        end: { componentId: 'mr-led5', pinName: '1' },
         color: '#22bb22',
       },
       {
         id: 'w6',
         start: { componentId: 'arduino-uno', pinName: '6' },
-        end: { componentId: 'led6', pinName: 'A' },
+        end: { componentId: 'mr-led6', pinName: '1' },
         color: '#2244ff',
       },
       {
         id: 'w7',
         start: { componentId: 'arduino-uno', pinName: '7' },
-        end: { componentId: 'led7', pinName: 'A' },
+        end: { componentId: 'mr-led7', pinName: '1' },
         color: '#aa44ff',
       },
       {
         id: 'w8',
         start: { componentId: 'arduino-uno', pinName: '8' },
-        end: { componentId: 'led8', pinName: 'A' },
+        end: { componentId: 'mr-led8', pinName: '1' },
         color: '#ffffff',
       },
       {
         id: 'w9',
         start: { componentId: 'arduino-uno', pinName: '9' },
-        end: { componentId: 'led9', pinName: 'A' },
+        end: { componentId: 'mr-led9', pinName: '1' },
         color: '#ff2222',
       },
       {
@@ -5627,6 +6392,54 @@ void loop() {
         start: { componentId: 'led9', pinName: 'C' },
         end: { componentId: 'arduino-uno', pinName: 'GND' },
         color: '#000000',
+      },
+      {
+        id: 'w2-r',
+        start: { componentId: 'mr-led2', pinName: '2' },
+        end: { componentId: 'led2', pinName: 'A' },
+        color: '#ff2222',
+      },
+      {
+        id: 'w3-r',
+        start: { componentId: 'mr-led3', pinName: '2' },
+        end: { componentId: 'led3', pinName: 'A' },
+        color: '#ff8800',
+      },
+      {
+        id: 'w4-r',
+        start: { componentId: 'mr-led4', pinName: '2' },
+        end: { componentId: 'led4', pinName: 'A' },
+        color: '#ffcc00',
+      },
+      {
+        id: 'w5-r',
+        start: { componentId: 'mr-led5', pinName: '2' },
+        end: { componentId: 'led5', pinName: 'A' },
+        color: '#22bb22',
+      },
+      {
+        id: 'w6-r',
+        start: { componentId: 'mr-led6', pinName: '2' },
+        end: { componentId: 'led6', pinName: 'A' },
+        color: '#2244ff',
+      },
+      {
+        id: 'w7-r',
+        start: { componentId: 'mr-led7', pinName: '2' },
+        end: { componentId: 'led7', pinName: 'A' },
+        color: '#aa44ff',
+      },
+      {
+        id: 'w8-r',
+        start: { componentId: 'mr-led8', pinName: '2' },
+        end: { componentId: 'led8', pinName: 'A' },
+        color: '#ffffff',
+      },
+      {
+        id: 'w9-r',
+        start: { componentId: 'mr-led9', pinName: '2' },
+        end: { componentId: 'led9', pinName: 'A' },
+        color: '#ff2222',
       },
     ],
   },
@@ -5683,54 +6496,64 @@ void loop() {
       { type: 'wokwi-led', id: 'mled7', x: 620, y: 80, properties: { color: 'purple' } },
       { type: 'wokwi-led', id: 'mled8', x: 660, y: 80, properties: { color: 'white' } },
       { type: 'wokwi-led', id: 'mled9', x: 700, y: 80, properties: { color: 'red' } },
+      // 220 ohm between each GPIO and its LED — (5V - ~2V) / 220R ~= 14 mA,
+      // under the LED's 20 mA. One series resistor per LED, as everywhere else.
+      { type: 'wokwi-resistor', id: 'msr-mled2', x: 420, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled3', x: 460, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled4', x: 500, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled5', x: 540, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled6', x: 580, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled7', x: 620, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled8', x: 660, y: 20, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'msr-mled9', x: 700, y: 20, properties: { value: '220' } },
     ],
     wires: [
       {
         id: 'mw2',
         start: { componentId: 'arduino-uno', pinName: '2' },
-        end: { componentId: 'mled2', pinName: 'A' },
+        end: { componentId: 'msr-mled2', pinName: '1' },
         color: '#ff2222',
       },
       {
         id: 'mw3',
         start: { componentId: 'arduino-uno', pinName: '3' },
-        end: { componentId: 'mled3', pinName: 'A' },
+        end: { componentId: 'msr-mled3', pinName: '1' },
         color: '#ff8800',
       },
       {
         id: 'mw4',
         start: { componentId: 'arduino-uno', pinName: '4' },
-        end: { componentId: 'mled4', pinName: 'A' },
+        end: { componentId: 'msr-mled4', pinName: '1' },
         color: '#ffcc00',
       },
       {
         id: 'mw5',
         start: { componentId: 'arduino-uno', pinName: '5' },
-        end: { componentId: 'mled5', pinName: 'A' },
+        end: { componentId: 'msr-mled5', pinName: '1' },
         color: '#22bb22',
       },
       {
         id: 'mw6',
         start: { componentId: 'arduino-uno', pinName: '6' },
-        end: { componentId: 'mled6', pinName: 'A' },
+        end: { componentId: 'msr-mled6', pinName: '1' },
         color: '#2244ff',
       },
       {
         id: 'mw7',
         start: { componentId: 'arduino-uno', pinName: '7' },
-        end: { componentId: 'mled7', pinName: 'A' },
+        end: { componentId: 'msr-mled7', pinName: '1' },
         color: '#aa44ff',
       },
       {
         id: 'mw8',
         start: { componentId: 'arduino-uno', pinName: '8' },
-        end: { componentId: 'mled8', pinName: 'A' },
+        end: { componentId: 'msr-mled8', pinName: '1' },
         color: '#ffffff',
       },
       {
         id: 'mw9',
         start: { componentId: 'arduino-uno', pinName: '9' },
-        end: { componentId: 'mled9', pinName: 'A' },
+        end: { componentId: 'msr-mled9', pinName: '1' },
         color: '#ff2222',
       },
       {
@@ -5781,6 +6604,54 @@ void loop() {
         end: { componentId: 'arduino-uno', pinName: 'GND' },
         color: '#000000',
       },
+      {
+        id: 'mw2-r',
+        start: { componentId: 'msr-mled2', pinName: '2' },
+        end: { componentId: 'mled2', pinName: 'A' },
+        color: '#ff2222',
+      },
+      {
+        id: 'mw3-r',
+        start: { componentId: 'msr-mled3', pinName: '2' },
+        end: { componentId: 'mled3', pinName: 'A' },
+        color: '#ff8800',
+      },
+      {
+        id: 'mw4-r',
+        start: { componentId: 'msr-mled4', pinName: '2' },
+        end: { componentId: 'mled4', pinName: 'A' },
+        color: '#ffcc00',
+      },
+      {
+        id: 'mw5-r',
+        start: { componentId: 'msr-mled5', pinName: '2' },
+        end: { componentId: 'mled5', pinName: 'A' },
+        color: '#22bb22',
+      },
+      {
+        id: 'mw6-r',
+        start: { componentId: 'msr-mled6', pinName: '2' },
+        end: { componentId: 'mled6', pinName: 'A' },
+        color: '#2244ff',
+      },
+      {
+        id: 'mw7-r',
+        start: { componentId: 'msr-mled7', pinName: '2' },
+        end: { componentId: 'mled7', pinName: 'A' },
+        color: '#aa44ff',
+      },
+      {
+        id: 'mw8-r',
+        start: { componentId: 'msr-mled8', pinName: '2' },
+        end: { componentId: 'mled8', pinName: 'A' },
+        color: '#ffffff',
+      },
+      {
+        id: 'mw9-r',
+        start: { componentId: 'msr-mled9', pinName: '2' },
+        end: { componentId: 'mled9', pinName: 'A' },
+        color: '#ff2222',
+      },
     ],
   },
 
@@ -5815,7 +6686,7 @@ void loop() {
 }`,
     components: [
       { type: 'wokwi-led', id: 'c3-led1', x: 440, y: 160, properties: { color: 'green' } },
-      { type: 'wokwi-resistor', id: 'c3-r1', x: 440, y: 240, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'c3-r1', x: 440, y: 240, properties: { value: '220' } },
     ],
     wires: [
       {
@@ -5912,25 +6783,47 @@ void loop() {
   setRGB(1,1,1); Serial.println("WHITE"); delay(600);
   setRGB(0,0,0); Serial.println("OFF");   delay(300);
 }`,
-    components: [{ type: 'wokwi-rgb-led', id: 'c3-rgb1', x: 440, y: 160, properties: {} }],
+    components: [
+      { type: 'wokwi-resistor', id: 'r-c3-rgb1-r', x: 320, y: 160, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-c3-rgb1-g', x: 320, y: 186, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-c3-rgb1-b', x: 320, y: 212, properties: { value: '220' } },
+      { type: 'wokwi-rgb-led', id: 'c3-rgb1', x: 440, y: 160, properties: {} }],
     wires: [
       {
         id: 'c3-rw1',
         start: { componentId: 'arduino-uno', pinName: '6' },
-        end: { componentId: 'c3-rgb1', pinName: 'R' },
+        end: { componentId: 'r-c3-rgb1-r', pinName: '1' },
         color: '#ff2222',
+      },
+      {
+        id: 'w-r-c3-rgb1-r',
+        start: { componentId: 'r-c3-rgb1-r', pinName: '2' },
+        end: { componentId: 'c3-rgb1', pinName: 'R' },
+        color: '#e74c3c',
       },
       {
         id: 'c3-rw2',
         start: { componentId: 'arduino-uno', pinName: '7' },
-        end: { componentId: 'c3-rgb1', pinName: 'G' },
+        end: { componentId: 'r-c3-rgb1-g', pinName: '1' },
         color: '#22cc22',
+      },
+      {
+        id: 'w-r-c3-rgb1-g',
+        start: { componentId: 'r-c3-rgb1-g', pinName: '2' },
+        end: { componentId: 'c3-rgb1', pinName: 'G' },
+        color: '#e74c3c',
       },
       {
         id: 'c3-rw3',
         start: { componentId: 'arduino-uno', pinName: '8' },
-        end: { componentId: 'c3-rgb1', pinName: 'B' },
+        end: { componentId: 'r-c3-rgb1-b', pinName: '1' },
         color: '#2244ff',
+      },
+      {
+        id: 'w-r-c3-rgb1-b',
+        start: { componentId: 'r-c3-rgb1-b', pinName: '2' },
+        end: { componentId: 'c3-rgb1', pinName: 'B' },
+        color: '#e74c3c',
       },
       {
         id: 'c3-rw4',
@@ -5971,18 +6864,30 @@ void loop() {
 }`,
     components: [
       { type: 'wokwi-pushbutton', id: 'c3-btn1', x: 440, y: 120, properties: {} },
+      // 220 ohm in series with the LED — never hang an LED straight off a
+      // GPIO. (3.3V - ~2.8V for the blue one) / 220R ~= 2 mA, comfortably
+      // under the 20 mA it takes. Without it the circuit checker computes
+      // 506 mA and rightly refuses to run: on real hardware that LED would
+      // not last long.
+      { type: 'wokwi-resistor', id: 'c3-r-led', x: 440, y: 200, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'c3-led-btn', x: 440, y: 260, properties: { color: 'blue' } },
     ],
     wires: [
       {
         id: 'c3-bw1',
         start: { componentId: 'arduino-uno', pinName: '9' },
-        end: { componentId: 'c3-btn1', pinName: '1a' },
+        end: { componentId: 'c3-btn1', pinName: '1.l' },
         color: '#00aaff',
       },
       {
         id: 'c3-bw2',
         start: { componentId: 'arduino-uno', pinName: '8' },
+        end: { componentId: 'c3-r-led', pinName: '1' },
+        color: '#2244ff',
+      },
+      {
+        id: 'c3-bw2b',
+        start: { componentId: 'c3-r-led', pinName: '2' },
         end: { componentId: 'c3-led-btn', pinName: 'A' },
         color: '#2244ff',
       },
@@ -5994,7 +6899,7 @@ void loop() {
       },
       {
         id: 'c3-bw4',
-        start: { componentId: 'c3-btn1', pinName: '1b' },
+        start: { componentId: 'c3-btn1', pinName: '2.l' },
         end: { componentId: 'arduino-uno', pinName: 'GND.9' },
         color: '#000000',
       },
@@ -6442,25 +7347,47 @@ void loop() {
   setColor(255, 255, 255); Serial.println("WHITE");   delay(600);
   setColor(  0,   0,   0); Serial.println("OFF");     delay(300);
 }`,
-    components: [{ type: 'wokwi-rgb-led', id: 'rgb1', x: 440, y: 160, properties: {} }],
+    components: [
+      { type: 'wokwi-resistor', id: 'r-rgb1-r', x: 320, y: 160, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-rgb1-g', x: 320, y: 186, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-rgb1-b', x: 320, y: 212, properties: { value: '220' } },
+      { type: 'wokwi-rgb-led', id: 'rgb1', x: 440, y: 160, properties: {} }],
     wires: [
       {
         id: 'w-r',
         start: { componentId: 'arduino-uno', pinName: '9' },
-        end: { componentId: 'rgb1', pinName: 'R' },
+        end: { componentId: 'r-rgb1-r', pinName: '1' },
         color: '#ff2222',
+      },
+      {
+        id: 'w-r-rgb1-r',
+        start: { componentId: 'r-rgb1-r', pinName: '2' },
+        end: { componentId: 'rgb1', pinName: 'R' },
+        color: '#e74c3c',
       },
       {
         id: 'w-g',
         start: { componentId: 'arduino-uno', pinName: '10' },
-        end: { componentId: 'rgb1', pinName: 'G' },
+        end: { componentId: 'r-rgb1-g', pinName: '1' },
         color: '#22cc22',
+      },
+      {
+        id: 'w-r-rgb1-g',
+        start: { componentId: 'r-rgb1-g', pinName: '2' },
+        end: { componentId: 'rgb1', pinName: 'G' },
+        color: '#e74c3c',
       },
       {
         id: 'w-b',
         start: { componentId: 'arduino-uno', pinName: '11' },
-        end: { componentId: 'rgb1', pinName: 'B' },
+        end: { componentId: 'r-rgb1-b', pinName: '1' },
         color: '#2244ff',
+      },
+      {
+        id: 'w-r-rgb1-b',
+        start: { componentId: 'r-rgb1-b', pinName: '2' },
+        end: { componentId: 'rgb1', pinName: 'B' },
+        color: '#e74c3c',
       },
       {
         id: 'w-rgb-gnd',
@@ -6499,18 +7426,28 @@ void loop() {
 }`,
     components: [
       { type: 'wokwi-pushbutton', id: 'pico-btn1', x: 440, y: 120, properties: {} },
+      // 220 ohm in series with the LED — as in every other example. An LED
+      // hung straight off a GPIO goes over the current limit and the circuit
+      // checker blocks it, rightly.
+      { type: 'wokwi-resistor', id: 'pico-r-led', x: 440, y: 200, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pico-led-btn', x: 440, y: 260, properties: { color: 'yellow' } },
     ],
     wires: [
       {
         id: 'pb-btn',
         start: { componentId: 'arduino-uno', pinName: 'GP2' },
-        end: { componentId: 'pico-btn1', pinName: '1a' },
+        end: { componentId: 'pico-btn1', pinName: '1.l' },
         color: '#00aaff',
       },
       {
         id: 'pb-led',
         start: { componentId: 'arduino-uno', pinName: 'GP3' },
+        end: { componentId: 'pico-r-led', pinName: '1' },
+        color: '#ffcc00',
+      },
+      {
+        id: 'pb-led-r',
+        start: { componentId: 'pico-r-led', pinName: '2' },
         end: { componentId: 'pico-led-btn', pinName: 'A' },
         color: '#ffcc00',
       },
@@ -6522,7 +7459,7 @@ void loop() {
       },
       {
         id: 'pb-btn-gnd',
-        start: { componentId: 'pico-btn1', pinName: '1b' },
+        start: { componentId: 'pico-btn1', pinName: '2.l' },
         end: { componentId: 'arduino-uno', pinName: 'GND.1' },
         color: '#000000',
       },
@@ -6566,25 +7503,47 @@ void loop() {
   setRGB(1,0,1); Serial.println("MAGENTA");delay(600);
   setRGB(0,0,0); Serial.println("OFF");    delay(300);
 }`,
-    components: [{ type: 'wokwi-rgb-led', id: 'pico-rgb1', x: 440, y: 160, properties: {} }],
+    components: [
+      { type: 'wokwi-resistor', id: 'r-pico-rgb1-r', x: 320, y: 160, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-pico-rgb1-g', x: 320, y: 186, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-pico-rgb1-b', x: 320, y: 212, properties: { value: '220' } },
+      { type: 'wokwi-rgb-led', id: 'pico-rgb1', x: 440, y: 160, properties: {} }],
     wires: [
       {
         id: 'pr-r',
         start: { componentId: 'arduino-uno', pinName: 'GP6' },
-        end: { componentId: 'pico-rgb1', pinName: 'R' },
+        end: { componentId: 'r-pico-rgb1-r', pinName: '1' },
         color: '#ff2222',
+      },
+      {
+        id: 'w-r-pico-rgb1-r',
+        start: { componentId: 'r-pico-rgb1-r', pinName: '2' },
+        end: { componentId: 'pico-rgb1', pinName: 'R' },
+        color: '#e74c3c',
       },
       {
         id: 'pr-g',
         start: { componentId: 'arduino-uno', pinName: 'GP7' },
-        end: { componentId: 'pico-rgb1', pinName: 'G' },
+        end: { componentId: 'r-pico-rgb1-g', pinName: '1' },
         color: '#22cc22',
+      },
+      {
+        id: 'w-r-pico-rgb1-g',
+        start: { componentId: 'r-pico-rgb1-g', pinName: '2' },
+        end: { componentId: 'pico-rgb1', pinName: 'G' },
+        color: '#e74c3c',
       },
       {
         id: 'pr-b',
         start: { componentId: 'arduino-uno', pinName: 'GP8' },
-        end: { componentId: 'pico-rgb1', pinName: 'B' },
+        end: { componentId: 'r-pico-rgb1-b', pinName: '1' },
         color: '#2244ff',
+      },
+      {
+        id: 'w-r-pico-rgb1-b',
+        start: { componentId: 'r-pico-rgb1-b', pinName: '2' },
+        end: { componentId: 'pico-rgb1', pinName: 'B' },
+        color: '#e74c3c',
       },
       {
         id: 'pr-gnd',
@@ -6906,7 +7865,7 @@ void loop() {
         id: 'uno-photo-r',
         x: 430,
         y: 340,
-        properties: { resistance: '220' },
+        properties: { value: '220' },
       },
     ],
     wires: [
@@ -6971,13 +7930,11 @@ const float NOM_TEMP_K  = 298.15;   // 25 °C in Kelvin
 float readTempC() {
   int   raw  = analogRead(NTC_PIN);
   float v    = raw * (VCC / 1023.0);
-  // Voltage divider topology used by standard NTC modules and by Velxio's
-  // wokwi-ntc-temperature-sensor: VCC → R_NTC → A1 → R_pull (10k) → GND.
-  // Higher temperature → R_NTC drops → V rises, so the NTC resistance is
-  //   r = R_pull * (VCC - v) / v
-  // Using the inverted form (r = R_pull * v / (VCC - v)) gives the wrong
-  // sign and Steinhart-Hart returns negative temperatures for hot inputs.
-  float r    = SERIES_R * (VCC - v) / v;
+  // Divider modelled by Velxio's ntc-temperature-sensor:
+  //   VCC → R_pull (10k) → A1 → R_NTC → GND.
+  // Higher temperature → R_NTC drops → V FALLS, so
+  //   r = R_pull * v / (VCC - v)
+  float r    = SERIES_R * v / (VCC - v);
   // Steinhart–Hart simplified equation
   float st   = log(r / NOM_R) / B_COEFF + 1.0 / NOM_TEMP_K;
   return (1.0 / st) - 273.15;
@@ -7306,8 +8263,8 @@ const float NOM_TEMP_K = 298.15; // 25 °C
 float readTempC() {
   int   raw = analogRead(NTC_PIN);
   float v   = raw * (VCC / 1023.0);
-  // VCC → R_NTC → A1 → R_pull → GND  (standard NTC module topology)
-  float r   = SERIES_R * (VCC - v) / v;
+  // VCC → R_pull → A1 → R_NTC → GND (the divider Velxio models)
+  float r   = SERIES_R * v / (VCC - v);
   float st  = log(r / NOM_R) / B_COEFF + 1.0 / NOM_TEMP_K;
   return (1.0 / st) - 273.15;
 }
@@ -8810,7 +9767,7 @@ void loop() {
     code: '',
     components: [
       { type: 'wokwi-led', id: 'tiny-led1', x: 360, y: 140, properties: { color: 'green' } },
-      { type: 'wokwi-resistor', id: 'tiny-r1', x: 360, y: 220, properties: { resistance: '220' } },
+      { type: 'wokwi-resistor', id: 'tiny-r1', x: 360, y: 220, properties: { value: '220' } },
     ],
     wires: [
       {
@@ -8871,7 +9828,7 @@ void loop() {
         id: 'tiny-btn-r1',
         x: 380,
         y: 320,
-        properties: { resistance: '220' },
+        properties: { value: '220' },
       },
     ],
     wires: [
@@ -8951,7 +9908,7 @@ void loop() {
         id: 'tiny-fade-r1',
         x: 380,
         y: 300,
-        properties: { resistance: '220' },
+        properties: { value: '220' },
       },
     ],
     wires: [
@@ -9004,7 +9961,9 @@ const float B_COEFF    = 3950.0;
 
 float readTemperature() {
   int raw = analogRead(NTC_PIN);
-  float resistance = SERIES_R * (1023.0 / raw - 1.0);
+  // R_NTC sits on the LOW side, so raw/1023 = R_NTC / (R_NTC + SERIES_R):
+  //   R_NTC = SERIES_R / (1023/raw - 1)
+  float resistance = SERIES_R / (1023.0 / raw - 1.0);
   float steinhart = resistance / NOM_R;
   steinhart = log(steinhart) / B_COEFF;
   steinhart += 1.0 / (NOM_TEMP + 273.15);
@@ -9043,7 +10002,7 @@ void loop() {
         id: 'tiny-ntc-r1',
         x: 380,
         y: 380,
-        properties: { resistance: '220' },
+        properties: { value: '220' },
       },
     ],
     wires: [
@@ -9370,9 +10329,17 @@ void loop() {
       {
         type: 'wokwi-ili9341',
         id: 'tft1',
-        x: 320,
-        y: 60,
-        properties: {},
+        x: 360,
+        y: 100,
+        // Rotated 90 CW, which fixes both complaints at once. The module is
+        // portrait with its header along the BOTTOM edge, and the sketch draws
+        // setRotation(1) landscape - per the part's own MADCTL mapping
+        // (ComplexParts writePixel: rot-1 content's top edge lies on the
+        // canvas's LEFT edge), so upright viewing needs the module turned a
+        // quarter clockwise, exactly like the physical bench setup. The same
+        // turn brings the header to the LEFT edge, facing the board, so the
+        // wires run straight between the two instead of over the glass.
+        properties: { rotation: 90 },
       },
     ],
     wires: [
@@ -9685,30 +10652,121 @@ void loop() {
 }
 `,
     components: [
-      { type: 'wokwi-ili9341',    id: 'tft1',      x: 380, y: 40,  properties: {} },
-      { type: 'wokwi-pushbutton', id: 'btn_fwd',   x: 360, y: 330, properties: { color: 'green' } },
-      { type: 'wokwi-pushbutton', id: 'btn_back',  x: 470, y: 330, properties: { color: 'red' } },
-      { type: 'wokwi-pushbutton', id: 'btn_left',  x: 580, y: 330, properties: { color: 'blue' } },
-      { type: 'wokwi-pushbutton', id: 'btn_right', x: 690, y: 330, properties: { color: 'yellow' } },
+      { type: 'wokwi-ili9341', id: 'tft1', x: 380, y: 40, properties: {} },
+      { type: 'wokwi-pushbutton', id: 'btn_fwd', x: 360, y: 330, properties: { color: 'green' } },
+      { type: 'wokwi-pushbutton', id: 'btn_back', x: 470, y: 330, properties: { color: 'red' } },
+      { type: 'wokwi-pushbutton', id: 'btn_left', x: 580, y: 330, properties: { color: 'blue' } },
+      {
+        type: 'wokwi-pushbutton',
+        id: 'btn_right',
+        x: 690,
+        y: 330,
+        properties: { color: 'yellow' },
+      },
     ],
     wires: [
-      { id: 'd-sck',  start: { componentId: 'esp32', pinName: '18'  }, end: { componentId: 'tft1', pinName: 'SCK'  }, color: '#27ae60' },
-      { id: 'd-mosi', start: { componentId: 'esp32', pinName: '23'  }, end: { componentId: 'tft1', pinName: 'MOSI' }, color: '#3498db' },
-      { id: 'd-miso', start: { componentId: 'esp32', pinName: '19'  }, end: { componentId: 'tft1', pinName: 'MISO' }, color: '#9b59b6' },
-      { id: 'd-cs',   start: { componentId: 'esp32', pinName: '5'   }, end: { componentId: 'tft1', pinName: 'CS'   }, color: '#e67e22' },
-      { id: 'd-dc',   start: { componentId: 'esp32', pinName: '2'   }, end: { componentId: 'tft1', pinName: 'D/C'  }, color: '#f1c40f' },
-      { id: 'd-rst',  start: { componentId: 'esp32', pinName: '4'   }, end: { componentId: 'tft1', pinName: 'RST'  }, color: '#ecf0f1' },
-      { id: 'd-vcc',  start: { componentId: 'esp32', pinName: '3V3' }, end: { componentId: 'tft1', pinName: 'VCC'  }, color: '#e74c3c' },
-      { id: 'd-led',  start: { componentId: 'esp32', pinName: '3V3' }, end: { componentId: 'tft1', pinName: 'LED'  }, color: '#e74c3c' },
-      { id: 'd-gnd',  start: { componentId: 'esp32', pinName: 'GND' }, end: { componentId: 'tft1', pinName: 'GND'  }, color: '#2c3e50' },
-      { id: 'd-bf-s', start: { componentId: 'esp32', pinName: '32'   }, end: { componentId: 'btn_fwd',   pinName: '1.l' }, color: '#16a085' },
-      { id: 'd-bf-g', start: { componentId: 'esp32', pinName: 'GND'  }, end: { componentId: 'btn_fwd',   pinName: '2.l' }, color: '#000000' },
-      { id: 'd-bb-s', start: { componentId: 'esp32', pinName: '33'   }, end: { componentId: 'btn_back',  pinName: '1.l' }, color: '#c0392b' },
-      { id: 'd-bb-g', start: { componentId: 'esp32', pinName: 'GND2' }, end: { componentId: 'btn_back',  pinName: '2.l' }, color: '#000000' },
-      { id: 'd-bl-s', start: { componentId: 'esp32', pinName: '25'   }, end: { componentId: 'btn_left',  pinName: '1.l' }, color: '#2980b9' },
-      { id: 'd-bl-g', start: { componentId: 'esp32', pinName: 'GND'  }, end: { componentId: 'btn_left',  pinName: '2.l' }, color: '#000000' },
-      { id: 'd-br-s', start: { componentId: 'esp32', pinName: '26'   }, end: { componentId: 'btn_right', pinName: '1.l' }, color: '#f39c12' },
-      { id: 'd-br-g', start: { componentId: 'esp32', pinName: 'GND2' }, end: { componentId: 'btn_right', pinName: '2.l' }, color: '#000000' },
+      {
+        id: 'd-sck',
+        start: { componentId: 'esp32', pinName: '18' },
+        end: { componentId: 'tft1', pinName: 'SCK' },
+        color: '#27ae60',
+      },
+      {
+        id: 'd-mosi',
+        start: { componentId: 'esp32', pinName: '23' },
+        end: { componentId: 'tft1', pinName: 'MOSI' },
+        color: '#3498db',
+      },
+      {
+        id: 'd-miso',
+        start: { componentId: 'esp32', pinName: '19' },
+        end: { componentId: 'tft1', pinName: 'MISO' },
+        color: '#9b59b6',
+      },
+      {
+        id: 'd-cs',
+        start: { componentId: 'esp32', pinName: '5' },
+        end: { componentId: 'tft1', pinName: 'CS' },
+        color: '#e67e22',
+      },
+      {
+        id: 'd-dc',
+        start: { componentId: 'esp32', pinName: '2' },
+        end: { componentId: 'tft1', pinName: 'D/C' },
+        color: '#f1c40f',
+      },
+      {
+        id: 'd-rst',
+        start: { componentId: 'esp32', pinName: '4' },
+        end: { componentId: 'tft1', pinName: 'RST' },
+        color: '#ecf0f1',
+      },
+      {
+        id: 'd-vcc',
+        start: { componentId: 'esp32', pinName: '3V3' },
+        end: { componentId: 'tft1', pinName: 'VCC' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'd-led',
+        start: { componentId: 'esp32', pinName: '3V3' },
+        end: { componentId: 'tft1', pinName: 'LED' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'd-gnd',
+        start: { componentId: 'esp32', pinName: 'GND' },
+        end: { componentId: 'tft1', pinName: 'GND' },
+        color: '#2c3e50',
+      },
+      {
+        id: 'd-bf-s',
+        start: { componentId: 'esp32', pinName: '32' },
+        end: { componentId: 'btn_fwd', pinName: '1.l' },
+        color: '#16a085',
+      },
+      {
+        id: 'd-bf-g',
+        start: { componentId: 'esp32', pinName: 'GND' },
+        end: { componentId: 'btn_fwd', pinName: '2.l' },
+        color: '#000000',
+      },
+      {
+        id: 'd-bb-s',
+        start: { componentId: 'esp32', pinName: '33' },
+        end: { componentId: 'btn_back', pinName: '1.l' },
+        color: '#c0392b',
+      },
+      {
+        id: 'd-bb-g',
+        start: { componentId: 'esp32', pinName: 'GND2' },
+        end: { componentId: 'btn_back', pinName: '2.l' },
+        color: '#000000',
+      },
+      {
+        id: 'd-bl-s',
+        start: { componentId: 'esp32', pinName: '25' },
+        end: { componentId: 'btn_left', pinName: '1.l' },
+        color: '#2980b9',
+      },
+      {
+        id: 'd-bl-g',
+        start: { componentId: 'esp32', pinName: 'GND' },
+        end: { componentId: 'btn_left', pinName: '2.l' },
+        color: '#000000',
+      },
+      {
+        id: 'd-br-s',
+        start: { componentId: 'esp32', pinName: '26' },
+        end: { componentId: 'btn_right', pinName: '1.l' },
+        color: '#f39c12',
+      },
+      {
+        id: 'd-br-g',
+        start: { componentId: 'esp32', pinName: 'GND2' },
+        end: { componentId: 'btn_right', pinName: '2.l' },
+        color: '#000000',
+      },
     ],
   },
 
@@ -9757,11 +10815,28 @@ except KeyboardInterrupt:
       },
     ],
     components: [
+      { type: 'wokwi-resistor', id: 'r-pi3b-led', x: 410, y: 180, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi3b-led', x: 540, y: 160, properties: { color: 'red' } },
     ],
     wires: [
-      { id: 'w-sig', start: { componentId: 'raspberry-pi-3', pinName: 'GPIO17' }, end: { componentId: 'pi3b-led', pinName: 'A' }, color: '#e74c3c' },
-      { id: 'w-gnd', start: { componentId: 'pi3b-led', pinName: 'C' }, end: { componentId: 'raspberry-pi-3', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w-sig',
+        start: { componentId: 'raspberry-pi-3', pinName: 'GPIO17' },
+        end: { componentId: 'r-pi3b-led', pinName: '1' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-sig-r',
+        start: { componentId: 'r-pi3b-led', pinName: '2' },
+        end: { componentId: 'pi3b-led', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-gnd',
+        start: { componentId: 'pi3b-led', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-3', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -9807,23 +10882,108 @@ except KeyboardInterrupt:
       },
     ],
     components: [
+      { type: 'wokwi-resistor', id: 'r-pi3r-led1', x: 410, y: 80, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi3r-led1', x: 540, y: 60, properties: { color: 'red' } },
+      { type: 'wokwi-resistor', id: 'r-pi3r-led2', x: 410, y: 160, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi3r-led2', x: 540, y: 140, properties: { color: 'orange' } },
+      { type: 'wokwi-resistor', id: 'r-pi3r-led3', x: 410, y: 240, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi3r-led3', x: 540, y: 220, properties: { color: 'yellow' } },
+      { type: 'wokwi-resistor', id: 'r-pi3r-led4', x: 410, y: 320, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi3r-led4', x: 540, y: 300, properties: { color: 'green' } },
+      { type: 'wokwi-resistor', id: 'r-pi3r-led5', x: 410, y: 400, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi3r-led5', x: 540, y: 380, properties: { color: 'blue' } },
     ],
     wires: [
-      { id: 'w1', start: { componentId: 'raspberry-pi-3', pinName: 'GPIO17' }, end: { componentId: 'pi3r-led1', pinName: 'A' }, color: '#e74c3c' },
-      { id: 'w2', start: { componentId: 'raspberry-pi-3', pinName: 'GPIO27' }, end: { componentId: 'pi3r-led2', pinName: 'A' }, color: '#e67e22' },
-      { id: 'w3', start: { componentId: 'raspberry-pi-3', pinName: 'GPIO22' }, end: { componentId: 'pi3r-led3', pinName: 'A' }, color: '#f1c40f' },
-      { id: 'w4', start: { componentId: 'raspberry-pi-3', pinName: 'GPIO5' }, end: { componentId: 'pi3r-led4', pinName: 'A' }, color: '#2ecc71' },
-      { id: 'w5', start: { componentId: 'raspberry-pi-3', pinName: 'GPIO6' }, end: { componentId: 'pi3r-led5', pinName: 'A' }, color: '#3498db' },
-      { id: 'g1', start: { componentId: 'pi3r-led1', pinName: 'C' }, end: { componentId: 'raspberry-pi-3', pinName: 'GND' }, color: '#000000' },
-      { id: 'g2', start: { componentId: 'pi3r-led2', pinName: 'C' }, end: { componentId: 'raspberry-pi-3', pinName: 'GND' }, color: '#000000' },
-      { id: 'g3', start: { componentId: 'pi3r-led3', pinName: 'C' }, end: { componentId: 'raspberry-pi-3', pinName: 'GND' }, color: '#000000' },
-      { id: 'g4', start: { componentId: 'pi3r-led4', pinName: 'C' }, end: { componentId: 'raspberry-pi-3', pinName: 'GND' }, color: '#000000' },
-      { id: 'g5', start: { componentId: 'pi3r-led5', pinName: 'C' }, end: { componentId: 'raspberry-pi-3', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w1',
+        start: { componentId: 'raspberry-pi-3', pinName: 'GPIO17' },
+        end: { componentId: 'r-pi3r-led1', pinName: '1' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w1-r',
+        start: { componentId: 'r-pi3r-led1', pinName: '2' },
+        end: { componentId: 'pi3r-led1', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w2',
+        start: { componentId: 'raspberry-pi-3', pinName: 'GPIO27' },
+        end: { componentId: 'r-pi3r-led2', pinName: '1' },
+        color: '#e67e22',
+      },
+      {
+        id: 'w2-r',
+        start: { componentId: 'r-pi3r-led2', pinName: '2' },
+        end: { componentId: 'pi3r-led2', pinName: 'A' },
+        color: '#e67e22',
+      },
+      {
+        id: 'w3',
+        start: { componentId: 'raspberry-pi-3', pinName: 'GPIO22' },
+        end: { componentId: 'r-pi3r-led3', pinName: '1' },
+        color: '#f1c40f',
+      },
+      {
+        id: 'w3-r',
+        start: { componentId: 'r-pi3r-led3', pinName: '2' },
+        end: { componentId: 'pi3r-led3', pinName: 'A' },
+        color: '#f1c40f',
+      },
+      {
+        id: 'w4',
+        start: { componentId: 'raspberry-pi-3', pinName: 'GPIO5' },
+        end: { componentId: 'r-pi3r-led4', pinName: '1' },
+        color: '#2ecc71',
+      },
+      {
+        id: 'w4-r',
+        start: { componentId: 'r-pi3r-led4', pinName: '2' },
+        end: { componentId: 'pi3r-led4', pinName: 'A' },
+        color: '#2ecc71',
+      },
+      {
+        id: 'w5',
+        start: { componentId: 'raspberry-pi-3', pinName: 'GPIO6' },
+        end: { componentId: 'r-pi3r-led5', pinName: '1' },
+        color: '#3498db',
+      },
+      {
+        id: 'w5-r',
+        start: { componentId: 'r-pi3r-led5', pinName: '2' },
+        end: { componentId: 'pi3r-led5', pinName: 'A' },
+        color: '#3498db',
+      },
+      {
+        id: 'g1',
+        start: { componentId: 'pi3r-led1', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-3', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'g2',
+        start: { componentId: 'pi3r-led2', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-3', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'g3',
+        start: { componentId: 'pi3r-led3', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-3', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'g4',
+        start: { componentId: 'pi3r-led4', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-3', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'g5',
+        start: { componentId: 'pi3r-led5', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-3', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -9867,13 +11027,40 @@ except KeyboardInterrupt:
     ],
     components: [
       { type: 'wokwi-pushbutton', id: 'pi4-btn', x: 540, y: 120, properties: { color: 'green' } },
+      { type: 'wokwi-resistor', id: 'r-pi4-led', x: 410, y: 320, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi4-led', x: 540, y: 300, properties: { color: 'blue' } },
     ],
     wires: [
-      { id: 'w-btn', start: { componentId: 'raspberry-pi-4', pinName: 'GPIO2' }, end: { componentId: 'pi4-btn', pinName: '1.l' }, color: '#00aaff' },
-      { id: 'w-btn-gnd', start: { componentId: 'pi4-btn', pinName: '2.l' }, end: { componentId: 'raspberry-pi-4', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-led', start: { componentId: 'raspberry-pi-4', pinName: 'GPIO17' }, end: { componentId: 'pi4-led', pinName: 'A' }, color: '#3498db' },
-      { id: 'w-led-gnd', start: { componentId: 'pi4-led', pinName: 'C' }, end: { componentId: 'raspberry-pi-4', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w-btn',
+        start: { componentId: 'raspberry-pi-4', pinName: 'GPIO2' },
+        end: { componentId: 'pi4-btn', pinName: '1.l' },
+        color: '#00aaff',
+      },
+      {
+        id: 'w-btn-gnd',
+        start: { componentId: 'pi4-btn', pinName: '2.l' },
+        end: { componentId: 'raspberry-pi-4', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-led',
+        start: { componentId: 'raspberry-pi-4', pinName: 'GPIO17' },
+        end: { componentId: 'r-pi4-led', pinName: '1' },
+        color: '#3498db',
+      },
+      {
+        id: 'w-led-r',
+        start: { componentId: 'r-pi4-led', pinName: '2' },
+        end: { componentId: 'pi4-led', pinName: 'A' },
+        color: '#3498db',
+      },
+      {
+        id: 'w-led-gnd',
+        start: { componentId: 'pi4-led', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-4', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -9922,13 +11109,53 @@ except KeyboardInterrupt:
       },
     ],
     components: [
-      { type: 'wokwi-rgb-led', id: 'pi4-rgb', x: 560, y: 160, properties: {} },
-    ],
+      { type: 'wokwi-resistor', id: 'r-pi4-rgb-r', x: 440, y: 160, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-pi4-rgb-g', x: 440, y: 186, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-pi4-rgb-b', x: 440, y: 212, properties: { value: '220' } },
+      { type: 'wokwi-rgb-led', id: 'pi4-rgb', x: 560, y: 160, properties: {} }],
     wires: [
-      { id: 'w-r', start: { componentId: 'raspberry-pi-4', pinName: 'GPIO17' }, end: { componentId: 'pi4-rgb', pinName: 'R' }, color: '#e74c3c' },
-      { id: 'w-g', start: { componentId: 'raspberry-pi-4', pinName: 'GPIO27' }, end: { componentId: 'pi4-rgb', pinName: 'G' }, color: '#2ecc71' },
-      { id: 'w-b', start: { componentId: 'raspberry-pi-4', pinName: 'GPIO22' }, end: { componentId: 'pi4-rgb', pinName: 'B' }, color: '#3498db' },
-      { id: 'w-com', start: { componentId: 'pi4-rgb', pinName: 'COM' }, end: { componentId: 'raspberry-pi-4', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w-r',
+        start: { componentId: 'raspberry-pi-4', pinName: 'GPIO17' },
+        end: { componentId: 'r-pi4-rgb-r', pinName: '1' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-r-pi4-rgb-r',
+        start: { componentId: 'r-pi4-rgb-r', pinName: '2' },
+        end: { componentId: 'pi4-rgb', pinName: 'R' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-g',
+        start: { componentId: 'raspberry-pi-4', pinName: 'GPIO27' },
+        end: { componentId: 'r-pi4-rgb-g', pinName: '1' },
+        color: '#2ecc71',
+      },
+      {
+        id: 'w-r-pi4-rgb-g',
+        start: { componentId: 'r-pi4-rgb-g', pinName: '2' },
+        end: { componentId: 'pi4-rgb', pinName: 'G' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-b',
+        start: { componentId: 'raspberry-pi-4', pinName: 'GPIO22' },
+        end: { componentId: 'r-pi4-rgb-b', pinName: '1' },
+        color: '#3498db',
+      },
+      {
+        id: 'w-r-pi4-rgb-b',
+        start: { componentId: 'r-pi4-rgb-b', pinName: '2' },
+        end: { componentId: 'pi4-rgb', pinName: 'B' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-com',
+        start: { componentId: 'pi4-rgb', pinName: 'COM' },
+        end: { componentId: 'raspberry-pi-4', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -9971,14 +11198,46 @@ except KeyboardInterrupt:
     ],
     components: [
       { type: 'wokwi-pir-motion-sensor', id: 'pi5-pir', x: 540, y: 120, properties: {} },
+      { type: 'wokwi-resistor', id: 'r-pi5-led', x: 430, y: 340, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi5-led', x: 560, y: 320, properties: { color: 'red' } },
     ],
     wires: [
-      { id: 'w-vcc', start: { componentId: 'raspberry-pi-5', pinName: '5V' }, end: { componentId: 'pi5-pir', pinName: 'VCC' }, color: '#e74c3c' },
-      { id: 'w-pir-gnd', start: { componentId: 'pi5-pir', pinName: 'GND' }, end: { componentId: 'raspberry-pi-5', pinName: 'GND' }, color: '#000000' },
-      { id: 'w-out', start: { componentId: 'pi5-pir', pinName: 'OUT' }, end: { componentId: 'raspberry-pi-5', pinName: 'GPIO4' }, color: '#f1c40f' },
-      { id: 'w-led', start: { componentId: 'raspberry-pi-5', pinName: 'GPIO17' }, end: { componentId: 'pi5-led', pinName: 'A' }, color: '#e74c3c' },
-      { id: 'w-led-gnd', start: { componentId: 'pi5-led', pinName: 'C' }, end: { componentId: 'raspberry-pi-5', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w-vcc',
+        start: { componentId: 'raspberry-pi-5', pinName: '5V' },
+        end: { componentId: 'pi5-pir', pinName: 'VCC' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-pir-gnd',
+        start: { componentId: 'pi5-pir', pinName: 'GND' },
+        end: { componentId: 'raspberry-pi-5', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'w-out',
+        start: { componentId: 'pi5-pir', pinName: 'OUT' },
+        end: { componentId: 'raspberry-pi-5', pinName: 'GPIO4' },
+        color: '#f1c40f',
+      },
+      {
+        id: 'w-led',
+        start: { componentId: 'raspberry-pi-5', pinName: 'GPIO17' },
+        end: { componentId: 'r-pi5-led', pinName: '1' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-led-r',
+        start: { componentId: 'r-pi5-led', pinName: '2' },
+        end: { componentId: 'pi5-led', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-led-gnd',
+        start: { componentId: 'pi5-led', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-5', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
   {
@@ -10025,17 +11284,68 @@ except KeyboardInterrupt:
       },
     ],
     components: [
+      { type: 'wokwi-resistor', id: 'r-pi5-red-a', x: 420, y: 80, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-pi5-yellow-a', x: 420, y: 200, properties: { value: '220' } },
+      { type: 'wokwi-resistor', id: 'r-pi5-green-a', x: 420, y: 320, properties: { value: '220' } },
       { type: 'wokwi-led', id: 'pi5-red', x: 540, y: 80, properties: { color: 'red' } },
       { type: 'wokwi-led', id: 'pi5-yellow', x: 540, y: 200, properties: { color: 'yellow' } },
       { type: 'wokwi-led', id: 'pi5-green', x: 540, y: 320, properties: { color: 'green' } },
     ],
     wires: [
-      { id: 'w-r', start: { componentId: 'raspberry-pi-5', pinName: 'GPIO17' }, end: { componentId: 'pi5-red', pinName: 'A' }, color: '#e74c3c' },
-      { id: 'w-y', start: { componentId: 'raspberry-pi-5', pinName: 'GPIO27' }, end: { componentId: 'pi5-yellow', pinName: 'A' }, color: '#f1c40f' },
-      { id: 'w-g', start: { componentId: 'raspberry-pi-5', pinName: 'GPIO22' }, end: { componentId: 'pi5-green', pinName: 'A' }, color: '#2ecc71' },
-      { id: 'g-r', start: { componentId: 'pi5-red', pinName: 'C' }, end: { componentId: 'raspberry-pi-5', pinName: 'GND' }, color: '#000000' },
-      { id: 'g-y', start: { componentId: 'pi5-yellow', pinName: 'C' }, end: { componentId: 'raspberry-pi-5', pinName: 'GND' }, color: '#000000' },
-      { id: 'g-g', start: { componentId: 'pi5-green', pinName: 'C' }, end: { componentId: 'raspberry-pi-5', pinName: 'GND' }, color: '#000000' },
+      {
+        id: 'w-r',
+        start: { componentId: 'raspberry-pi-5', pinName: 'GPIO17' },
+        end: { componentId: 'r-pi5-red-a', pinName: '1' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-r-pi5-red-a',
+        start: { componentId: 'r-pi5-red-a', pinName: '2' },
+        end: { componentId: 'pi5-red', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-y',
+        start: { componentId: 'raspberry-pi-5', pinName: 'GPIO27' },
+        end: { componentId: 'r-pi5-yellow-a', pinName: '1' },
+        color: '#f1c40f',
+      },
+      {
+        id: 'w-r-pi5-yellow-a',
+        start: { componentId: 'r-pi5-yellow-a', pinName: '2' },
+        end: { componentId: 'pi5-yellow', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-g',
+        start: { componentId: 'raspberry-pi-5', pinName: 'GPIO22' },
+        end: { componentId: 'r-pi5-green-a', pinName: '1' },
+        color: '#2ecc71',
+      },
+      {
+        id: 'w-r-pi5-green-a',
+        start: { componentId: 'r-pi5-green-a', pinName: '2' },
+        end: { componentId: 'pi5-green', pinName: 'A' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'g-r',
+        start: { componentId: 'pi5-red', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-5', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'g-y',
+        start: { componentId: 'pi5-yellow', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-5', pinName: 'GND' },
+        color: '#000000',
+      },
+      {
+        id: 'g-g',
+        start: { componentId: 'pi5-green', pinName: 'C' },
+        end: { componentId: 'raspberry-pi-5', pinName: 'GND' },
+        color: '#000000',
+      },
     ],
   },
 ];
@@ -10057,6 +11367,7 @@ export const exampleProjects: ExampleProject[] = [
   ...microsdExamples,
   ...esp32MqttExamples,
   ...esp32s3TftExamples,
+  ...jsemuChipExamples,
 ];
 
 // Get examples by category
@@ -10067,6 +11378,58 @@ export function getExamplesByCategory(category: ExampleProject['category']): Exa
 // Get example by ID
 export function getExampleById(id: string): ExampleProject | undefined {
   return exampleProjects.find((example) => example.id === id);
+}
+
+/**
+ * Overlay seam: a private build can append gallery examples for the boards it
+ * registers at runtime. Push-based (the exported array is the single source
+ * the gallery and /example/:slug both read), idempotent per example id.
+ */
+let proExamplesVersion = 0;
+const proExamplesListeners = new Set<() => void>();
+
+export function registerProExamples(examples: ExampleProject[]): void {
+  for (const ex of examples) {
+    if (!exampleProjects.some((e) => e.id === ex.id)) exampleProjects.push(ex);
+  }
+  // Overlay registration can land AFTER a direct-URL page render resolved the
+  // array (the @pro import is dynamic) — notify subscribers so example pages
+  // re-render instead of sticking on a 404 (same contract as proRoutes).
+  proExamplesVersion++;
+  for (const l of proExamplesListeners) l();
+}
+
+export function subscribeProExamples(cb: () => void): () => void {
+  proExamplesListeners.add(cb);
+  return () => proExamplesListeners.delete(cb);
+}
+
+/**
+ * Has the pro overlay had its chance to register examples?
+ *
+ * A direct link to a PRO example (/example/pi5-opencv-vision) races the
+ * overlay's dynamic import: the page resolves the gallery before
+ * registerProExamples has run, concluded "not found", and flashed a 404 —
+ * full marketing header included — before re-rendering into the editor.
+ * The page needs to distinguish "not in the gallery" from "not in the
+ * gallery YET". main.tsx flips this: immediately when no overlay is
+ * configured, otherwise when the overlay's import settles (either way).
+ */
+let proExamplesSettled = false;
+
+export function markProExamplesSettled(): void {
+  if (proExamplesSettled) return;
+  proExamplesSettled = true;
+  proExamplesVersion++;
+  for (const l of proExamplesListeners) l();
+}
+
+export function areProExamplesSettled(): boolean {
+  return proExamplesSettled;
+}
+
+export function getProExamplesVersion(): number {
+  return proExamplesVersion;
 }
 
 // Get all categories

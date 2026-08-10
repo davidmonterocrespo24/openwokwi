@@ -9,7 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  SENSOR_CONTROLS,
+  getSensorControl,
   type SensorControl,
   type SliderControl,
 } from '../../simulation/sensorControlConfig';
@@ -49,7 +49,7 @@ export const SensorControlPanel: React.FC<SensorControlPanelProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
-  const def = SENSOR_CONTROLS[metadataId];
+  const def = getSensorControl(metadataId);
 
   // Local slider/button state — hydrated from the registry's last-known
   // values for this componentId (so reopening a sensor or switching between

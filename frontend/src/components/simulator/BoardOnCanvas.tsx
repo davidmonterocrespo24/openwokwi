@@ -1,4 +1,7 @@
 import React from 'react';
+import { useSimulatorStore } from '../../store/useSimulatorStore';
+import { isBoardSeated } from '../../utils/socketSnap';
+import { getProBoard } from '../../lib/proBoardRegistry';
 import type { BoardInstance } from '../../types/board';
 import { ArduinoUno } from '../velxio-components/ArduinoUno';
 import { ArduinoNano } from '../velxio-components/ArduinoNano';
@@ -40,6 +43,11 @@ export const BOARD_SIZE: Record<string, { w: number; h: number }> = {
   // referenced GP10/GP18/etc. landed at (0,0). The render now matches
   // the boardKind name.
   'raspberry-pi-pico': { w: 105, h: 264 },
+  // Zero/1/2 render through the Pi-3 element (same 40-pin header art); the
+  // backend picks their QEMU CPU/memory profile from the boardKind.
+  'raspberry-pi-zero': { w: 250, h: 160 },
+  'raspberry-pi-1': { w: 250, h: 160 },
+  'raspberry-pi-2': { w: 250, h: 160 },
   'raspberry-pi-3': { w: 250, h: 160 }, // RaspberryPi3Element: PI_WIDTH=250 PI_HEIGHT=160
   'raspberry-pi-4': { w: 330, h: 215 }, // RaspberryPi4Element — real board photo (925×602 @ scale)
   'raspberry-pi-5': { w: 330, h: 220 }, // RaspberryPi5Element — real board photo (1024×681 @ scale)
@@ -101,12 +109,48 @@ export const BoardOnCanvas = ({
   zoom = 1,
 }: BoardOnCanvasProps) => {
   const { id, boardKind, x, y } = board;
-  const size = BOARD_SIZE[boardKind] ?? { w: 300, h: 200 };
+  const size = BOARD_SIZE[boardKind] ?? getProBoard(boardKind)?.size ?? { w: 300, h: 200 };
+  // Seated on a socket component (Round Display back header)? Decides the
+  // stacking below. Recomputed on every position change; the check is a few
+  // pad lookups over the component list, cheap at render rate.
+  const components = useSimulatorStore((st) => st.components);
+  // The seat check reads pinInfo/boardSocket off DOM elements; on the FIRST
+  // render neither this board nor the socket component is mounted yet, so
+  // the memo would freeze on "not seated" for an example that OPENS with the
+  // board already stacked. Re-check after mount, twice: next frame, and once
+  // more after custom-element upgrade has had time to land.
+  const [seatEpoch, setSeatEpoch] = React.useState(0);
+  React.useEffect(() => {
+    const raf = requestAnimationFrame(() => setSeatEpoch((n) => n + 1));
+    const t = setTimeout(() => setSeatEpoch((n) => n + 1), 400);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, []);
+  const seated = React.useMemo(
+    () => isBoardSeated(id, boardKind, x, y, components),
+    [id, boardKind, x, y, components, seatEpoch],
+  );
+  // Drag-to-front rank: 0 = never dragged (static layering applies).
+  const zRaise = useSimulatorStore((st) => st.zOrders[id] ?? 0);
 
   // Status dot color: green=running, amber=compiled, gray=idle
   const statusColor = board.running ? '#22c55e' : board.compiledProgram ? '#f59e0b' : '#6b7280';
 
   const boardEl = (() => {
+    // Overlay-registered board (proBoardRegistry): the overlay either provides
+    // a render function or we mount its custom element directly — the element
+    // was defined by the overlay's import, and pinInfo lives on the DOM node
+    // like any other board Web Component.
+    const proDef = getProBoard(boardKind);
+    if (proDef) {
+      if (proDef.render) return proDef.render({ id, x, y, running: !!board.running });
+      return React.createElement(proDef.tag, {
+        id,
+        style: { position: 'absolute', left: x, top: y },
+      });
+    }
     switch (boardKind) {
       case 'arduino-uno':
         return <ArduinoUno id={id} x={x} y={y} led13={led13} />;
@@ -123,6 +167,12 @@ export const BoardOnCanvas = ({
       case 'raspberry-pi-pico':
       case 'pi-pico-w':
         return <PiPicoW id={id} x={x} y={y} />;
+      // Zero/1/2 share the Pi-3's 40-pin board art (their canvas identity is
+      // the header, and the ComponentRegistry metadata reuses the same tag);
+      // only the backend QEMU profile differs per kind.
+      case 'raspberry-pi-zero':
+      case 'raspberry-pi-1':
+      case 'raspberry-pi-2':
       case 'raspberry-pi-3':
         return <RaspberryPi3 id={id} x={x} y={y} />;
       case 'raspberry-pi-4':
@@ -171,9 +221,31 @@ export const BoardOnCanvas = ({
     // sibling of PinOverlay) made moving onto a pin fire mouseleave, which
     // cleared the hover and hid the pins before you could click one.
     <div
-      style={{ position: 'absolute', left: 0, top: 0, zIndex: 0 }}
+      // Stacking: boards normally sit BELOW components (z 0 vs their 1/2) —
+      // a resistor next to an Arduino must be visible on top, and a blanket
+      // z bump here once hid it behind the board in every ordinary example.
+      // Two exceptions:
+      //  - a board SEATED on a socket component (the Round Display / reSpeaker
+      //    back header): then the board is the thing you see, the way the
+      //    physical XIAO stacks on the shield;
+      //  - a board the user has DRAGGED (zRaise > 0): drag-to-front puts
+      //    whatever you dragged last above everything it overlaps, so a board
+      //    dropped over a part is never lost underneath it — and dragging the
+      //    part afterwards wins the stack right back.
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        zIndex: zRaise > 0 ? 10 + zRaise : seated ? 3 : 0,
+      }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      // Right-click opens the board inspector in EVERY mode. It used to live
+      // on the drag overlay only, which is hidden while running — so during a
+      // simulation there was no way to open the SD panel and grab the files
+      // the sketch just wrote. Bubbling from the board element lands here
+      // without covering the board (its buttons/screen stay interactive).
+      onContextMenu={onContextMenu}
     >
       {boardEl}
 
@@ -230,7 +302,6 @@ export const BoardOnCanvas = ({
             e.stopPropagation();
             onMouseDown(e);
           }}
-          onContextMenu={onContextMenu}
         />
       )}
 

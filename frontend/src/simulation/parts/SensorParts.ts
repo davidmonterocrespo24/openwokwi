@@ -18,7 +18,7 @@
  */
 
 import { PartSimulationRegistry } from './PartSimulationRegistry';
-import { setAdcVoltage, emitPropertyChange } from './partUtils';
+import { setAdcVoltage, emitPropertyChange, analogRailVolts } from './partUtils';
 import { registerSensorUpdate, unregisterSensorUpdate } from '../SensorUpdateRegistry';
 
 // ─── Tilt Switch ─────────────────────────────────────────────────────────────
@@ -64,11 +64,17 @@ PartSimulationRegistry.register('tilt-switch', {
  *
  * The injected OUT voltage uses the SAME β-model voltage divider the circuit
  * (and the example sketch) assume: a 10k pull-up from VCC to OUT and the NTC
- * from OUT to GND, so V_OUT = 5 · R_ntc / (R_ntc + R_pull) with
+ * from OUT to GND, so V_OUT = VCC · R_ntc / (R_ntc + R_pull) with
  * R_ntc(T) = R0 · exp(β · (1/T − 1/T0)).  This makes the injected ADC voltage
  * decode straight back to the slider value (set 50°C → read 50°C).  When the
  * electrical (SPICE) engine is active it drives A0 from the ngspice solve
  * instead, using the matching topology in componentToSpice.ts — both agree.
+ *
+ * VCC is the rail of the board the sensor is wired to, not a constant 5. The
+ * divider used to assume 5 V everywhere, which on a 3.3 V board put the node
+ * above the ADC's full scale: the slider read 1.4°C where it said 25, and
+ * everything below ~11°C pinned at the same saturated value (issue #233). The
+ * SPICE path already used the board's rail, so the two only agreed on AVR.
  */
 PartSimulationRegistry.register('ntc-temperature-sensor', {
   attachEvents: (_element, simulator, getArduinoPinHelper, componentId) => {
@@ -77,9 +83,10 @@ PartSimulationRegistry.register('ntc-temperature-sensor', {
     const NTC_R0 = 10_000;
     const NTC_BETA = 3950;
     const R_PULL = 10_000;
+    const vcc = analogRailVolts(simulator);
     const tempToVolts = (temp: number) => {
       const rNtc = NTC_R0 * Math.exp(NTC_BETA * (1 / (temp + 273.15) - 1 / 298.15));
-      return Math.max(0, Math.min(5, 5 * (rNtc / (rNtc + R_PULL))));
+      return Math.max(0, Math.min(vcc, vcc * (rNtc / (rNtc + R_PULL))));
     };
 
     // Room temperature default
@@ -451,7 +458,13 @@ PartSimulationRegistry.register('stepper-motor', {
 /**
  * Decode WS2812B bit-stream from DIN pin changes for NeoPixel devices.
  */
-function createNeopixelDecoder(
+/**
+ * WS2812/NeoPixel bit-bang decoder, shared. Exported because a board is not
+ * the only thing that carries an addressable LED: any part with one on board
+ * (the reSpeaker Lite's RGB, driven by whatever host is wired to it) needs the
+ * same decode, and re-implementing it per part is how two of them drift.
+ */
+export function createNeopixelDecoder(
   simulator: any,
   pinDIN: number,
   onPixel: (index: number, r: number, g: number, b: number) => void,

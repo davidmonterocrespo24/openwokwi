@@ -350,6 +350,45 @@ export const ESP32_ADC_PIN_MAP: Record<number, { adc: 1 | 2; ch: number; chn: nu
   26: { adc: 2, ch: 9, chn: 17 },
 };
 
+// ─── ADC pin map per CHIP ──────────────────────────────────────────────────────
+// The map above is the CLASSIC ESP32's, and it was being applied to every board in
+// the family. That is wrong twice over, and the second way is the nasty one:
+//
+//   * ESP32-S3: its ADC pins are GPIO1..20, none of which appear above, so the
+//     lookup returned undefined and the potentiometer's listener was never even
+//     attached — the knob did nothing at all.
+//   * ESP32-C3/C6: GPIO0 IS in the classic map, as ADC2_CH1 → chn 9. But on those
+//     chips GPIO0 is ADC1_CH0, and their engines take a plain ADC1 channel index
+//     (0..4). So the value was pushed to channel 9, out of range, silently dropped
+//     while the firmware read channel 0. A wrong answer instead of no answer.
+//
+// `chn` is what reaches the bridge's setAdc(): the flat qemu index on the classic
+// ESP32, and the ADC1 channel index on the RISC-V parts and the S3 (whose engines
+// expose setChannel/setAdcChannel over ADC1).
+export type AdcPinInfo = { adc: 1 | 2; ch: number; chn: number };
+
+/** ESP32-C3 / C6: ADC1 channels 0..4 are GPIO0..4 (ADC2 is not modelled). */
+const RISCV_C_ADC_PIN_MAP: Record<number, AdcPinInfo> = {
+  0: { adc: 1, ch: 0, chn: 0 },
+  1: { adc: 1, ch: 1, chn: 1 },
+  2: { adc: 1, ch: 2, chn: 2 },
+  3: { adc: 1, ch: 3, chn: 3 },
+  4: { adc: 1, ch: 4, chn: 4 },
+};
+
+/** ESP32-S3: ADC1 channels 0..9 are GPIO1..10. (ADC2 = GPIO11..20 shares the same
+ *  channel indices in the engine, so it is left out rather than aliased wrongly.) */
+const ESP32S3_ADC_PIN_MAP: Record<number, AdcPinInfo> = Object.fromEntries(
+  Array.from({ length: 10 }, (_, ch) => [ch + 1, { adc: 1 as const, ch, chn: ch }]),
+);
+
+/** The ADC map for a board kind. Unknown kinds fall back to the classic ESP32. */
+export function adcPinMapFor(boardKind: string): Record<number, AdcPinInfo> {
+  if (boardKind.includes('c3') || boardKind.includes('c6')) return RISCV_C_ADC_PIN_MAP;
+  if (boardKind.includes('s3')) return ESP32S3_ADC_PIN_MAP;
+  return ESP32_ADC_PIN_MAP;
+}
+
 // ─── Board config by variant ──────────────────────────────────────────────────
 
 interface BoardConfig {

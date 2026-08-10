@@ -32,11 +32,24 @@ export type BoardKind =
 
 export type LanguageMode = 'arduino' | 'micropython' | 'espidf';
 
-/** True for every Raspberry Pi backed by the QEMU bridge (Zero, 1, 2, 3, 4, 5).
+/** Extra QEMU-Linux board kinds registered at runtime by a private overlay
+ *  (proBoardRegistry defs with `piFamily: true`). They route through the same
+ *  backend qemu bridge, VFS panel and terminal UX as the Raspberry Pi family. */
+const PI_FAMILY_EXTRA_KINDS = new Set<string>();
+
+export function registerPiFamilyKind(kind: string): void {
+  PI_FAMILY_EXTRA_KINDS.add(kind);
+}
+
+/** True for every Raspberry Pi backed by the QEMU bridge (Zero, 1, 2, 3, 4, 5)
+ *  and any overlay-registered QEMU-Linux board (registerPiFamilyKind).
  *  Excludes the Pico boards (RP2040, browser emulation). */
 export function isPiBoardKind(kind: BoardKind | string): boolean {
-  return typeof kind === 'string' && kind.startsWith('raspberry-pi-')
-    && kind !== 'raspberry-pi-pico';
+  if (typeof kind !== 'string') return false;
+  return (
+    (kind.startsWith('raspberry-pi-') && kind !== 'raspberry-pi-pico') ||
+    PI_FAMILY_EXTRA_KINDS.has(kind)
+  );
 }
 
 /** True for STM32 boards backed by the QEMU bridge (libqemu-arm via
@@ -109,6 +122,15 @@ export interface BoardInstance {
   // the bridge sees the boot-complete marker, and drives the "Booting…" overlay
   // and gates file uploads. Undefined/false for non-Pi boards and pre-boot.
   piBooted?: boolean;
+  /** QEMU-Linux boards only. Which engine this board is running on (or ran
+   *  last): 'instant' = in-browser Python, 'linux' = the QEMU guest. Drives
+   *  the mode chip and the terminal panel (interactive shell only exists in
+   *  Linux mode). Undefined until the first run. */
+  engineMode?: 'instant' | 'linux';
+  /** User override for the engine, persisted with the project. Set by the
+   *  mode chip or by turning on the Linux terminal; wins over the detector
+   *  so a project doesn't silently change behaviour between runs. */
+  enginePinned?: 'instant' | 'linux';
   compiledProgram: string | null; // hex for AVR/RP2040, null for Pi (runs Python)
   serialOutput: string;
   serialBaudRate: number;
@@ -124,6 +146,12 @@ export interface BoardInstance {
   // Types live in `./boardOptions` to avoid a circular import.
   boardOptions?: import('./boardOptions').ESP32BoardOptions;
   spiffsFiles?: import('./boardOptions').SpiffsFile[];
+  /** User uploads for a board's BUILT-IN microSD slot (a ProBoardDef with
+   *  builtInSdCsPin, e.g. the XIAO ESP32S3 Sense). Same shape the
+   *  microsd-card component persists in properties.sdFiles, and consumed the
+   *  same way: merged into buildProjectSdImage on Run, overriding same-named
+   *  project files. Undefined for boards without a slot. */
+  sdFiles?: Array<{ name: string; contentB64: string }>;
   // P2.4 — this board's declared library manifest (its velxio.json). The ESP32
   // compile scope: each board resolves ONLY its own declared libraries, so two
   // boards in the same project can use different (even conflicting) libraries

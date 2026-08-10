@@ -4,9 +4,16 @@
  * Displays a gallery of example Arduino projects that users can load and run
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
-import { exampleProjects, type ExampleProject } from '../../data/examples';
+import {
+  exampleProjects,
+  subscribeProExamples,
+  getProExamplesVersion,
+  type ExampleProject,
+} from '../../data/examples';
+import { subscribeProBoards, getProBoardsVersion } from '../../lib/proBoardRegistry';
+import { BOARD_KIND_LABELS } from '../../types/board';
 import { ExampleThumbnail } from './ExampleThumbnail';
 import './ExamplesGallery.css';
 
@@ -33,6 +40,7 @@ const BOARD_TABS: BoardTab[] = [
   { id: 'pi-pico-w', label: 'Pico W (Wi-Fi)', color: '#ffffff', bg: '#8c0e1e' },
   { id: 'esp32', label: 'ESP32 (Xtensa)', color: '#ffffff', bg: '#e77d11' },
   { id: 'esp32-cam', label: 'ESP32-CAM', color: '#ffffff', bg: '#d35400' },
+  { id: 'esp32-s3', label: 'ESP32-S3 (Xtensa)', color: '#ffffff', bg: '#b3540e' },
   { id: 'esp32-c3', label: 'ESP32-C3 (RISC-V)', color: '#ffffff', bg: '#27ae60' },
   { id: 'stm32-bluepill', label: 'STM32 Blue Pill', color: '#ffffff', bg: '#0a7ea4' },
   { id: 'stm32-blackpill', label: 'STM32 Black Pill', color: '#ffffff', bg: '#2d3436' },
@@ -70,6 +78,34 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
   >('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
+
+  // Overlay boards and their examples register asynchronously — re-derive the
+  // filter options when either lands, so a pro board's tab appears without a
+  // reload.
+  useSyncExternalStore(subscribeProExamples, getProExamplesVersion);
+  useSyncExternalStore(subscribeProBoards, getProBoardsVersion);
+
+  // The static tabs cover the OSS boards; every other board kind that appears
+  // in the (possibly overlay-extended) gallery gets a tab of its own, labelled
+  // from the board registry. Without this, examples for runtime-registered
+  // boards (XIAO, M5Stack, Raspberry Pi, ...) were reachable only via "All".
+  const boardTabs: BoardTab[] = (() => {
+    const known = new Set(BOARD_TABS.map((tab) => tab.id));
+    const extra: BoardTab[] = [];
+    for (const ex of exampleProjects) {
+      const bf = getBoardFilter(ex);
+      if (known.has(bf)) continue;
+      known.add(bf);
+      extra.push({
+        id: bf,
+        label: (BOARD_KIND_LABELS as Record<string, string>)[bf] ?? bf,
+        color: '#ffffff',
+        bg: '#4a5568',
+      });
+    }
+    extra.sort((a, b) => a.label.localeCompare(b.label));
+    return [...BOARD_TABS, ...extra];
+  })();
 
   const handleCopyLink = useCallback((e: React.MouseEvent, exampleId: string) => {
     e.stopPropagation(); // Don't trigger card click
@@ -114,10 +150,10 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
     return searchTokens.every((tok) => hay.includes(tok));
   })
     .sort((a, b) => {
-      // Order by board following the BOARD_TABS order (so Arduino Uno comes
+      // Order by board following the boardTabs order (so Arduino Uno comes
       // first), then alphabetically by title within each board.
-      const ra = BOARD_TABS.findIndex((t) => t.id === getBoardFilter(a));
-      const rb = BOARD_TABS.findIndex((t) => t.id === getBoardFilter(b));
+      const ra = boardTabs.findIndex((t) => t.id === getBoardFilter(a));
+      const rb = boardTabs.findIndex((t) => t.id === getBoardFilter(b));
       if (ra !== rb) return (ra < 0 ? 999 : ra) - (rb < 0 ? 999 : rb);
       return (a.title ?? '').localeCompare(b.title ?? '');
     });
@@ -215,7 +251,7 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
     example: ExampleProject,
   ): { label: string; color: string; bg: string } | null => {
     const bf = getBoardFilter(example);
-    const tab = BOARD_TABS.find((t) => t.id === bf);
+    const tab = boardTabs.find((t) => t.id === bf);
     if (!tab || tab.id === 'all') return null;
     return { label: tab.label, color: tab.color, bg: tab.bg };
   };
@@ -235,7 +271,7 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
   // Active filters rendered as removable chips (the compact replacement for
   // the old three rows of always-visible filter buttons). Each chip clears
   // its own filter; "Clear all" resets everything.
-  const boardTabForChip = BOARD_TABS.find((tb) => tb.id === selectedBoard);
+  const boardTabForChip = boardTabs.find((tb) => tb.id === selectedBoard);
   const activeChips: { key: string; label: string; onClear: () => void }[] = [];
   if (selectedBoard !== 'all' && boardTabForChip) {
     activeChips.push({
@@ -325,7 +361,7 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
           onChange={(e) => setSelectedBoard(e.target.value)}
           aria-label={t('examples.filters.boardLabel', 'Board')}
         >
-          {BOARD_TABS.map((tab) => (
+          {boardTabs.map((tab) => (
             <option key={tab.id} value={tab.id}>
               {tab.id === 'all' ? t('examples.filters.allBoards', 'All boards') : tab.label}
               {boardCounts[tab.id] != null ? ` (${boardCounts[tab.id]})` : ''}

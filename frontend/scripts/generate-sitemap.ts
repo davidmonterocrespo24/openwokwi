@@ -16,7 +16,14 @@ const __dirname_resolved = dirname(fileURLToPath(import.meta.url));
 const DOMAIN = 'https://velxio.dev';
 const TODAY = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-const indexableRoutes = SEO_ROUTES.filter((r) => !r.noindex);
+// The OSS build serves only the editor surface; its sitemap must not list
+// marketing URLs that 404 on a self-hosted instance. Pro builds (velxio.dev)
+// list everything, exactly as before.
+const OSS_SERVED = new Set(['/editor', '/examples']);
+const isProBuild = !!process.env.VITE_PRO_BUILD;
+const indexableRoutes = SEO_ROUTES.filter(
+  (r) => !r.noindex && (isProBuild || OSS_SERVED.has(r.path)),
+);
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"

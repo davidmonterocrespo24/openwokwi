@@ -166,6 +166,12 @@ body {
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
+  /* When the row genuinely cannot fit (narrow window + docked chat), wrap
+     the canvas controls onto a second line instead of letting flexbox
+     squeeze fixed blocks below their content — that used to crush the
+     Code/Both/Circuit toggle to a third of its width, clipping two of its
+     buttons into unreachable slivers. Two short rows beat hidden buttons. */
+  flex-wrap: wrap;
   background: #252526;
   border-bottom: 1px solid #333;
   min-height: 38px;
@@ -188,17 +194,15 @@ body {
   }
 }
 
-.unified-toolbar-explorer-toggle {
-  border-bottom: none;
-}
-
 .unified-toolbar-editor {
   flex: 1 1 auto;
-  /* Floor the editor zone at its fully-collapsed content width so it can never
-     shrink *under* its own buttons and paint them over the adjacent canvas
-     controls. Below this floor the (lower-priority) canvas controls get pushed
-     toward the right edge instead of overlapping — never the other way. */
-  min-width: 280px;
+  /* Floor the editor zone at its own content width so it can never shrink
+     *under* its buttons and paint them over the adjacent canvas controls
+     (a hardcoded 280px floor sat below the real content width, letting the
+     console button overlap the board selector with the chat docked). When
+     the row genuinely cannot fit, the bar's flex-wrap moves the canvas
+     controls to a second line instead — never an overlap. */
+  min-width: max-content;
   display: flex;
 }
 
@@ -447,4 +451,209 @@ body {
 @keyframes velxio-pulse {
   0%, 100% { opacity: 0.4; transform: scale(0.85); }
   50%      { opacity: 1.0; transform: scale(1.0); }
+}
+
+/* Marching-ants attention border (CameraToggle while it wants a click):
+   four thin repeating-gradient strips, one per edge, sliding one dash
+   period per cycle. Drawn as backgrounds rather than a border because a
+   CSS border cannot animate its dash offset. Uses currentColor so the
+   ants inherit the button's state colour (grey idle, red on error).
+   NOT named .velxio-ants: that class is the canvas selection outline
+   (SimulatorCanvas.css) whose ::after is position:absolute — on a
+   non-positioned button it anchored to the toolbar and drew a
+   toolbar-wide ant line. */
+@keyframes velxio-marching-ants {
+  to { background-position: 12px 0, -12px 100%, 0 -12px, 100% 12px; }
+}
+.velxio-btn-ants {
+  background-image:
+    repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(0deg, currentColor 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(0deg, currentColor 0 6px, transparent 6px 12px);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size: 12px 1px, 12px 1px, 1px 12px, 1px 12px;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  animation: velxio-marching-ants 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .velxio-btn-ants { animation: none; }
+}
+
+/* ── Editor: toolbar riding inside the header ─────────────────────────────
+   With the marketing nav gone from the editor header, its middle was dead
+   space while the toolbar occupied a whole second bar. The strip now fills
+   that middle: one 44px row instead of 44+38 — a full row returned to the
+   code/canvas. The strip keeps its own class names (container queries, the
+   docked-chat padding-right) and wraps internally when it truly cannot
+   fit; the header then grows instead of clipping or overlapping. */
+.app-header--with-toolbar {
+  height: auto;
+  min-height: 44px;
+}
+
+.header-editor-toolbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-self: stretch;
+  margin: 0 10px;
+}
+
+.header-editor-toolbar .unified-toolbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Skin: it is part of the header now, not a bar of its own. */
+  background: transparent;
+  border-bottom: none;
+  min-height: 44px;
+  align-items: center;
+}
+
+/* Keep the brand block and the right-side controls pinned to the first
+   line when the strip wraps the header taller. */
+.app-header--with-toolbar .header-left,
+.app-header--with-toolbar .header-right {
+  align-self: flex-start;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+/* Logo and the File menu read as one menubar — the marketing-header 16px
+   gap left a hole between them in the editor. */
+.app-header--with-toolbar .header-left {
+  gap: 6px;
+}
+
+.app-header--with-toolbar .header-content {
+  align-items: stretch;
+}
+
+/* The editor zone / toolbar inside the strip: no own chrome, blend into
+   the header instead of painting a nested dark box with its own border. */
+.header-editor-toolbar .editor-toolbar,
+.header-editor-toolbar .unified-toolbar-editor .editor-toolbar {
+  background: transparent;
+  border-bottom: none;
+  height: 44px;
+}
+
+/* ── Tight fallback for the in-header strip ──────────────────────────────
+   Between "fits in one row" and "phone" there is an awkward middle (e.g.
+   1440px with the chat docked) where flex-wrap produced an orphan group of
+   canvas controls floating inside a tall transparent header, next to a
+   dead hole before the right-side controls. Below the width where one row
+   GENUINELY fits — thresholds account for the docked chat's reserved
+   380px / 36px — the strip drops back to being its own full-width second
+   bar with its old skin: exactly the familiar pre-merge layout, which
+   reads as intentional instead of broken. Three blocks because a media
+   query cannot test a body class in its condition. */
+
+@media (max-width: 1039.9px) {
+  .app-header--with-toolbar .header-content {
+    flex-wrap: wrap;
+  }
+  .app-header--with-toolbar .header-editor-toolbar {
+    flex-basis: 100%;
+    order: 10;
+    margin: 0 -16px;
+  }
+  .app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
+    background: #252526;
+    border-top: 1px solid #333;
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 1059.9px) {
+  body.velxio-agent-collapsed .app-header--with-toolbar .header-content {
+    flex-wrap: wrap;
+  }
+  body.velxio-agent-collapsed .app-header--with-toolbar .header-editor-toolbar {
+    flex-basis: 100%;
+    order: 10;
+    margin: 0 -16px;
+  }
+  body.velxio-agent-collapsed .app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
+    background: #252526;
+    border-top: 1px solid #333;
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 1399.9px) {
+  body.velxio-agent-open .app-header--with-toolbar .header-content {
+    flex-wrap: wrap;
+  }
+  body.velxio-agent-open .app-header--with-toolbar .header-editor-toolbar {
+    flex-basis: 100%;
+    order: 10;
+    margin: 0 -16px;
+  }
+  body.velxio-agent-open .app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
+    background: #252526;
+    border-top: 1px solid #333;
+    min-height: 38px;
+  }
+}
+
+/* ── Editor corner box (bottom-left) ─────────────────────────────────────
+   Language switcher + account button, IDE style. Moving them out of the
+   header is what buys the toolbar the last ~150px it needed to keep the
+   single-row layout on 1440px screens with the chat docked. */
+.editor-corner-box {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 7000; /* above the canvas, below the chat (8000) and modals */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(23, 26, 33, 0.95);
+  border: 1px solid #2f3542;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* With the chat rising to the very top (agent CSS sets the header's
+   padding-right), the strip must NOT also pad itself — that would double
+   the reservation and squeeze the toolbar by another panel-width. */
+.app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
+  padding-right: 6px !important;
+}
+
+/* ── Explorer account footer ─────────────────────────────────────────────
+   The account + language block fused to the bottom of the file explorer:
+   a long tree scrolls above it instead of hiding under a floating box.
+   (.editor-corner-box remains as the fallback when the explorer is
+   collapsed.) The standalone globe is a logged-out affordance only — once
+   the pro auth slot renders its signed-in marker, language moves inside
+   the account menu and the globe hides. */
+.explorer-account-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid #2f3542;
+  background: #171a21;
+}
+
+.explorer-account-footer {
+  container-type: inline-size;
+}
+
+/* Tight footer (narrow explorer): the avatar alone identifies the account;
+   the name is a luxury that costs exactly the width we do not have. */
+@container (max-width: 150px) {
+  .explorer-account-footer .header-username-text {
+    display: none;
+  }
+}
+
+/* Collapsed explorer: the floating fallback box shows the circle only. */
+.editor-corner-box .header-username-text {
+  display: none;
 }

@@ -58,8 +58,10 @@
 
 /* ── Icon buttons ───────────────────────────────── */
 .tb-btn {
-  width: 30px;
-  height: 30px;
+  /* 28px — the one control height across the whole editor strip (view-mode
+     segments, Libraries, language select, canvas controls all match). */
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,7 +123,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 26px;
+  height: 28px;
   padding: 0 8px 0 7px;
   border: none;
   border-radius: 5px;
@@ -169,37 +171,9 @@
   }
 }
 
-/* ── Progressive overflow ──────────────────────────────────────────────
-   The overflow menu starts with three items (BOM, Schematic, Firmware)
-   plus two hidden ones (Import, Export) declared up top.  As the toolbar
-   narrows we drop inline buttons into the menu instead, so mobile users
-   always reach every action — they just open the "..." menu to find it.
-
-   Selectors are intentionally compound (.tb-overflow-menu .tb-…) to beat
-   the later-defined `.tb-overflow-item { display: flex }` baseline.
-   Container width thresholds reflect the editor pane width (toolbar lives
-   inside it), not the viewport — at a 50/50 desktop split a 1280px
-   viewport gives the toolbar ~376px to work with. */
-.tb-overflow-menu .tb-overflow-import,
-.tb-overflow-menu .tb-overflow-export {
-  display: none;
-}
-@container editor-toolbar (max-width: 320px) {
-  .tb-btn-import-inline {
-    display: none;
-  }
-  .tb-overflow-menu .tb-overflow-import {
-    display: flex;
-  }
-}
-@container editor-toolbar (max-width: 280px) {
-  .tb-btn-export-inline {
-    display: none;
-  }
-  .tb-overflow-menu .tb-overflow-export {
-    display: flex;
-  }
-}
+/* Import / Export moved to the File menu in the header (EditorMenuBar):
+   their inline buttons and the responsive overflow twins are gone, which
+   is ~70px the row no longer has to find on laptop widths. */
 
 /* Legacy lib icon-only button (for overflow items) */
 .tb-btn-lib {
@@ -378,67 +352,11 @@
 }
 
 /* ── Overflow (…) menu ──────────────────────────── */
-.tb-overflow-wrap {
-  position: relative;
-}
 
-.tb-btn-overflow {
-  color: #9d9d9d;
-}
-.tb-btn-overflow:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #ccc;
-}
-.tb-btn-overflow-active {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
 
-.tb-overflow-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 200;
-  background: #2a2a2c;
-  border: 1px solid #3a3a3c;
-  border-radius: 10px;
-  padding: 6px;
-  min-width: 180px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 
-.tb-overflow-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  border-radius: 7px;
-  color: #ccc;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  text-align: left;
-  white-space: nowrap;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
 
-.tb-overflow-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
 
-.tb-overflow-item svg {
-  flex-shrink: 0;
-  color: var(--color-fg-default);
-}
 
 /* ── Run split-button (multi-board: primary Run = all boards + menu) ──── */
 .tb-run-split {
@@ -496,24 +414,10 @@
   cursor: default;
 }
 
-.tb-overflow-label {
-  flex: 1;
-  text-align: left;
-}
 
 /* Pro pill — signals premium items in the overflow menu BEFORE the user
    clicks. Used in place of a hidden gate so free users aren't surprised
    by an upgrade prompt on what looked like a free button. */
-.tb-overflow-pro {
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
-  color: #1a1a1a;
-  flex-shrink: 0;
-}
 
 /* ── Error detail bar (for long compiler errors) ── */
 .toolbar-error-detail {

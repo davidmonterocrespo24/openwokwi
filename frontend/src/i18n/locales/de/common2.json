@@ -31,7 +31,15 @@
         "dismiss": "Schließen"
       },
       "exportBom": "Stückliste exportieren (CSV — Pro)",
-      "exportScreenshot": "Schaltplan als Bild exportieren (PNG — Pro)"
+      "exportScreenshot": "Schaltplan als Bild exportieren (PNG — Pro)",
+      "importLabel": "Projekt importieren",
+      "exportLabel": "Projekt exportieren (.zip)",
+      "exportBomLabel": "Stückliste (CSV)",
+      "exportScreenshotLabel": "Schaltplanbild (PNG)",
+      "shareLabel": "Teilen / Einbetten",
+      "githubSyncLabel": "Mit GitHub synchronisieren",
+      "uploadFirmwareLabel": "Firmware hochladen",
+      "recordLabel": "Simulation aufzeichnen"
     },
     "fileExplorer": {
       "workspace": "ARBEITSBEREICH",
@@ -147,7 +155,7 @@
       "dismiss": "Schließen",
       "removeBoard": "Board entfernen",
       "wireCount_one": "{{count}} Leitung",
-      "wireCount_other": "{{count}} Leitungen",
+      "wireCount_other": "{{count}} Kabel",
       "removeConfirm": {
         "boardFallback": "Board",
         "title": "{{label}} entfernen?",
@@ -156,7 +164,9 @@
         "bodyWithWires_other": "Dadurch wird das Board aus dem Arbeitsbereich und {{count}} verbundene Leitungen entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
         "cancel": "Abbrechen",
         "remove": "Entfernen"
-      }
+      },
+      "boardOptions": "Board-Optionen...",
+      "flashToBoard": "Auf echtes Board flashen"
     },
     "componentPicker": {
       "title": "Komponente hinzufügen",
@@ -353,6 +363,37 @@
         "cr": "Wagenrücklauf",
         "both": "Beides NL & CR"
       }
+    },
+    "menu": {
+      "file": "Datei",
+      "edit": "Bearbeiten",
+      "view": "Ansicht",
+      "language": "Sprache",
+      "help": "Hilfe",
+      "newProject": "Neuer Arbeitsbereich",
+      "newFile": "Neue Datei",
+      "open": "Projekt öffnen…",
+      "save": "Projekt speichern",
+      "undo": "Rückgängig",
+      "redo": "Wiederholen",
+      "centerView": "Canvas-Ansicht zentrieren",
+      "toggleExplorer": "Datei-Explorer",
+      "toggleConsole": "Ausgabekonsole",
+      "toggleScope": "Oszilloskop / Logikanalysator",
+      "home": "Velxio-Startseite",
+      "about": "Über Velxio",
+      "discord": "Discord-Community",
+      "github": "GitHub-Repository",
+      "compile": "Kompilieren",
+      "run": "Ausführen",
+      "hideExplorer": "Datei-Explorer ausblenden",
+      "showExplorer": "Datei-Explorer einblenden"
+    },
+    "inspector": {
+      "propertiesTab": "Eigenschaften",
+      "datasheetTab": "Datenblatt",
+      "examplesTitle": "Beispielprojekte",
+      "productPage": "Produktseite"
     }
   },
   "about": {

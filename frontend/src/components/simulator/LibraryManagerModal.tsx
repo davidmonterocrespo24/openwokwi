@@ -140,6 +140,20 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     if (isOpen) fetchInstalled();
   }, [isOpen, fetchInstalled]);
 
+  // Escape closes it, like any dialog. The overlay already closes on a
+  // backdrop click, but the toolbar button that OPENED this sits underneath
+  // the overlay — so someone who installs a library and reaches for it to get
+  // back to their sketch clicks a button that cannot be hit, and the editor
+  // reads as frozen. Escape is the exit everyone tries next.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   // Search the index (debounced). With an empty query we BROWSE the installed
   // list instead, so don't fire a search.
   useEffect(() => {

@@ -1,0 +1,560 @@
+/**
+ * Part Inspector dialog — the merged right-click surface (preview + pins on
+ * the left, Properties/Datasheet tabs on the right). Portaled to <body> and
+ * positioned in viewport coordinates, unlike its predecessor.
+ */
+
+.part-inspector-dialog {
+  position: fixed;
+  background-color: #2d2d2d;
+  border: 1px solid #555;
+  border-radius: 10px;
+  /* Wide enough that a pinout table in a datasheet fits without sideways
+     scrolling, and clamped so the dialog can never run off the right edge. */
+  width: 720px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+  /* Above every canvas overlay (wire menus ~1001) AND above the pro agent
+     chat panel (8000/8001), which docks over the canvas — the dialog opens
+     from a right-click on the very thing the chat covers, so it has to win.
+     Still below the component picker (9000+), which is never open with it. */
+  z-index: 8500;
+  pointer-events: all;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 13px;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+
+.pid-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #444;
+  flex: 0 0 auto;
+}
+
+.pid-thumb {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pid-thumb svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.pid-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.pid-name {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pid-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pid-cat,
+.pid-pins-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #3d3d3d;
+  color: #bbb;
+}
+
+.pid-pro {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #7c5cff;
+  color: #fff;
+  font-weight: 700;
+}
+
+.pid-brand {
+  font-size: 11px;
+  color: #999;
+}
+
+.pid-close {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  flex: 0 0 auto;
+}
+
+.pid-close:hover {
+  color: #fff;
+}
+
+/* ── Two columns ─────────────────────────────────────────────────────── */
+
+.pid-columns {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.pid-left {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-right: 1px solid #444;
+  max-width: 60%;
+  overflow: auto;
+}
+
+.pid-right {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  min-height: 0;
+}
+
+/* ── Preview + spatial pins ──────────────────────────────────────────── */
+
+.pid-preview {
+  position: relative;
+  min-width: 90px;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Labels are laid out inside the reserved gutters; clip anything that still
+     overshoots rather than letting it escape over the header or the canvas. */
+  overflow: hidden;
+}
+
+.pid-preview-art {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* Collapsed mode centres the scaled art in the box via flex on the parent —
+   the art host is absolute, so centre it with inset auto margins instead. */
+.pid-preview:not(.pid-preview--pins) .pid-preview-art {
+  position: relative;
+}
+
+.pid-preview-element {
+  display: block;
+}
+
+/* Stand-in for the part's body while the art is hidden (pin mode). */
+.pid-body-outline {
+  position: absolute;
+  border: 1px dashed #5a5a5a;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  pointer-events: none;
+}
+
+.pid-preview-missing {
+  color: #666;
+  font-size: 22px;
+}
+
+.pid-preview-fallback svg {
+  width: 90px;
+  height: 90px;
+}
+
+.pid-pin-leader {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.pid-pin-leader line {
+  stroke: #777;
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  transition: stroke 0.1s;
+}
+
+/* Tracing a name back to its pad: the whole run lights at once. */
+.pid-pin-leader--lit line {
+  stroke: #4dd0e1;
+  stroke-width: 1.6;
+  stroke-dasharray: none;
+}
+
+.pid-pin-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px; /* centre on the pin coordinate */
+  border-radius: 50%;
+  border: 1px solid #111;
+  background: #9aa0a6;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.pid-pin-dot:disabled {
+  cursor: default;
+}
+
+.pid-pin-dot:hover:not(:disabled),
+.pid-pin-dot--lit {
+  transform: scale(1.6);
+  background: #4dd0e1;
+  box-shadow: 0 0 6px rgba(77, 208, 225, 0.9);
+}
+
+/* Signal tinting — the same data the wire classifier reads. */
+.pid-sig-power-gnd { background: #616161; }
+.pid-sig-power-vcc { background: #e57373; }
+.pid-sig-i2c { background: #64b5f6; }
+.pid-sig-spi { background: #81c784; }
+.pid-sig-usart { background: #ffb74d; }
+.pid-sig-pwm { background: #ba68c8; }
+.pid-sig-analog { background: #4db6ac; }
+
+.pid-pin-label {
+  position: absolute;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #ddd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.pid-pin-label:disabled {
+  cursor: default;
+}
+
+.pid-pin-label:hover:not(:disabled),
+.pid-pin-label--lit {
+  color: #4dd0e1;
+  font-weight: 700;
+}
+
+.pid-pin-label--left {
+  transform: translate(-100%, -50%);
+}
+
+/* Top/bottom labels are VERTICAL, like a printed pinout diagram: a header row
+   packs pins every ~12px, where horizontal text would need ~36px and spill
+   out of the dialog (an 8-pin SSD1306 header is 240px wide). */
+.pid-pin-label--top,
+.pid-pin-label--bottom {
+  writing-mode: vertical-rl;
+}
+
+.pid-pin-label--top {
+  transform: translate(-50%, -100%) rotate(180deg);
+}
+
+.pid-pin-label--bottom {
+  transform: translate(-50%, 0);
+}
+
+.pid-pin-hint {
+  font-size: 11px;
+  color: #999;
+  text-align: center;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────── */
+
+/* One action bar across the bottom of the dialog, OUTSIDE the tabs, so the
+   same buttons are there whichever tab is open. Rotate/Delete (and the board
+   actions) sit left; Buy sits right. */
+.pid-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-top: 1px solid #444;
+  flex: 0 0 auto;
+}
+
+.pid-actions-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Solid fills, per the brand kit: interactive surfaces are the accent blue
+   (--blue-600 #0071e3), destructive ones the danger red (--red-500 #ff453a),
+   both with white text. Velxio does not use outline buttons. */
+.pid-action-button {
+  background: var(--color-action-primary, #0071e3);
+  border: none;
+  border-radius: 6px;
+  color: var(--color-action-primary-fg, #fff);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, opacity 0.12s;
+}
+
+.pid-action-button:hover:not(:disabled) {
+  background: var(--color-action-primary-hover, #0a84ff);
+}
+
+.pid-action-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pid-action-delete {
+  background: var(--color-feedback-error, #ff453a);
+  color: #fff;
+}
+
+.pid-action-delete:hover:not(:disabled) {
+  background: #d70015; /* --red-600 */
+}
+
+/* Buy in the action bar: solid brand blue (Velxio buttons are solid, and
+   the buy link is the primary action of the datasheet). */
+.pid-buy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0071e3;
+  border: 1px solid #0071e3;
+  border-radius: 6px;
+  color: #fff;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pid-buy-button:hover {
+  background: #005a9e;
+  border-color: #005a9e;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+
+.pid-tabs {
+  display: flex;
+  border-bottom: 1px solid #444;
+  flex: 0 0 auto;
+}
+
+.pid-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #aaa;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pid-tab--active {
+  color: #fff;
+  border-bottom-color: #4dd0e1;
+}
+
+/* ONE height for both tabs. Sizing each tab to its own content made the whole
+   dialog jump every time you switched — a short Properties list shrank it, a
+   long datasheet grew it. The pane is fixed and each tab scrolls inside it. */
+.pid-tab-body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  height: 360px;
+  max-height: 46vh;
+}
+
+/* The datasheet reuses the picker card's .cip-doc styles, with one override:
+   NO sideways scrolling. The doc tables have a nowrap first column (a pin
+   name), which pushed wide pinouts past the edge; here they wrap instead and
+   long tokens break rather than widening the pane. */
+.pid-tab-body--doc {
+  overflow-x: hidden;
+}
+
+.pid-tab-body--doc .cip-doc {
+  max-height: none;
+  overflow-wrap: anywhere;
+}
+
+.pid-tab-body--doc .cip-doc table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.pid-tab-body--doc .cip-doc td:first-child {
+  white-space: normal;
+}
+
+.pid-tab-body--doc .cip-doc pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The body's own Buy footer is suppressed here — the dialog puts Buy in the
+   action bar, where it stays visible on both tabs. */
+.pid-tab-body--doc .cip-footer {
+  display: none;
+}
+
+/* ── Property rows ───────────────────────────────────────────────────── */
+
+.pid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.pid-row-label {
+  color: #bbb;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pid-row-value {
+  color: #eee;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.pid-row--dim .pid-row-label,
+.pid-row--dim .pid-row-value {
+  color: #888;
+}
+
+.pid-select,
+.pid-input {
+  background: #1f1f1f;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #eee;
+  padding: 4px 6px;
+  font-size: 12px;
+  max-width: 150px;
+}
+
+.pid-defaults {
+  margin-top: 8px;
+  border-top: 1px dashed #444;
+  padding-top: 6px;
+}
+
+/* ── Gallery examples that use this part (bottom of the Properties tab) ── */
+
+.pid-examples {
+  margin-top: 10px;
+  border-top: 1px dashed #444;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pid-examples-title {
+  color: #999;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.pid-example-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #7ab8f5;
+  font-size: 12px;
+  text-decoration: none;
+  line-height: 1.5;
+}
+
+.pid-example-link svg {
+  flex: none;
+  opacity: 0.7;
+}
+
+.pid-example-link:hover {
+  color: #a5d0ff;
+  text-decoration: underline;
+}
+
+/* ── Mobile: full sheet, columns stack ───────────────────────────────── */
+
+@media (max-width: 560px) {
+  .part-inspector-dialog {
+    left: 8px !important;
+    right: 8px !important;
+    top: 8px !important;
+    bottom: 8px !important;
+    width: auto;
+    max-height: none;
+  }
+
+  .pid-columns {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .pid-left {
+    border-right: none;
+    border-bottom: 1px solid #444;
+    max-width: none;
+  }
+
+  /* The full-sheet layout scrolls as one column, so the fixed desktop pane
+     height would leave a dead gap under a short tab. */
+  .pid-tab-body {
+    height: auto;
+    max-height: none;
+  }
+}

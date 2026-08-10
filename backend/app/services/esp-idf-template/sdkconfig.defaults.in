@@ -57,12 +57,25 @@ CONFIG_FREERTOS_HZ=1000
 
 # ── Console ──────────────────────────────────────────────────────────────
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# No secondary console: on USB-Serial-JTAG chips the ROM/IDF would mirror every
+# log byte to the USB console too, and the emulator merges both streams into ONE
+# serial monitor -- the whole log would show twice on CDC builds. Logs stay on
+# UART0; the USB channel carries only what the sketch prints through HWCDC.
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
 # ── Arduino-as-component: we provide our own app_main (main.cpp) ─────────
 CONFIG_AUTOSTART_ARDUINO=n
 
 # Which core Arduino's setup/loop and event task run on. Both default to
 # core 1 (matches Arduino IDE) but the user can pin them independently.
+# Which board variant Arduino builds against. This is what puts
+# variants/<VARIANT>/pins_arduino.h on the include path, and therefore what
+# makes the board's own pin names (D0..D10 on a XIAO, the M5 silk names, ...)
+# exist at all. Left at its default it is just the chip name, so every board
+# compiles as a generic dev-kit and any sketch copied from a vendor's wiki
+# fails on its very first pin macro.
+CONFIG_ARDUINO_VARIANT="${ARDUINO_VARIANT}"
+
 CONFIG_ARDUINO_RUNNING_CORE=${ARDUINO_RUNNING_CORE}
 CONFIG_ARDUINO_EVENT_RUNNING_CORE=${ARDUINO_EVENT_RUNNING_CORE}
 

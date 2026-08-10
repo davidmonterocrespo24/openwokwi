@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { generateUUID } from '../utils/uuid';
+import { isPiBoardKind } from '../types/board';
 
 export interface WorkspaceFile {
   id: string;
@@ -9,6 +10,18 @@ export interface WorkspaceFile {
 }
 
 const MAIN_ID = 'main-sketch';
+
+/** Trim, collapse slashes/backslashes, strip leading/trailing '/' and any
+ *  '.'/'..' segments — folder paths are always workspace-relative. */
+export function normalizeFolderPath(path: string): string {
+  return path
+    .trim()
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((seg) => seg.trim())
+    .filter((seg) => seg && seg !== '.' && seg !== '..')
+    .join('/');
+}
 
 const DEFAULT_INO_CONTENT = `// Arduino Blink Example
 void setup() {
@@ -150,6 +163,21 @@ interface EditorState {
   /** Open file IDs within each group */
   openGroupFileIds: Record<string, string[]>;
 
+  // ── Folders ──────────────────────────────────────────────────────────────
+  /**
+   * Folders exist implicitly through file names containing '/'
+   * ("apps/badge/__init__.py" lives in apps/badge). This map only tracks
+   * EMPTY folders per group (created but not yet holding a file) so they
+   * survive in the explorer until a file lands in them. Paths are
+   * '/'-separated with no leading/trailing slash.
+   */
+  folderGroups: Record<string, string[]>;
+  /** Create a folder (in the active group). No-op if it already exists. */
+  createFolder: (path: string) => void;
+  /** Delete a folder (active group): removes every file under it and any
+   *  tracked empty subfolders. */
+  deleteFolder: (path: string) => void;
+
   // File operations (operate on active group)
   createFile: (name: string) => string;
   deleteFile: (id: string) => void;
@@ -171,8 +199,13 @@ interface EditorState {
   setActiveGroup: (groupId: string) => void;
   getGroupFiles: (groupId: string) => WorkspaceFile[];
   updateGroupFile: (groupId: string, fileId: string, content: string) => void;
-  /** Replace ALL file groups atomically (used when loading a saved project). */
-  replaceFileGroups: (groups: Record<string, { name: string; content: string }[]>) => void;
+  /** Replace ALL file groups atomically (used when loading a saved project).
+   *  `folders` restores the tracked EMPTY folders per group (optional —
+   *  folders holding files rebuild themselves from the file name prefixes). */
+  replaceFileGroups: (
+    groups: Record<string, { name: string; content: string }[]>,
+    folders?: Record<string, string[]>,
+  ) => void;
 
   // Settings
   setTheme: (theme: 'vs-dark' | 'light') => void;
@@ -201,12 +234,59 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fileGroups: {
     [DEFAULT_GROUP_ID]: [DEFAULT_FILE],
   },
+  folderGroups: {},
   activeGroupId: DEFAULT_GROUP_ID,
   activeGroupFileId: { [DEFAULT_GROUP_ID]: MAIN_ID },
   openGroupFileIds: { [DEFAULT_GROUP_ID]: [MAIN_ID] },
 
   codeChangedSinceLastCompile: true,
   markCompiled: () => set({ codeChangedSinceLastCompile: false }),
+
+  // ── Folder operations (operate on active group) ─────────────────────────
+
+  createFolder: (path: string) => {
+    const clean = normalizeFolderPath(path);
+    if (!clean) return;
+    set((s) => {
+      const groupId = s.activeGroupId;
+      const folders = s.folderGroups[groupId] ?? [];
+      const files = s.fileGroups[groupId] ?? [];
+      const exists =
+        folders.includes(clean) || files.some((f) => f.name.startsWith(clean + '/'));
+      if (exists) return {};
+      return { folderGroups: { ...s.folderGroups, [groupId]: [...folders, clean] } };
+    });
+  },
+
+  deleteFolder: (path: string) => {
+    const clean = normalizeFolderPath(path);
+    if (!clean) return;
+    set((s) => {
+      const groupId = s.activeGroupId;
+      const prefix = clean + '/';
+      const doomed = new Set(
+        (s.fileGroups[groupId] ?? []).filter((f) => f.name.startsWith(prefix)).map((f) => f.id),
+      );
+      const files = s.files.filter((f) => !doomed.has(f.id));
+      const openFileIds = s.openFileIds.filter((fid) => !doomed.has(fid));
+      let activeFileId = s.activeFileId;
+      if (doomed.has(activeFileId)) activeFileId = openFileIds[0] ?? files[0]?.id ?? '';
+      const groupFiles = (s.fileGroups[groupId] ?? []).filter((f) => !doomed.has(f.id));
+      const groupOpenIds = (s.openGroupFileIds[groupId] ?? []).filter((fid) => !doomed.has(fid));
+      const folders = (s.folderGroups[groupId] ?? []).filter(
+        (p) => p !== clean && !p.startsWith(prefix),
+      );
+      return {
+        files,
+        openFileIds,
+        activeFileId,
+        fileGroups: { ...s.fileGroups, [groupId]: groupFiles },
+        openGroupFileIds: { ...s.openGroupFileIds, [groupId]: groupOpenIds },
+        activeGroupFileId: { ...s.activeGroupFileId, [groupId]: activeFileId },
+        folderGroups: { ...s.folderGroups, [groupId]: folders },
+      };
+    });
+  },
 
   // ── File operations (legacy API — operate on active group) ──────────────
 
@@ -216,6 +296,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => {
       const groupId = s.activeGroupId;
       const groupFiles = [...(s.fileGroups[groupId] ?? []), newFile];
+      // A file landing inside a tracked empty folder materialises it — the
+      // folder now exists through the file's path prefix.
+      const folders = (s.folderGroups[groupId] ?? []).filter((p) => !name.startsWith(p + '/'));
       return {
         // Legacy flat list (mirrors active group)
         files: [...s.files, newFile],
@@ -228,6 +311,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           [groupId]: [...(s.openGroupFileIds[groupId] ?? []), id],
         },
         activeGroupFileId: { ...s.activeGroupFileId, [groupId]: id },
+        folderGroups: { ...s.folderGroups, [groupId]: folders },
       };
     });
     return id;
@@ -384,11 +468,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }));
       } else {
         // Determine default file by group name convention or language mode.
-        // All Linux Pi boards (Zero/1/2/3/4/5) default to script.py; the Pico
-        // (RP2040) is browser-emulated and not a Linux Pi. Mirrors
-        // isPiBoardKind() in types/board.ts, adapted to the `group-<id>` convention.
+        // All QEMU-Linux boards (Pi Zero/1/2/3/4/5 plus overlay piFamily
+        // kinds like the UNIHIKER) default to script.py. Group ids follow
+        // `group-<boardId>`; the first board of a kind uses the kind as its
+        // id, later instances append '-N'. Test the FULL id first — kinds
+        // themselves end in digits ('raspberry-pi-3'), so stripping the
+        // numeric suffix unconditionally would mangle them ('raspberry-pi'
+        // matched nothing and Pis regressed to sketch.ino).
+        const boardIdPart = groupId.replace(/^group-/, '');
         const isPi =
-          groupId.includes('raspberry-pi-') && !groupId.includes('raspberry-pi-pico');
+          isPiBoardKind(boardIdPart) || isPiBoardKind(boardIdPart.replace(/-\d+$/, ''));
         const isMicroPython = languageMode === 'micropython';
         const mainId = `${groupId}-main`;
         let fileName: string;
@@ -427,10 +516,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const { [groupId]: _removed, ...rest } = s.fileGroups;
       const { [groupId]: _a, ...restActive } = s.activeGroupFileId;
       const { [groupId]: _o, ...restOpen } = s.openGroupFileIds;
+      const { [groupId]: _f, ...restFolders } = s.folderGroups;
       return {
         fileGroups: rest,
         activeGroupFileId: restActive,
         openGroupFileIds: restOpen,
+        folderGroups: restFolders,
       };
     });
   },
@@ -462,7 +553,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  replaceFileGroups: (groups) => {
+  replaceFileGroups: (groups, folders) => {
     const fileGroups: Record<string, WorkspaceFile[]> = {};
     const activeGroupFileId: Record<string, string> = {};
     const openGroupFileIds: Record<string, string[]> = {};
@@ -488,6 +579,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         activeGroupFileId,
         openGroupFileIds,
         activeGroupId,
+        folderGroups: folders ?? {},
         // Mirror legacy flat fields to the active group
         files: groupFiles,
         activeFileId: activeGroupFileId[activeGroupId] ?? '',

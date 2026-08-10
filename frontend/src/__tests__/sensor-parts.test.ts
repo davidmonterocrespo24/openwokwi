@@ -152,6 +152,43 @@ describe('ntc-temperature-sensor — attachEvents', () => {
     // ADC should remain zeroed
     expect(adc.channelValues[0]).toBe(0);
   });
+
+  /**
+   * Issue #233. The divider used to be computed against a hard-coded 5 V rail,
+   * so on a 3.3 V board it handed the ADC a voltage above full scale: 25 C came
+   * back as ~1.4 C and everything below ~11 C saturated at the same reading.
+   * The rail now follows the board, so the midpoint of a 10k/10k divider is
+   * half of THAT rail.
+   */
+  it('scales the divider to a 3.3V board instead of assuming 5V', () => {
+    const logic = PartSimulationRegistry.get('ntc-temperature-sensor')!;
+    const injected: number[] = [];
+    // A simulator exposing setAdcVoltage is the ESP32 bridge shim.
+    const sim = {
+      ...makeSimulator(makeADC()),
+      setAdcVoltage: (_pin: number, volts: number) => {
+        injected.push(volts);
+        return true;
+      },
+    };
+
+    logic.attachEvents!(makeElement(), sim as any, pinMap({ OUT: 34 }));
+
+    expect(injected).toHaveLength(1);
+    // R_ntc(25 C) == R_pull == 10k, so OUT sits at exactly half the rail.
+    expect(injected[0]).toBeCloseTo(1.65, 2);
+    expect(injected[0]).toBeLessThan(3.3); // never above the board's full scale
+  });
+
+  it('keeps the 5V midpoint on an AVR board', () => {
+    const logic = PartSimulationRegistry.get('ntc-temperature-sensor')!;
+    const adc = makeADC();
+    const sim = makeSimulator(adc);
+
+    logic.attachEvents!(makeElement(), sim as any, pinMap({ OUT: 14 }));
+
+    expect(adc.channelValues[0]).toBeCloseTo(2.5, 2);
+  });
 });
 
 // ─── Gas Sensor ──────────────────────────────────────────────────────────────

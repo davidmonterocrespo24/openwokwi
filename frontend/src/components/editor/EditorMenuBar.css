@@ -1,0 +1,112 @@
+/* EditorMenuBar — File / Edit dropdowns in the editor header.
+   Visual language borrowed from the toolbar's overflow menu
+   (tb-overflow-menu) so the two read as one system. */
+
+.editor-menubar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+}
+
+.emb-root {
+  position: relative;
+}
+
+.emb-trigger {
+  background: transparent;
+  border: none;
+  color: #c5cad3;
+  font: 400 13px system-ui, sans-serif;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.emb-trigger:hover,
+.emb-trigger-open {
+  background: #2f3542;
+  color: #fff;
+}
+
+.emb-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 230px;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 9500; /* above the toolbar and the canvas, below modals (10000) */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.emb-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #d6dae2;
+  font: 400 13px system-ui, sans-serif;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.emb-item:hover:not(:disabled) {
+  background: #0e639c;
+  color: #fff;
+}
+
+.emb-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.emb-shortcut {
+  color: #8b93a1;
+  font-size: 11px;
+}
+
+.emb-item:hover:not(:disabled) .emb-shortcut {
+  color: #cfe3f5;
+}
+
+.emb-separator {
+  height: 1px;
+  background: #3c3c3c;
+  margin: 4px 6px;
+}
+
+/* Small uppercase section header inside a menu (the Account menu groups
+   the pro items and the Language list under one trigger). */
+.emb-section-label {
+  padding: 6px 12px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8a8f98;
+  user-select: none;
+}
+
+/* Same PRO pill the old toolbar overflow used (tb-overflow-pro) — users
+   should know an item is premium BEFORE clicking, not via a surprise
+   upgrade prompt. */
+.emb-pro {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
+  color: #1a1a1a;
+  flex-shrink: 0;
+  margin-left: 8px;
+}

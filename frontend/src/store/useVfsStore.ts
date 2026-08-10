@@ -36,38 +36,54 @@ const DEFAULT_SH_CONTENT = `#!/bin/bash
 echo "Hello from Pi!"
 `;
 
-function makeDefaultTree(): { tree: VfsTree; rootId: string } {
-  const rootId = nanoid(8);
-  const homeId = nanoid(8);
-  const piId = nanoid(8);
-  const scriptId = nanoid(8);
-  const shellId = nanoid(8);
+export interface VfsInitOptions {
+  /** Home directory path for the default tree (default '/home/pi'). Overlay
+   *  boards whose guest logs in as root pass '/root'. */
+  home?: string;
+  /** Include the hello.sh shell sample (default true — historic Pi VFS). */
+  withShellSample?: boolean;
+}
 
+function makeDefaultTree(opts?: VfsInitOptions): { tree: VfsTree; rootId: string } {
+  const home = (opts?.home ?? '/home/pi').replace(/^\/+|\/+$/g, '');
+  const withShell = opts?.withShellSample ?? true;
+  const segments = home.split('/').filter(Boolean);
+
+  const rootId = nanoid(8);
   const tree: VfsTree = {
-    [rootId]: { id: rootId, name: '/', type: 'directory', children: [homeId], parentId: null },
-    [homeId]: { id: homeId, name: 'home', type: 'directory', children: [piId], parentId: rootId },
-    [piId]: {
-      id: piId,
-      name: 'pi',
-      type: 'directory',
-      children: [scriptId, shellId],
-      parentId: homeId,
-    },
-    [scriptId]: {
-      id: scriptId,
-      name: 'script.py',
-      type: 'file',
-      content: DEFAULT_PY_CONTENT,
-      parentId: piId,
-    },
-    [shellId]: {
+    [rootId]: { id: rootId, name: '/', type: 'directory', children: [], parentId: null },
+  };
+
+  // Build the home directory chain (e.g. home/pi, or just root).
+  let parentId = rootId;
+  for (const name of segments) {
+    const dirId = nanoid(8);
+    tree[dirId] = { id: dirId, name, type: 'directory', children: [], parentId };
+    tree[parentId].children!.push(dirId);
+    parentId = dirId;
+  }
+
+  const scriptId = nanoid(8);
+  tree[scriptId] = {
+    id: scriptId,
+    name: 'script.py',
+    type: 'file',
+    content: DEFAULT_PY_CONTENT,
+    parentId,
+  };
+  tree[parentId].children!.push(scriptId);
+
+  if (withShell) {
+    const shellId = nanoid(8);
+    tree[shellId] = {
       id: shellId,
       name: 'hello.sh',
       type: 'file',
       content: DEFAULT_SH_CONTENT,
-      parentId: piId,
-    },
-  };
+      parentId,
+    };
+    tree[parentId].children!.push(shellId);
+  }
 
   return { tree, rootId };
 }
@@ -78,7 +94,7 @@ interface VfsState {
   // Per-board: boardId → selected nodeId (for editor focus)
   selectedNodeId: Record<string, string | null>;
 
-  initBoardVfs: (boardId: string) => void;
+  initBoardVfs: (boardId: string, opts?: VfsInitOptions) => void;
   getTree: (boardId: string) => VfsTree;
   getRootId: (boardId: string) => string | null;
   getNode: (boardId: string, nodeId: string) => VfsNode | null;
@@ -131,9 +147,9 @@ export const useVfsStore = create<VfsState>((set, get) => ({
   boards: {},
   selectedNodeId: {},
 
-  initBoardVfs: (boardId) => {
+  initBoardVfs: (boardId, opts) => {
     if (get().boards[boardId]) return; // already initialized
-    const { tree, rootId } = makeDefaultTree();
+    const { tree, rootId } = makeDefaultTree(opts);
     set((s) => ({
       boards: { ...s.boards, [boardId]: { tree, rootId } },
       selectedNodeId: { ...s.selectedNodeId, [boardId]: null },

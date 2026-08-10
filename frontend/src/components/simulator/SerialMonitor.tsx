@@ -9,7 +9,8 @@ import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { getTabSessionId } from '../../simulation/Esp32Bridge';
 import { openDeviceGateway } from '../../lib/openDeviceGateway';
 import type { BoardKind } from '../../types/board';
-import { boardDisplayName } from '../../types/board';
+import { boardDisplayName, isPiBoardKind } from '../../types/board';
+import { PiTerminal } from '../raspberry-pi/PiTerminal';
 
 // Short labels for tabs
 const BOARD_SHORT_LABEL: Partial<Record<string, string>> = {
@@ -249,10 +250,21 @@ export const SerialMonitor: React.FC = () => {
           >
             {t('editor.serial.clear')}
           </button>
+          {/* Overlay slot for per-board terminal actions (empty in OSS). */}
+          <span data-velxio-slot="serial-actions" />
         </div>
       </div>
 
-      {/* Output area */}
+      {/* Output area. QEMU-Linux boards get the interactive xterm (shell
+          input, line editing, ANSI) instead of the read-only mirror — this
+          replaced the separate RaspberryPiWorkspace as the one terminal. */}
+      {isPiBoardKind(activeBoard?.boardKind ?? '') &&
+      activeBoard?.running &&
+      activeBoard?.engineMode !== 'instant' ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <PiTerminal key={activeBoard.id} boardId={activeBoard.id} />
+        </div>
+      ) : (
       <pre ref={outputRef} style={styles.output}>
         {activeBoard?.serialOutput
           ? (() => {
@@ -266,7 +278,11 @@ export const SerialMonitor: React.FC = () => {
               // parses + answers them — this only cleans the dumb mirror.)
               const text = activeBoard.serialOutput
                 .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
-                .replace(/\x1b[=>]/g, '');
+                .replace(/\x1b[=>]/g, '')
+                // Line-editing bytes the guest shell echoes (DEL on
+                // backspace, BEL, other C0 controls) render as tofu boxes
+                // in a <pre>; strip everything except \t \n \r.
+                .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
               // ESP32 (QEMU slirp) hands out 192.168.4.x; the Pico W virtual
               // net hands out 10.13.37.x. Both reach their emulated server
               // through the same /api/gateway proxy, so linkify either subnet.
@@ -328,8 +344,14 @@ export const SerialMonitor: React.FC = () => {
             ? t('editor.serial.waitingData') + '\n'
             : t('editor.serial.startSim') + '\n'}
       </pre>
+      )}
 
-      {/* Input row */}
+      {/* Input row — the xterm handles Pi input itself */}
+      {!(
+        isPiBoardKind(activeBoard?.boardKind ?? '') &&
+        activeBoard?.running &&
+        activeBoard?.engineMode !== 'instant'
+      ) && (
       <div style={styles.inputRow}>
         <input
           type="text"
@@ -358,6 +380,7 @@ export const SerialMonitor: React.FC = () => {
           {t('editor.serial.send')}
         </button>
       </div>
+      )}
     </div>
   );
 };

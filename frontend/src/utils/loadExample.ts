@@ -114,6 +114,8 @@ export async function loadExample(
   // sees null as projectId during every subsequent simulator/editor change,
   // so no PUT goes out.
   useProjectStore.getState().clearCurrentProject();
+  // Analytics context: compiles/runs from this workspace stamp the example id.
+  useProjectStore.getState().setCurrentExampleId(example.id);
 
   // P2.4 — this example's declared manifest (compile scope) is assigned to each
   // board it creates at the END of this function (the boards don't exist yet).
@@ -166,7 +168,13 @@ export async function loadExample(
       const board = newBoards.find((b) => b.id === boardId);
       if (!board) return;
 
-      if (eb.code) {
+      if (eb.files?.length) {
+        // Full multi-file workspace (may carry '/' folder paths). First
+        // entry is the main/active file — the example must lead with the
+        // sketch so compile picks it up.
+        useEditorStore.getState().setActiveGroup(board.activeFileGroupId);
+        useEditorStore.getState().loadFiles(eb.files);
+      } else if (eb.code) {
         // Arduino-style boards (AVR, RP2040, ESP32, …) all need the `.ino`
         // extension so arduino-cli auto-includes <Arduino.h>. Only the Pi 3B
         // uses a different toolchain (Python via VFS or g++ for `.cpp`).
@@ -175,7 +183,25 @@ export async function loadExample(
         useEditorStore.getState().loadFiles([{ name: filename, content: eb.code }]);
       }
 
+      // Built-in SD slot uploads (XIAO Sense): land on the board exactly as
+      // the SD Card panel would put them, so the Run path finds them.
+      if (eb.sdFiles?.length) {
+        useSimulatorStore.getState().updateBoard(boardId, { sdFiles: eb.sdFiles });
+      }
+
       if (eb.vfsFiles && isPiBoardKind(eb.boardKind)) {
+        // Pi example scripts go into the board's REGULAR file group — they
+        // are edited in Monaco like any other board's code, and the run
+        // path uploads the group into the guest home. (The old separate
+        // VFS tree + panel + editor confused users with three file
+        // surfaces; the VFS store is still updated for back-compat with
+        // anything reading it, but the editor group is the source of truth.)
+        const groupFiles = Object.entries(eb.vfsFiles).map(([name, content]) => ({
+          name,
+          content,
+        }));
+        useEditorStore.getState().setActiveGroup(board.activeFileGroupId);
+        useEditorStore.getState().loadFiles(groupFiles);
         const vfsState = useVfsStore.getState();
         const tree = vfsState.getTree(boardId);
         for (const [nodeId, node] of Object.entries(tree)) {

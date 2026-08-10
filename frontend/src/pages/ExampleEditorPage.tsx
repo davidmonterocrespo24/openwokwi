@@ -21,9 +21,10 @@
  * id is set on useProjectStore, so it can't overwrite anything).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useParams } from 'react-router-dom';
-import { exampleProjects } from '../data/examples';
+import { exampleProjects, subscribeProExamples,
+  areProExamplesSettled, getProExamplesVersion } from '../data/examples';
 import { loadExample, type LibraryInstallProgress } from '../utils/loadExample';
 import { EditorPage } from './EditorPage';
 import { AppHeader } from '../components/layout/AppHeader';
@@ -32,6 +33,9 @@ import { useSEO } from '../utils/useSEO';
 const DOMAIN = 'https://velxio.dev';
 
 export const ExampleEditorPage: React.FC = () => {
+  // Re-render when the pro overlay registers late examples (dynamic import).
+  useSyncExternalStore(subscribeProExamples, getProExamplesVersion, getProExamplesVersion);
+
   const { exampleId } = useParams<{ exampleId: string }>();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
@@ -56,19 +60,28 @@ export const ExampleEditorPage: React.FC = () => {
       : `${DOMAIN}/examples`,
   });
 
+  const settled = useSyncExternalStore(
+    subscribeProExamples,
+    areProExamplesSettled,
+    areProExamplesSettled,
+  );
+
   useEffect(() => {
-    if (!exampleId) {
-      setError(true);
-      return;
-    }
-    if (!example) {
-      setError(true);
-      return;
-    }
+    // `settled` is deliberately NOT a dependency. A direct link to a pro
+    // example can begin loading the moment the overlay registers it — one
+    // microtask BEFORE the overlay's import promise settles. With `settled`
+    // in the deps, that flip re-fired the effect mid-load: the cleanup set
+    // `cancelled`, setReady was skipped, and the re-run hit the loadedIdRef
+    // guard and returned — the page hung on "Loading example…" forever
+    // (found with the reSpeaker example; any /example/<pro-id> direct URL
+    // could lose this race). The 404 decision lives in the render below,
+    // where reading `settled` doesn't cancel anything.
+    if (!exampleId || !example) return;
     if (loadedIdRef.current === exampleId) return;
     loadedIdRef.current = exampleId;
 
     let cancelled = false;
+    let done = false;
     setReady(false);
     setError(false);
     (async () => {
@@ -79,18 +92,29 @@ export const ExampleEditorPage: React.FC = () => {
         // are swallowed inside ensureLibraries — anything that DOES bubble
         // up here means the stores are partially populated. Surfacing a
         // clean error is more useful than rendering an empty editor.
+        done = true;
         if (!cancelled) setError(true);
         return;
       }
+      done = true;
       if (!cancelled) setReady(true);
     })();
 
     return () => {
       cancelled = true;
+      // A load cancelled mid-flight must not poison the guard: if this
+      // effect re-runs for the same id, it has to actually reload instead
+      // of early-returning with `ready` still false.
+      if (!done && loadedIdRef.current === exampleId) {
+        loadedIdRef.current = null;
+      }
     };
   }, [exampleId, example]);
 
-  if (error) {
+  // "Not in the gallery" and "not in the gallery YET" are different answers
+  // while the pro overlay's dynamic import is still in flight: only once the
+  // registry settles is a missing id really a 404.
+  if (error || !exampleId || (settled && !example)) {
     return (
       <div
         style={{

@@ -87,7 +87,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s;
-  height: 32px;
+  height: 28px;
   appearance: none;
   -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -111,7 +111,7 @@
   align-items: center;
   gap: 5px;
   padding: 0 10px;
-  height: 32px;
+  height: 28px;
   background: transparent;
   border: 1px solid #3a4a5a;
   border-radius: 5px;
@@ -142,8 +142,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: transparent;
   border: 1px solid #3a4a5a;
   border-radius: 5px;
@@ -182,7 +182,7 @@
   align-items: center;
   gap: 5px;
   padding: 0 10px;
-  height: 32px;
+  height: 28px;
   background: var(--color-action-primary);
   color: #fff;
   border: none;
@@ -262,6 +262,18 @@
   border-radius: 5px;
   padding: 0 2px;
   height: 28px;
+}
+
+/* Floating variant: pinned to the canvas' bottom-right corner (the header
+   got too tight once the AI chat panel docks on the right). Sits above the
+   canvas layers; dialogs/modals portal to <body> so they stay on top. */
+.zoom-controls--floating {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 60;
+  height: 32px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 
 .zoom-btn {
@@ -536,4 +548,50 @@
   outline: 1px dashed rgba(220, 38, 38, 0.65);
   outline-offset: 1px;
   border-radius: 4px;
+}
+
+/* Selected component: marching ants.
+   A newly added part lands in a corner of the viewport and the previous
+   flat dashed border was easy to miss on a busy canvas — a moving outline
+   is what the eye actually catches. Drawn on a pseudo-element just OUTSIDE
+   the body so it never covers the artwork, and pointer-events: none so it
+   never steals a click or a pin.
+
+   Animating a dashed border is not possible (dash offset is not an
+   animatable property), hence the four gradient edges with a moving
+   background-position — the standard recipe. */
+.velxio-ants::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 5px;
+  pointer-events: none;
+  z-index: 6;
+  background-image:
+    linear-gradient(90deg, var(--ant-color) 50%, transparent 0),
+    linear-gradient(90deg, var(--ant-color) 50%, transparent 0),
+    linear-gradient(0deg, var(--ant-color) 50%, transparent 0),
+    linear-gradient(0deg, var(--ant-color) 50%, transparent 0);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size: 10px 2px, 10px 2px, 2px 10px, 2px 10px;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  animation: velxio-ants 0.55s linear infinite;
+}
+
+.velxio-ants {
+  --ant-color: #2f9bff;
+}
+
+@keyframes velxio-ants {
+  to {
+    background-position: 10px 0, -10px 100%, 0 -10px, 100% 10px;
+  }
+}
+
+/* Respect the OS setting: the outline still marks the selection, it just
+   stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  .velxio-ants::after {
+    animation: none;
+  }
 }

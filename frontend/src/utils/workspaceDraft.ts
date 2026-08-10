@@ -65,6 +65,7 @@ export function restoreStashedWorkspace(): boolean {
     useSimulatorStore.getState().loadProjectState({
       boards: payload.boards as unknown as BoardInstance[],
       fileGroups: payload.fileGroups,
+      folderGroups: payload.folderGroups,
       components: payload.components,
       wires: payload.wires,
       activeBoardId: payload.activeBoardId,

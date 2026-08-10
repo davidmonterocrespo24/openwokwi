@@ -54,6 +54,11 @@ export function pinNameToArduinoPin(pinName: string, boardKind: BoardKind): numb
   if (/^PB\d+$/.test(pinName)) {
     return parseInt(pinName.slice(2), 10);
   }
+  // micro:bit-style pad names (P0..P25) used by QEMU-Linux SBC edges and
+  // Gravity ports (e.g. the UNIHIKER's P24). Must come after the PB test.
+  if (/^P\d+$/.test(pinName)) {
+    return parseInt(pinName.slice(1), 10);
+  }
   if (/^\d+$/.test(pinName)) {
     return parseInt(pinName, 10);
   }
