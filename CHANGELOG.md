@@ -3,6 +3,63 @@
 All notable changes to Velxio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.3] - 2026-08-10
+
+### Added
+- Added an online board showcase to the picker with cards for online-only boards and components, including Seeed Studio XIAO, reSpeaker, and UNIHIKER M10.
+- Added a runtime overlay registry so private board packs can register boards, components, sensors, datasheets, built-in peripherals, and QEMU-Linux board kinds.
+- Added ESP-IDF v5.5 compile support for the entire ESP32 family, ESP32 bridge seams, and S3/C3 gallery examples.
+- Added serial-as-USB-CDC behavior when boards.txt declares it, and the real Arduino variant now reaches sdkconfig.
+- Added a starter-template picker for the pristine editor and New workspace, with circuit thumbnails, a blank canvas behind, a prominent + for Blank, an Arduino Mega card, and one ESP32 per chip.
+- Added File/Edit/View/Language/Help menus in the editor header, translated in all nine locales, with full desktop-menu parity.
+- Added folder trees in the file explorer, with create/delete folder support.
+- Added the Part Inspector, merging the right-click dialog with the picker card; pins remain visible and traceable, and boards open it too.
+- Added example links in the Properties tab and dynamic board tabs in the examples gallery.
+- Added a What's New modal with a product news feed, once-per-user queue, inline images/GIFs, YouTube click-to-play previews, and bare image URLs rendered inline.
+- Added microphone streaming into boards with an on-board mic.
+- Added camera toggles for component-owned webcams, including ESP32-CAM and XIAO ESP32S3 Sense; the webcam starts automatically when running an ESP32-CAM.
+- Added live SD card contents in the SD panel, letting users list and download files written by sketches; boards and parts with built-in microSD/TF slots accept uploads.
+- Added board-agnostic speaker and microphone seams, a speaker-sink gate, electrical seated sockets, and tilt/battery controls for boards with IMUs or gauges.
+- Added 4-level greyscale rendering in the SSD168xDecoder for e-paper panels.
+- Added canvas drop feedback, meaningful clicks, drag-to-front, a socket magnet, a board-status slot, and floating zoom controls.
+- Added Raspberry Pi display output, serial over the header in Linux mode, complete Pi peripheral plumbing, unified editor UX (Monaco/explorer/xterm), one-click run, quiet boot, and guest setup.
+- Added QEMU guest session ceiling, optional restricted guest egress via guestfwd tunnel, per-session extra drives, and start_pi payload passthrough.
+- Added a serial-actions slot in the monitor toolbar.
+- Added a pluggable browser MicroPython path for pro simulators.
+
+### Changed
+- Reworked the editor shell: the toolbar now rides inside the header, the overflow menu folded into File, and marketing navigation moved out of the editor.
+- Replaced the top-level Language menu with an Account menu; language and account controls moved to a bottom-left corner box.
+- SD auto-copy now puts only project data files on the card; source files stay off it.
+- Reordered picker contents maker-first, with passives, analog, and logic gates moved to the end.
+- Renamed component camera toggles to "Camera" to match the board toggle.
+- Softened datasheet purchase links from "Buy" to a localized "Product page" with UTM attribution and click reporting.
+- Made the inspector and datasheet share one action bar, use one height, and avoid sideways scroll.
+- Translated remaining raw editor/examples strings into all nine locales; leftover Spanish in gallery code was translated to English.
+- Cleaned up compile logs to tell the story once, without CMake's diary, and with the final flush speaking in whole lines from the real buffer.
+- Online-only showcase cards now use compile/run context (board kind, gallery example, engine) to stay quiet when irrelevant.
+
+### Fixed
+- Fixed ESP-IDF environment issues: the Python venv now matches the IDF tree's version and works in Docker; header-only libraries no longer break ESP32 builds; quoted header includes resolve libraries; esp_camera.h was restored.
+- Fixed compiler failures caused by missing board_fqbn and sdkconfig writes not following defaults.
+- Fixed ESP32 simulator bridge issues: rebuilt boards re-sync the flat simulator field and adopt I2C devices; SPI completeTransfer now delivers MISO; ADC and GPIO-to-ADC channel mapping consult the bridge; the M5 Cardputer header resolves to real GPIO numbers.
+- Fixed ESP32 button handling: active-low is decided by the circuit, not a constant.
+- Fixed compile-output false positives: IDF "Project commit: HEAD-HASH-NOTFOUND" banners are no longer errors.
+- Fixed wire endpoint races: both halves of the load-time endpoint race close, and endpoints recalculate when a late-defined element upgrades.
+- Fixed canvas stacking and socket interactions: seated boards stack as one piece, sockets latch at drag start, boards stay above their socket, boards paint only when seated and above components, and touchscreen swipes no longer pan the canvas while running.
+- Fixed socket seating tolerance so a board that is slightly off the seat stays plugged in.
+- Fixed e-paper rendering: refresh tears gone by persisting the window union, vertical orientation correct for descending-Y panels, custom B/W waveform LUTs honored, and 4-level greyscale works.
+- Fixed NTC temperature sensor readings on 3.3V boards and corrected three backwards-decoded examples.
+- Fixed MicroPython prompt handshake: the \r poke no longer fires after the prompt is already up.
+- Fixed the Libraries manager: Escape now closes it.
+- Fixed Part Inspector rendering: no more flicker on every render, dropped labels for inset pin columns, clipped tall pin stacks, crowded pin headers drawn vertically, and a column is recognized as a run of pads.
+- Fixed the inspector "no datasheet" state: parts now say they have no datasheet instead of showing an empty tab.
+- Fixed right-clicking a board while running so it opens the board inspector.
+- Fixed picker overlay issues: late overlay registration re-renders the picker without a reload, version hooks are declared before memos, previews match variants, the datasheet popover appears above the modal, duplicate Pi cards are removed, Pi Zero/1/2 are wired as real boards, and many-pin inspectors are readable.
+- Fixed Pi/QEMU-Linux issues: booting without a bridge no longer fails silently, restarting in Linux mode boots the guest, serial TX hooks survive simulator rebuilds, overlays no longer hijack Pi drawing, per-tab client_id is stable, Pi board ids are parsed correctly, and Run stays enabled on running QEMU-Linux boards for fast re-runs.
+- Fixed SPICE pin mapping for micro:bit-style P<n> pad names.
+- Fixed example gallery: direct pro-example URLs no longer hang or flash a 404, LED examples have series resistors,
+
 ## [3.0.2] - 2026-08-05
 
 ### Added
@@ -272,3 +329,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 [3.0.0]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.0
 [3.0.1]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.1
 [3.0.2]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.2
+[3.0.3]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.3
