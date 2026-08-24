@@ -24,7 +24,7 @@
 import { buildNetlist } from '../spice/NetlistBuilder';
 import { runNetlist as runSpice } from '../spice/runNetlist';
 import { UnionFind } from '../spice/unionFind';
-import { BOARD_PIN_GROUPS } from '../spice/boardPinGroups';
+import { BOARD_PIN_GROUPS, auxRailNetName } from '../spice/boardPinGroups';
 import { isBreadboard } from '../../utils/breadboardNets';
 import type { BuildNetlistInput, ElectricalSolveResult } from '../spice/types';
 import { COMPONENT_RATINGS } from './componentRatings';
@@ -112,11 +112,12 @@ export async function verifyCircuit(
 
   // ── Board over-voltage (graph-based, no solve) ─────────────────────────
   // Runs BEFORE the solve so it still reports even when an external source on
-  // a board's vcc rail makes the .op singular. A board's supply pins (3V3 /
-  // 5V / VIN / VBUS / VSYS) all collapse to the single self-driven `vcc_rail`
-  // net, so an over-voltage can't be read from node voltages — instead check
-  // the wiring directly: a power source wired to a board supply pin whose
-  // nominal voltage exceeds that pin's rating. Non-blocking.
+  // a board's vcc rail makes the .op singular. A board's supply pins collapse
+  // to self-driven rail nets (main pins → `vcc_rail`, off-voltage pins →
+  // `aux_rail_*`), each held at its nominal voltage, so an over-voltage can't
+  // be read from node voltages — instead check the wiring directly: a power
+  // source wired to a board supply pin whose nominal voltage exceeds that
+  // pin's rating. Non-blocking.
   const boardWarned = new Set<string>();
   for (const board of input.boards) {
     if (!board.boardKind) continue;
@@ -404,7 +405,14 @@ export async function verifyCircuit(
     }
     const railDriven =
       input.boards.length > 0 || input.components.some((c) => boardVccByKind.has(c.metadataId));
-    if (railDriven) positiveSourceNets.add('vcc_rail');
+    if (railDriven) {
+      positiveSourceNets.add('vcc_rail');
+      // Aux rails (VIN / 5V on 3.3 V boards, 3V3 on 5 V boards) are board
+      // -driven positive supplies too — Rule A1 must see them as sources.
+      for (const b of input.boards) {
+        if (b.auxVolts !== undefined) positiveSourceNets.add(auxRailNetName(b.auxVolts));
+      }
+    }
 
     const skipForAudit = (c: BuildNetlistInput['components'][number]): boolean =>
       dcSourceIds.has(c.id) ||
@@ -539,6 +547,13 @@ export async function verifyCircuit(
         if (Number.isFinite(v) && v > 0 && (best === undefined || v > best)) best = v;
       };
       if (nets.has('vcc_rail') && railDriven) consider(dominantVcc);
+      // Aux rails carry their own nominal voltage (a relay coil fed from VIN
+      // sees 5 V, not the board's 3.3 V logic rail).
+      for (const b of input.boards) {
+        if (b.auxVolts !== undefined && nets.has(auxRailNetName(b.auxVolts))) {
+          consider(b.auxVolts);
+        }
+      }
       for (const c of input.components) {
         const info = sourceInfo(c);
         if (info) {

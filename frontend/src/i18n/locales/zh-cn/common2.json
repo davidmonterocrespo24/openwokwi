@@ -72,7 +72,11 @@
       "contextMenu": {
         "rename": "重命名",
         "delete": "删除"
-      }
+      },
+      "lastSaved": "上次保存",
+      "saving": "保存中…",
+      "saved": "已保存",
+      "saveFailed": "保存失败"
     },
     "fileTabs": {
       "unsavedChanges": "未保存的更改",
@@ -166,7 +170,13 @@
         "remove": "移除"
       },
       "boardOptions": "开发板选项...",
-      "flashToBoard": "烧录到实体板"
+      "flashToBoard": "烧录到实体板",
+      "flashHint": {
+        "mpy": "安装 MicroPython（如需要）并把此项目上传到 USB 连接的实体板",
+        "mpyUnavailable": "MicroPython 项目不能从这里烧录：仅支持 Arduino 程序",
+        "ready": "把编译好的程序烧录到 USB 连接的实体板",
+        "willCompile": "编译程序并烧录到 USB 连接的实体板"
+      }
     },
     "componentPicker": {
       "title": "添加元件",
@@ -394,6 +404,49 @@
       "datasheetTab": "数据手册",
       "examplesTitle": "示例项目",
       "productPage": "产品页面"
+    },
+    "flash": {
+      "title": "烧录 {{board}}",
+      "close": "关闭",
+      "detectingPorts": "正在检测 USB 串口...",
+      "needsDesktop": "烧录实体板需要 Velxio Desktop。网页版无法访问本地 USB 串口。",
+      "noPorts": "未检测到 USB 串口。",
+      "noPortsHint": "把开发板插到 USB 口并点击“刷新”。在 Linux 上可能需要把自己加入 dialout 组：",
+      "noPortsHintLogout": "（执行后请注销并重新登录。）",
+      "refresh": "刷新",
+      "refreshPorts": "刷新串口",
+      "serialPort": "串口",
+      "flash": "烧录",
+      "compileFlash": "编译并烧录",
+      "connectFlash": "连接并烧录",
+      "connectCompileFlash": "连接、编译并烧录",
+      "noBuild": "这块板子还没有编译好的程序：会先编译再烧录。编译器输出显示在下方控制台。",
+      "staleBuild": "上次编译后代码有改动。烧录前会重新编译，保证板子拿到的就是编辑器里的内容。",
+      "webIntro": "直接在浏览器里通过 USB 烧录。",
+      "webHint": "用 USB 连接开发板并点击按钮，浏览器会询问使用哪个串口。请先关闭其他占用该串口的程序（串口监视器、IDE）。",
+      "mpyTwoSteps": "这个 MicroPython 项目分两步烧录：如果板子没有 MicroPython 固件，先安装固件（约一分钟），然后上传你的 .py 文件并重启进入 main.py。",
+      "mpyUnavailable": "MicroPython 项目不能从这里烧录到实体板。",
+      "compiling": "正在编译程序...",
+      "compilingHint": "编译成功后会自动开始烧录。",
+      "flashingOn": "正在通过 {{port}} 烧录...",
+      "success": "烧录成功，用时 {{seconds}} 秒",
+      "compileFailed": "编译失败：请修正下方错误后重试。{{error}}",
+      "noOutput": "（暂无输出）",
+      "dontUnplug": "烧录时不要拔掉开发板。",
+      "startOver": "重新开始",
+      "pickAnotherPort": "选择其他串口",
+      "retry": "重试",
+      "retryCompile": "重新编译并烧录",
+      "cancel": "取消",
+      "hide": "隐藏",
+      "paidOnlyTitle": "烧录实体板属于 Velxio Desktop 付费许可的功能",
+      "paidOnlyBody": "把程序上传到 USB 连接的实体板，需要 Personal、Commercial 或 Enterprise 许可。模拟器本身仍然免费。",
+      "seePlans": "查看方案",
+      "log": {
+        "compiling": "烧录前先编译程序...",
+        "recompiling": "上次构建后代码有改动：烧录前重新编译...",
+        "compiled": "构建成功，用时 {{seconds}} 秒。开始烧录..."
+      }
     }
   },
   "about": {

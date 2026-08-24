@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { useOscilloscopeStore } from '../../store/useOscilloscopeStore';
+import { useEditorStore, type EditorViewMode } from '../../store/useEditorStore';
 import { LOCALES, LOCALE_META, type Locale } from '../../i18n/config';
 import { getLocaleFromPath, switchLocale } from '../../i18n/path';
 import {
@@ -35,7 +36,20 @@ import {
 import './EditorMenuBar.css';
 
 type Item =
-  | { kind: 'command'; id: EditorCommandId; label: string; shortcut?: string; pro?: boolean }
+  | {
+      kind: 'command';
+      id: EditorCommandId;
+      label: string;
+      shortcut?: string;
+      pro?: boolean;
+      /** Hide the row entirely when no handler is registered, instead of
+       *  the default "render disabled". For account-scoped items the
+       *  absence of a handler is not "temporarily unavailable" but "does
+       *  not apply here": OSS has no accounts at all, and in pro exactly
+       *  one of Sign in / My projects is meaningful at a time. A greyed-out
+       *  "My projects" would read as a broken feature in both. */
+      optional?: boolean;
+    }
   | { kind: 'link'; href: string; label: string }
   | { kind: 'separator' };
 
@@ -65,6 +79,13 @@ export const EditorMenuBar: React.FC = () => {
   const toggleSerialMonitor = useSimulatorStore((s) => s.toggleSerialMonitor);
   const scopeOpen = useOscilloscopeStore((s) => s.open);
   const toggleOscilloscope = useOscilloscopeStore((s) => s.toggleOscilloscope);
+  // Layout rows: the same switches as the toolbar's explorer / Code / Both /
+  // Circuit toggle, which hides on a narrow bar (App.css) — the menu is then
+  // the only way to reach them, so they carry live checkmarks.
+  const explorerOpen = useEditorStore((s) => s.explorerOpen);
+  const toggleExplorer = useEditorStore((s) => s.toggleExplorer);
+  const viewMode = useEditorStore((s) => s.viewMode);
+  const setViewMode = useEditorStore((s) => s.setViewMode);
   const undo = useSimulatorStore((s) => s.undo);
   const redo = useSimulatorStore((s) => s.redo);
   const history = useSimulatorStore((s) => s.history);
@@ -90,6 +111,15 @@ export const EditorMenuBar: React.FC = () => {
     { kind: 'command', id: 'project.new', label: t('editor.menu.newProject', 'New workspace') },
     { kind: 'command', id: 'file.new', label: t('editor.menu.newFile', 'New file') },
     { kind: 'separator' },
+    // Third item, and deliberately at the head of the project group rather
+    // than tacked onto the "new …" pair above: it opens the user's saved
+    // work, which is what Open/Save below are about.
+    {
+      kind: 'command',
+      id: 'account.myProjects',
+      label: t('header.auth.myProjects', 'My projects'),
+      optional: true,
+    },
     { kind: 'command', id: 'project.open', label: t('editor.menu.open', 'Open project…') },
     {
       kind: 'command',
@@ -116,7 +146,34 @@ export const EditorMenuBar: React.FC = () => {
     { kind: 'command', id: 'sim.record', label: t('editor.toolbar.recordLabel', 'Record simulation'), pro: true },
   ];
 
+  // Sign in / My projects for the Account menu. The bottom-left account
+  // dropdown gets these from its own (pro) markup; this menubar only ever
+  // hosted the shared `user-menu` slot, which is why the editor's Account
+  // menu had no way in or out of a session.
+  const accountItems: Item[] = [
+    {
+      kind: 'command',
+      id: 'account.myProjects',
+      label: t('header.auth.myProjects', 'My projects'),
+      optional: true,
+    },
+    {
+      kind: 'command',
+      id: 'account.login',
+      label: t('header.auth.signIn', 'Sign in'),
+      optional: true,
+    },
+  ];
+
   const helpItems: Item[] = [
+    // Only present once a post has been delivered — the announcement is a
+    // toast now, and this is how it stays reachable after it retires.
+    {
+      kind: 'command',
+      id: 'help.whatsNew',
+      label: t('news.kicker', "What's new"),
+      optional: true,
+    },
     { kind: 'link', href: `${SITE}/docs`, label: t('header.nav.documentation', 'Documentation') },
     { kind: 'link', href: '/examples', label: t('header.nav.examples', 'Examples') },
     { kind: 'link', href: `${SITE}/pricing`, label: t('header.nav.pricing', 'Pricing') },
@@ -133,18 +190,25 @@ export const EditorMenuBar: React.FC = () => {
   // everything view-shaped lives in the View menu, like the desktop app.
   const editItems: Item[] = [];
 
+  // File Explorer is rendered as a checkmarked row in the View block below
+  // (it reads the store), not as a plain command here.
   const viewItems: Item[] = [
     { kind: 'command', id: 'sim.compile', label: t('editor.menu.compile', 'Compile'), shortcut: 'Ctrl+B' },
     { kind: 'command', id: 'sim.run', label: t('editor.menu.run', 'Run') },
     { kind: 'command', id: 'sim.stop', label: t('editor.toolbar.stop', 'Stop') },
     { kind: 'command', id: 'sim.resetBoard', label: t('editor.toolbar.reset', 'Reset') },
     { kind: 'separator' },
-    { kind: 'command', id: 'view.toggleExplorer', label: t('editor.menu.toggleExplorer', 'File Explorer') },
     { kind: 'command', id: 'view.toggleConsole', label: t('editor.menu.toggleConsole', 'Output Console') },
     { kind: 'separator' },
     { kind: 'command', id: 'view.reset', label: t('editor.menu.centerView', 'Center canvas view') },
     { kind: 'command', id: 'view.zoomIn', label: t('editor.canvas.zoomIn', 'Zoom in') },
     { kind: 'command', id: 'view.zoomOut', label: t('editor.canvas.zoomOut', 'Zoom out') },
+  ];
+
+  const layoutModes: { key: EditorViewMode; label: string }[] = [
+    { key: 'code', label: t('editor.shell.code', 'Code') },
+    { key: 'both', label: t('editor.shell.both', 'Both') },
+    { key: 'circuit', label: t('editor.shell.circuit', 'Circuit') },
   ];
 
   const renderLink = (item: Extract<Item, { kind: 'link' }>): React.ReactNode => (
@@ -220,10 +284,52 @@ export const EditorMenuBar: React.FC = () => {
                 <span className="emb-shortcut">{scopeOpen ? '✓' : ''}</span>
               </button>
               <div className="emb-separator" />
+              {/* Layout: explorer pane + Code / Both / Circuit. Mirrors the
+                  toolbar's segmented toggle, which App.css hides once the
+                  shared bar gets narrow (small window + docked AI chat). */}
+              <div className="emb-section-label">{t('editor.shell.viewMode', 'View mode')}</div>
+              <button
+                role="menuitemcheckbox"
+                aria-checked={explorerOpen}
+                className="emb-item"
+                onClick={() => {
+                  setOpen(null);
+                  toggleExplorer();
+                }}
+              >
+                <span>{t('editor.menu.toggleExplorer', 'File Explorer')}</span>
+                <span className="emb-shortcut">{explorerOpen ? '✓' : ''}</span>
+              </button>
+              {layoutModes.map((m) => (
+                <button
+                  key={m.key}
+                  role="menuitemradio"
+                  aria-checked={viewMode === m.key}
+                  className="emb-item"
+                  onClick={() => {
+                    setOpen(null);
+                    setViewMode(m.key);
+                  }}
+                >
+                  <span>{m.label}</span>
+                  <span className="emb-shortcut">{viewMode === m.key ? '✓' : ''}</span>
+                </button>
+              ))}
+              <div className="emb-separator" />
             </>
           )}
           {which === 'account' && (
             <>
+              {/* Session entry points, above the pro extras. Exactly one of
+                  the two is registered at a time (pro registers by session
+                  state) and neither exists in OSS, so this block renders
+                  nothing in an OSS build. */}
+              {accountItems
+                .filter((item) => item.kind !== 'command' || hasEditorCommand(item.id))
+                .map((item) => (item.kind === 'command' ? renderCommand(item) : null))}
+              {accountItems.some(
+                (item) => item.kind === 'command' && hasEditorCommand(item.id),
+              ) && <div className="emb-separator" />}
               {/* Pro account items (PRO badge, Subscribe / Manage
                   subscription, licenses, history, replays, Privacy) mount
                   here via the SAME user-menu slot the bottom-left account
@@ -291,15 +397,20 @@ export const EditorMenuBar: React.FC = () => {
               </button>
             </>
           )}
-          {items.map((item, i) =>
-            item.kind === 'separator' ? (
-              <div key={`sep-${i}`} className="emb-separator" />
-            ) : item.kind === 'link' ? (
-              renderLink(item)
-            ) : (
-              renderCommand(item)
-            ),
-          )}
+          {items
+            .filter(
+              (item) =>
+                item.kind !== 'command' || !item.optional || hasEditorCommand(item.id),
+            )
+            .map((item, i) =>
+              item.kind === 'separator' ? (
+                <div key={`sep-${i}`} className="emb-separator" />
+              ) : item.kind === 'link' ? (
+                renderLink(item)
+              ) : (
+                renderCommand(item)
+              ),
+            )}
         </div>
       )}
     </div>

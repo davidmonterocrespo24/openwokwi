@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { buildNetlist } from '../simulation/spice/NetlistBuilder';
 import { runNetlist } from './helpers/testSolver';
 import { UnionFind } from '../simulation/spice/unionFind';
+import { BOARD_PIN_GROUPS } from '../simulation/spice/boardPinGroups';
 import { parseValueWithUnits } from '../simulation/spice/valueParser';
+import type { BoardForSpice } from '../simulation/spice/types';
 
 describe('UnionFind', () => {
   it('unions transitively', () => {
@@ -242,6 +244,106 @@ describe('NetlistBuilder — simple cases', () => {
     // D9 is wired directly to GND → same net as ground → no source emitted
     // (this is a degenerate case; just ensure we don't crash)
     expect(netlist).toMatch(/\.end/);
+  });
+});
+
+describe('NetlistBuilder — aux supply rails (off-voltage supply pins, B16)', () => {
+  // Boards built exactly the way storeAdapter builds them, so these tests
+  // exercise the real BOARD_PIN_GROUPS tables.
+  const boardFromGroup = (id: string, kind: keyof typeof BOARD_PIN_GROUPS): BoardForSpice => {
+    const g = BOARD_PIN_GROUPS[kind];
+    return {
+      id,
+      boardKind: kind,
+      vcc: g.vcc,
+      pins: {},
+      groundPinNames: g.gnd,
+      vccPinNames: g.vcc_pins,
+      auxPinNames: g.aux?.pins,
+      auxVolts: g.aux?.volts,
+    };
+  };
+  const wire = (id: string, aId: string, aPin: string, bId: string, bPin: string) => ({
+    id,
+    start: { componentId: aId, pinName: aPin },
+    end: { componentId: bId, pinName: bPin },
+  });
+
+  it(
+    'ESP32 VIN solves at 5 V while vcc_rail stays at 3.3 V',
+    { timeout: 30_000 },
+    async () => {
+      const { netlist, pinNetMap } = buildNetlist({
+        components: [
+          { id: 'r1', metadataId: 'resistor', properties: { value: '10k' } },
+          { id: 'r2', metadataId: 'resistor', properties: { value: '10k' } },
+        ],
+        wires: [
+          wire('w1', 'esp32', 'VIN', 'r1', '1'),
+          wire('w2', 'r1', '2', 'esp32', 'GND'),
+          wire('w3', 'esp32', '3V3', 'r2', '1'),
+          wire('w4', 'r2', '2', 'esp32', 'GND'),
+        ],
+        boards: [boardFromGroup('esp32', 'esp32')],
+        analysis: { kind: 'op' },
+      });
+      // VIN must land on its own 5 V aux rail, NOT collapse onto vcc_rail
+      // (the customer-reported clamp: 5 V pin reading 3.3 V).
+      expect(pinNetMap.get('esp32:VIN')).toBe('aux_rail_5');
+      expect(pinNetMap.get('esp32:3V3')).toBe('vcc_rail');
+      expect(netlist).toMatch(/V_AUX_RAIL_5 aux_rail_5 0 DC 5/);
+      expect(netlist).toMatch(/V_VCC_RAIL vcc_rail 0 DC 3\.3/);
+      const result = await runNetlist(netlist);
+      expect(result.dcValue('v(aux_rail_5)')).toBeCloseTo(5, 2);
+      expect(result.dcValue('v(vcc_rail)')).toBeCloseTo(3.3, 2);
+    },
+  );
+
+  it(
+    'Arduino Uno 3.3V pin solves at 3.3 V while the 5 V rail stays at 5 V',
+    { timeout: 30_000 },
+    async () => {
+      const { netlist, pinNetMap } = buildNetlist({
+        components: [
+          { id: 'r1', metadataId: 'resistor', properties: { value: '10k' } },
+          { id: 'r2', metadataId: 'resistor', properties: { value: '10k' } },
+        ],
+        wires: [
+          wire('w1', 'uno', '3.3V', 'r1', '1'),
+          wire('w2', 'r1', '2', 'uno', 'GND'),
+          wire('w3', 'uno', '5V', 'r2', '1'),
+          wire('w4', 'r2', '2', 'uno', 'GND'),
+        ],
+        boards: [boardFromGroup('uno', 'arduino-uno')],
+        analysis: { kind: 'op' },
+      });
+      expect(pinNetMap.get('uno:3.3V')).toBe('aux_rail_3v3');
+      expect(pinNetMap.get('uno:5V')).toBe('vcc_rail');
+      expect(netlist).toMatch(/V_AUX_RAIL_3V3 aux_rail_3v3 0 DC 3\.3/);
+      expect(netlist).toMatch(/V_VCC_RAIL vcc_rail 0 DC 5/);
+      const result = await runNetlist(netlist);
+      expect(result.dcValue('v(aux_rail_3v3)')).toBeCloseTo(3.3, 2);
+      expect(result.dcValue('v(vcc_rail)')).toBeCloseTo(5, 2);
+    },
+  );
+
+  it('a module VCC pin wired to VIN stays on the 5 V aux rail', () => {
+    // The VCC pin-name heuristic canonicalizes to vcc_rail; the wire to VIN
+    // must win (aux rails outrank the heuristic in pickCanonical) or the
+    // module would be "powered" at 3.3 V despite being wired to 5 V.
+    const { pinNetMap } = buildNetlist({
+      components: [
+        { id: 'oled', metadataId: 'ssd1306-i2c-4pin', properties: {} },
+      ],
+      wires: [
+        wire('w1', 'oled', 'VCC', 'esp32', 'VIN'),
+        wire('w2', 'oled', 'GND', 'esp32', 'GND'),
+      ],
+      boards: [boardFromGroup('esp32', 'esp32')],
+      analysis: { kind: 'op' },
+    });
+    expect(pinNetMap.get('oled:VCC')).toBe('aux_rail_5');
+    expect(pinNetMap.get('esp32:VIN')).toBe('aux_rail_5');
   });
 });
 

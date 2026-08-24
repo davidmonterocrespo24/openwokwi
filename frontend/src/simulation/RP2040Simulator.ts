@@ -29,6 +29,16 @@ import { requestElectricalResolve } from './spice/electricalResolveHook';
  *   Default SPI     → SPI0  (GPIO16=MISO, GPIO19=MOSI, GPIO18=SCK, GPIO17=CS)
  */
 
+/**
+ * GPIOs wired to an on-module PIO peripheral rather than to the canvas.
+ *
+ * On the Pico W the CYW43439 hangs off GP23 (WL_ON), GP24 (WL_HOST_WAKE / gSPI
+ * data), GP25 (WL_CS) and GP29 (WL_CLK). They are internal to the module, so no
+ * SPICE net exists for them and the spice-driven input path must not touch
+ * them — see the guard in setupGpioListeners().
+ */
+const PIO_PERIPHERAL_PINS = new Set([23, 24, 25, 29]);
+
 const F_CPU = 125_000_000; // 125 MHz
 const CYCLE_NANOS = 1e9 / F_CPU; // nanoseconds per cycle (~8 ns)
 const FPS = 60;
@@ -82,7 +92,41 @@ export class IdleSpinDetector {
   constructor(
     private readonly threshold = 32,
     private readonly maxStride = 256,
+    /**
+     * How wide the loop body may be, in bytes of PC range, and still count as
+     * an idle spin.
+     *
+     * A `delay()` that polls the timer is a handful of instructions. An
+     * INTERPRETER's dispatch loop also closes the same backward branch over and
+     * over with no GPIO change — MicroPython's does — but it is hundreds of
+     * bytes wide and it is doing real work. Eliding that does not skip the
+     * work, it only races the clock ahead of it: on BadgeOS the guest executed
+     * 107 k instructions per second of guest time instead of 1.4 M, so the
+     * badge took ten times longer to reach its menu.
+     *
+     * 128 bytes is comfortably more than any busy-wait and comfortably less
+     * than a bytecode dispatch.
+     */
+    private readonly maxLoopSpan = 128,
+    /**
+     * How many instructions one iteration may take and still be a busy-wait.
+     *
+     * The PC-span test above is necessary and not sufficient: an interpreter's
+     * dispatch can be tight in ADDRESS and long in WORK, and a loop that is
+     * really executing bytecode must never have its clock jumped over. A
+     * `delay()` iteration is a handful of instructions — read the timer,
+     * compare, branch. Twenty-four leaves room for the compare-and-branch
+     * variants without admitting a VM.
+     */
+    private readonly maxIterInstructions = 24,
   ) {}
+
+  /** Widest PC seen since this loop started, so a big loop body can be told
+   *  from a tight spin. */
+  private loopLow = 0;
+  private loopHigh = 0;
+  /** Instructions seen since the last time this loop closed. */
+  private sinceIter = 0;
 
   /**
    * @param pc   program counter about to execute
@@ -94,15 +138,57 @@ export class IdleSpinDetector {
     const prev = this.prevPc;
     this.prevPc = pc;
     if (prev === -1) return false;
+    this.sinceIter++;
 
-    if (pc < prev) {
+    // The common case by far — a step forward inside the same code — is
+    // handled here and returns, so the loop-close bookkeeping below runs only
+    // on a backward branch. This function is called once per emulated
+    // instruction; on a 165 M-instruction boot every field access in it is
+    // 165 M field accesses.
+    if (pc >= prev) {
+      if (pc > prev + this.maxStride) {
+        // Long forward jump (call / loop exit) — left the tight spin.
+        this.reset();
+      } else if (pc > this.loopHigh) {
+        this.loopHigh = pc;
+      }
+      return false;
+    }
+
+    // A backward branch is the loop's top, so it is also its lowest PC.
+    if (pc < this.loopLow) this.loopLow = pc;
+
+    {
       // Backward branch — one loop iteration just closed.
       const g = gpio();
+      const iterLength = this.sinceIter;
+      this.sinceIter = 0;
+      if (iterLength > this.maxIterInstructions) {
+        // Too much work in one turn of the loop to be a wait.
+        this.loopTarget = pc;
+        this.gpioAtLastIter = g;
+        this.iters = 1;
+        this.loopLow = pc;
+        this.loopHigh = prev;
+        return false;
+      }
       if (this.loopTarget !== pc) {
         // First time we land on this loop top (or the loop moved): start over.
         this.loopTarget = pc;
         this.gpioAtLastIter = g;
         this.iters = 1;
+        this.loopLow = pc;
+        this.loopHigh = prev;
+        return false;
+      }
+      if (this.loopHigh - this.loopLow > this.maxLoopSpan) {
+        // Too wide to be a busy-wait. An interpreter's dispatch loop looks
+        // exactly like a spin from the outside, and eliding it races the clock
+        // ahead of work that is really happening.
+        this.iters = 1;
+        this.loopLow = pc;
+        this.loopHigh = prev;
+        this.gpioAtLastIter = g;
         return false;
       }
       if (g !== this.gpioAtLastIter) {
@@ -116,10 +202,6 @@ export class IdleSpinDetector {
       return this.iters >= this.threshold;
     }
 
-    if (pc > prev + this.maxStride) {
-      // Long forward jump (call / loop exit) — left the tight spin.
-      this.reset();
-    }
     return false;
   }
 
@@ -134,6 +216,9 @@ export class IdleSpinDetector {
     this.loopTarget = -1;
     this.iters = 0;
     this.gpioAtLastIter = -1;
+    this.loopLow = 0;
+    this.loopHigh = 0;
+    this.sinceIter = 0;
   }
 }
 
@@ -173,6 +258,9 @@ export class RP2040Simulator {
   // ── Generic PIO/gSPI bus peripheral (e.g. the pro WiFi co-processor). Null
   //    in OSS (no factory installed); attached for boards a factory supports.
   private pioPeripheral: PioPeripheral | null = null;
+  /** Board id the PIO peripheral was created for, so a rebooting guest can be
+   *  handed a freshly powered chip (see powerCyclePioPeripheral). */
+  private pioBoardId: string | null = null;
   private pioHookedFifos: Array<{ restore: () => void }> = [];
   // The board kind this simulator runs (set by attachPioPeripheral). A
   // 'pi-pico-w' boots the RPI_PICO_W firmware (with the `network` module)
@@ -376,6 +464,7 @@ export class RP2040Simulator {
     // RP2040, so those hooks now point at the discarded instance. Re-install
     // them on the new PIO FIFOs or the peripheral never sees the bus traffic.
     if (this.pioPeripheral) {
+      this.powerCyclePioPeripheral();
       this.pioHookedFifos = [];
       this.installPioPeripheralHooks();
     }
@@ -408,6 +497,7 @@ export class RP2040Simulator {
     // factory-not-installed-yet) so loadMicroPython still picks the W firmware
     // for a pi-pico-w board.
     this.boardKind = boardKind;
+    this.pioBoardId = boardId;
     if (this.pioPeripheral) return this.pioPeripheral;
     const peripheral = createPioPeripheral(boardKind, boardId);
     if (!peripheral) return null;
@@ -423,6 +513,48 @@ export class RP2040Simulator {
 
     this.installPioPeripheralHooks();
     return peripheral;
+  }
+
+  /**
+   * Give a rebooting guest a chip that has also rebooted.
+   *
+   * The CYW43439 emulator is stateful: the bus handshake result, the backplane
+   * window, the SDPCM sequence counters and credit, the event mask, the link
+   * state. attachPioPeripheral is idempotent and the store only calls it at
+   * board-add, so that state SURVIVED every later Run while the guest driver
+   * started over from scratch. The second Run then had a fresh driver talking
+   * to a chip mid-conversation: the handshake "passed" against stale
+   * registers, IOCTL replies came back zeroed, and the first call that waited
+   * on the chip blocked forever. Only the first Run after a page load worked.
+   *
+   * Called from the paths that rebuild the MCU, before the FIFO hooks are
+   * re-installed, so the new chip is what gets wired to the new PIO.
+   */
+  private powerCyclePioPeripheral(): void {
+    if (!this.pioPeripheral || !this.pioBoardId) return;
+    const kind = this.boardKind;
+    const boardId = this.pioBoardId;
+    try {
+      this.pioPeripheral.detach?.();
+    } catch {
+      /* the old chip is being thrown away either way */
+    }
+    for (const h of this.pioHookedFifos) {
+      try {
+        h.restore();
+      } catch {
+        /* noop */
+      }
+    }
+    this.pioHookedFifos = [];
+    this.pioPeripheral = null;
+    const fresh = createPioPeripheral(kind, boardId);
+    if (!fresh) return;
+    this.pioPeripheral = fresh;
+    fresh.onHostWake((active: boolean) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      try { (this.rp2040 as any)?.gpio?.[24]?.setInputValue(active); } catch { /* noop */ }
+    });
   }
 
   /** Detach the PIO peripheral (called from teardown). */
@@ -784,6 +916,14 @@ export class RP2040Simulator {
         // on a mode/pull change (an external value change via setInputValue does
         // not alter `value` for an input pin), so we can split cleanly.
         if (state >= GPIOPinState.Input) {
+          // Pins that belong to an attached PIO peripheral are NOT canvas pins.
+          // WL_HOST_WAKE (GPIO24) is driven by attachPioPeripheral() with
+          // setInputValue() from hostWakeLevel(); seeding a pull level here
+          // overwrites it the moment the CYW43 driver configures the pad as an
+          // input. The host then stops polling the chip, no association event is
+          // ever delivered, and the sketch sits forever at status=1 (CONNECTING)
+          // while `active()` still reads True. Leave them to the peripheral.
+          if (this.pioPeripheral && PIO_PERIPHERAL_PINS.has(pin)) return;
           // INPUT pin. Surface the internal pull so NetlistBuilder stamps the
           // weak resistor; the actual logic level is injected from the SPICE
           // solve by connectDigitalInputsToMcu. We do NOT mark the pin as an MCU

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getApiBase } from '../lib/apiBase';
 import type { ESP32BoardOptions, SpiffsFile } from '../types/boardOptions';
+import { implicitBoardOptions } from '../types/boardOptions';
 
 export interface SketchFile {
   name: string;
@@ -117,7 +118,14 @@ export async function compileCode(
   // Translate camelCase frontend keys to snake_case backend keys. Backend
   // only inspects these fields for esp32:* FQBNs — other boards pass them
   // through unread.
-  const board_options = extras?.boardOptions ? { ...extras.boardOptions } : null;
+  // A project that never opened the Board Options modal still has to build for
+  // the module it is running on: ask the board what it ships with. Null for
+  // every board that declares nothing, which is all of the OSS ones.
+  const board_options = extras?.boardOptions
+    ? { ...extras.boardOptions }
+    : extras?.boardKind
+      ? implicitBoardOptions(extras.boardKind as never)
+      : null;
   const spiffs_files = extras?.spiffsFiles?.length
     ? extras.spiffsFiles.map((f) => ({ name: f.name, content_b64: f.contentB64 }))
     : null;

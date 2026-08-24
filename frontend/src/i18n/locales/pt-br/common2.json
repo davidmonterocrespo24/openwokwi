@@ -72,7 +72,11 @@
       "contextMenu": {
         "rename": "Renomear",
         "delete": "Excluir"
-      }
+      },
+      "lastSaved": "salvo pela última vez",
+      "saving": "salvando…",
+      "saved": "salvo",
+      "saveFailed": "falha ao salvar"
     },
     "fileTabs": {
       "unsavedChanges": "Alterações não salvas",
@@ -166,7 +170,13 @@
         "remove": "Remover"
       },
       "boardOptions": "Opcoes da placa...",
-      "flashToBoard": "Gravar na placa real"
+      "flashToBoard": "Gravar na placa real",
+      "flashHint": {
+        "mpy": "Instalar o MicroPython (se necessário) e enviar este projeto para uma placa real conectada por USB",
+        "mpyUnavailable": "Projetos MicroPython não podem ser gravados daqui: só sketches Arduino",
+        "ready": "Gravar o sketch compilado em uma placa real conectada por USB",
+        "willCompile": "Compilar o sketch e gravá-lo em uma placa real conectada por USB"
+      }
     },
     "componentPicker": {
       "title": "Adicionar Componente",
@@ -394,6 +404,49 @@
       "datasheetTab": "Ficha técnica",
       "examplesTitle": "Projetos de exemplo",
       "productPage": "Página do produto"
+    },
+    "flash": {
+      "title": "Gravar {{board}}",
+      "close": "Fechar",
+      "detectingPorts": "Detectando portas seriais USB...",
+      "needsDesktop": "Gravar em hardware requer o Velxio Desktop. O app web não acessa as portas seriais USB locais.",
+      "noPorts": "Nenhuma porta serial USB detectada.",
+      "noPortsHint": "Conecte a placa a uma porta USB e clique em Atualizar. No Linux, talvez seja preciso se adicionar ao grupo dialout:",
+      "noPortsHintLogout": "(saia e entre de novo depois de executar.)",
+      "refresh": "Atualizar",
+      "refreshPorts": "Atualizar portas",
+      "serialPort": "Porta serial",
+      "flash": "Gravar",
+      "compileFlash": "Compilar e gravar",
+      "connectFlash": "Conectar e gravar",
+      "connectCompileFlash": "Conectar, compilar e gravar",
+      "noBuild": "Esta placa ainda não tem um programa compilado: ele será compilado primeiro e depois gravado. A saída do compilador aparece no console abaixo.",
+      "staleBuild": "O código mudou desde a última compilação. O sketch será recompilado antes de gravar, para a placa receber o que você vê no editor.",
+      "webIntro": "Grave por USB direto do navegador.",
+      "webHint": "Conecte a placa por USB e clique no botão: o navegador vai perguntar qual porta serial usar. Feche antes qualquer outro programa que use a porta (monitores seriais, IDEs).",
+      "mpyTwoSteps": "Este projeto MicroPython é gravado em duas etapas: primeiro o firmware MicroPython é instalado se a placa não o tiver (cerca de um minuto), depois seus arquivos .py são enviados e a placa reinicia em main.py.",
+      "mpyUnavailable": "Projetos MicroPython não podem ser gravados em uma placa real daqui.",
+      "compiling": "Compilando o sketch...",
+      "compilingHint": "A gravação começa sozinha quando a compilação termina bem.",
+      "flashingOn": "Gravando em {{port}}...",
+      "success": "Gravado com sucesso em {{seconds}} s",
+      "compileFailed": "A compilação falhou: corrija os erros abaixo e tente de novo. {{error}}",
+      "noOutput": "(ainda sem saída)",
+      "dontUnplug": "Não desconecte a placa durante a gravação.",
+      "startOver": "Recomeçar",
+      "pickAnotherPort": "Escolher outra porta",
+      "retry": "Tentar de novo",
+      "retryCompile": "Recompilar e gravar",
+      "cancel": "Cancelar",
+      "hide": "Ocultar",
+      "paidOnlyTitle": "Gravar placas reais faz parte da licença paga do Velxio Desktop",
+      "paidOnlyBody": "Enviar um sketch para uma placa real conectada por USB está disponível com uma licença Personal, Commercial ou Enterprise. O simulador continua gratuito.",
+      "seePlans": "Ver planos",
+      "log": {
+        "compiling": "Compilando o sketch antes de gravar...",
+        "recompiling": "O código mudou desde a última compilação: recompilando antes de gravar...",
+        "compiled": "Compilação OK em {{seconds}} s. Iniciando a gravação..."
+      }
     }
   },
   "about": {

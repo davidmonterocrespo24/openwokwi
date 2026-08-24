@@ -280,6 +280,20 @@ export class PinManager {
     return this.pwmValues.get(pin) ?? 0;
   }
 
+  /** Last known PWM carrier frequency per pin, in Hz. Written by the LEDC
+   *  duty handler when the engine reports it; 0 = never reported. Kept as a
+   *  side table rather than a new callback parameter so the many existing
+   *  two- and three-arg PWM listeners stay untouched. */
+  private pwmFreqs: Map<number, number> = new Map();
+
+  setPwmFreq(pin: number, freqHz: number): void {
+    this.pwmFreqs.set(pin, freqHz);
+  }
+
+  getPwmFreq(pin: number): number {
+    return this.pwmFreqs.get(pin) ?? 0;
+  }
+
   // ── Analog voltage API ───────────────────────────────────────────────────
 
   /**

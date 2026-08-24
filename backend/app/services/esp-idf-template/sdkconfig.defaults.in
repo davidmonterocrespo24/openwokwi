@@ -93,6 +93,16 @@ CONFIG_BT_ENABLED=y
 CONFIG_BT_BLUEDROID_ENABLED=y
 CONFIG_BTDM_CTRL_MODE_BR_EDR_BLE=y
 CONFIG_BT_BLE_ENABLED=y
+# BLE 4.2 legacy APIs (esp_ble_gap_config_adv_data_raw / esp_ble_gap_
+# start_advertising): arduino-esp32's Bluedroid BLE library is written
+# against them. BLE5-only SoCs (C3/S3/C6) default to 50_FEATURES with 4.2
+# OFF, so every BLEAdvertising call died at link with undefined references
+# (found by the gallery compile smoke: esp32c3-ble-advertise, 2026-08-15).
+# Enabling 4.2 alongside 5.0 is exactly what arduino-esp32's own per-target
+# sdkconfigs do; on classic ESP32 these are already the Kconfig defaults.
+CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y
+CONFIG_BT_BLE_42_ADV_EN=y
+CONFIG_BT_BLE_42_SCAN_EN=y
 
 # ── mbedTLS: PSK key-exchange ciphersuites ───────────────────────────────
 # arduino-esp32's WiFiClientSecure/ssl_client.cpp wraps its ENTIRE body

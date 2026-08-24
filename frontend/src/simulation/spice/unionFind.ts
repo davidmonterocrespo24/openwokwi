@@ -73,7 +73,7 @@ export class UnionFind {
 
   /**
    * Force the set containing `key` to report `name` as its representative.
-   * Called e.g. with "0" for ground, "vcc_rail" for supply rails.
+   * Called e.g. with "0" for ground, "vcc_rail" / "aux_rail_*" for supply rails.
    */
   setCanonical(key: string, name: string): void {
     this.add(key);
@@ -110,13 +110,22 @@ export class UnionFind {
   }
 }
 
-/** Ground ("0") always wins over vcc; vcc over auto-named. Deterministic pick. */
+/** Ground ("0") always wins over aux rails; aux rails over vcc; vcc over
+ *  auto-named. Deterministic pick. Aux rails outrank vcc because they are
+ *  board-declared facts while the vcc name often comes from the pin-name
+ *  regex heuristic — a module's VCC pin wired to a board's VIN pin must stay
+ *  on the 5 V aux net, not collapse back onto the logic-voltage vcc_rail. */
 function pickCanonical(a: string | undefined, b: string | undefined): string | undefined {
   if (a === undefined) return b;
   if (b === undefined) return a;
   if (a === b) return a;
   if (a === '0') return a;
   if (b === '0') return b;
+  const aAux = a.startsWith('aux_rail_');
+  const bAux = b.startsWith('aux_rail_');
+  if (aAux && bAux) return a < b ? a : b; // two aux rails shorted: stable pick
+  if (aAux) return a;
+  if (bAux) return b;
   if (a.startsWith('vcc')) return a;
   if (b.startsWith('vcc')) return b;
   // Lexicographically smaller wins (stable)

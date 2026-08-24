@@ -33,7 +33,7 @@
     "hero": {
       "titleLine1": "Arduino、ESP32 和 Raspberry Pi。",
       "titleAccent": "就在你的浏览器中。",
-      "subtitle": "编写代码、连接元件、运行。支持 19 块开发板，AI 智能助手为你搭建电路，真实 CPU 仿真，完整离线桌面应用，AGPLv3 开源。",
+      "subtitle": "编写代码、连接元件、运行。支持 35 块开发板，AI 智能助手为你搭建电路，真实 CPU 仿真，完整离线桌面应用，AGPLv3 开源。",
       "ctaPrimary": "免费在线试用模拟器 →",
       "ctaGithub": "在 GitHub 上查看",
       "trustLine": "内置 AI 助手 · 离线可用 · AGPLv3 开源 · 无需注册",
@@ -43,7 +43,7 @@
       "label": "支持的硬件",
       "titleLine1": "每种架构。",
       "titleLine2": "一个工具。",
-      "subtitle": "19 种开发板，涵盖 5 种 CPU 架构——AVR8、ARM Cortex-M0+、RISC-V、Xtensa 和 Linux。全部在本地运行，无需云。"
+      "subtitle": "35 种开发板，涵盖 6 种 CPU 架构——AVR8、ARM Cortex-M、ARM Cortex-A、RISC-V、Xtensa 和 Linux。包含 Pimoroni、M5Stack、Seeed Studio 和 DFRobot 的合作伙伴开发板。全部在本地运行，无需云端。"
     },
     "features": {
       "label": "功能",
@@ -433,5 +433,11 @@
         "privateHint": "只有你能看到此项目。"
       }
     }
+  },
+  "news": {
+    "kicker": "最新动态",
+    "readMore": "了解更多",
+    "gotIt": "知道了",
+    "close": "关闭"
   }
 }

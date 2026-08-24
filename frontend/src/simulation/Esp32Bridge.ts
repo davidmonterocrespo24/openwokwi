@@ -35,7 +35,9 @@
  */
 
 import type { BoardKind } from '../types/board';
+import { MicroPythonSession, type MpyProgram } from './micropythonSession';
 import { getProBoard } from '../lib/proBoardRegistry';
+import { sensorRecordOwnsPin as recordOwnsPin } from './sensorModels';
 import { generateUUID } from '../utils/uuid';
 
 /**
@@ -45,6 +47,15 @@ import { generateUUID } from '../utils/uuid';
 export function toQemuBoardType(kind: BoardKind): 'esp32' | 'esp32-s3' | 'esp32-c3' | 'esp32-c6' {
   // Overlay-registered boards carry their base chip in the registry.
   const proFam = getProBoard(kind)?.esp32Family;
+  // Chips with NO QEMU machine anywhere (backend esp_qemu_manager knows
+  // esp32/s3/c3 only; c6 is at least mapped): reaching this bridge means the
+  // JS engine was skipped for a chip that has no other path — fail loudly
+  // instead of booting the wrong machine and wedging on the first register.
+  if (proFam === 'esp32-p4' || proFam === 'esp32-c5') {
+    throw new Error(
+      `${kind}: the ${proFam} has no QEMU machine - it runs only on its in-browser engine`,
+    );
+  }
   if (proFam) return proFam;
   if (kind === 'esp32-s3' || kind === 'xiao-esp32-s3' || kind === 'arduino-nano-esp32')
     return 'esp32-s3';
@@ -52,6 +63,43 @@ export function toQemuBoardType(kind: BoardKind): 'esp32' | 'esp32-s3' | 'esp32-
     return 'esp32-c3';
   return 'esp32'; // esp32, esp32-devkit-c-v4, esp32-cam, wemos-lolin32-lite
 }
+
+/**
+ * Upsert sensor records by `pin` — the one merge every bridge uses.
+ *
+ * Same kind on the same pin merges per FIELD. Two registration paths describe
+ * one sensor knowing different halves: the part resolves its extra pins through
+ * the wire walk, the store's pre-registration knows the component's properties.
+ * Replacing the object let the coarser path silently drop `echo_pin`, and the
+ * QEMU worker then fell back to TRIG+1 and pulsed a pin nobody was reading
+ * (the 1k/2k2 divider report). Whoever writes last still wins per field.
+ *
+ * A DIFFERENT kind on the same pin replaces outright: a DHT22 swapped for an
+ * HC-SR04 must not inherit a stale `echo_pin` that ownsSensorPin would then
+ * keep guarding against the host.
+ */
+export function upsertSensorRecords(
+  existing: ReadonlyArray<Record<string, unknown>>,
+  incoming: ReadonlyArray<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  const merged = existing.slice();
+  for (const s of incoming) {
+    const idx = merged.findIndex((e) => e['pin'] === s['pin']);
+    if (idx < 0) merged.push(s);
+    else merged[idx] = merged[idx]['sensor_type'] === s['sensor_type'] ? { ...merged[idx], ...s } : s;
+  }
+  return merged;
+}
+
+// The sensors whose model owns its line are declared once, in sensorModels.
+// Re-exported here because this bridge is the import site the overlay engines
+// and the tests already use; the list itself lives with the wiring spec so it
+// cannot drift from what the store pre-registers.
+export {
+  SINGLE_WIRE_SENSOR_TYPES,
+  isSingleWireSensorRecord,
+  sensorRecordOwnsPin,
+} from './sensorModels';
 
 const API_BASE = (): string => {
   // The desktop shell injects the sidecar URL at runtime (random port) via
@@ -91,6 +139,11 @@ export interface Ws2812Pixel {
 export interface LedcDuty {
   channel: number;
   duty_pct: number;
+  /** Carrier frequency in Hz, when the engine knows it. The JS engines derive
+   *  it from the LEDC timer registers; without it a speaker on a PWM pin can
+   *  only ever play one fixed note, which is how the M5Stack Core's piano
+   *  spent months stuck on 660 Hz. */
+  freq_hz?: number;
 }
 /** GPIO Matrix routing event — `gpio_out_sel[gpio]` was set to
  *  `signal_id`.  Maintained by the backend SignalRouter; emitted on
@@ -103,6 +156,11 @@ export interface WifiStatus {
   status: string;
   ssid?: string;
   ip?: string;
+  /** True when the board's network stack lives in THIS browser tab (in-browser
+   *  JS engine). The IoT gateway must then open in the in-app iframe: a new
+   *  tab backgrounds this one, the emulation gets timer-throttled, and the
+   *  in-chip HTTP server can't answer. Unset = server runs backend-side. */
+  inBrowser?: boolean;
 }
 export interface BleStatus {
   status: string;
@@ -211,14 +269,11 @@ export class Esp32Bridge {
   private _pendingFirmware: string | null = null;
   private _pendingSensors: Array<Record<string, unknown>> = [];
 
-  // MicroPython REPL injection — 4-stage state machine
-  //   idle → banner_seen → prompt_seen → raw_repl_entered → done
-  // Each stage waits for a specific string in the serial buffer before
-  // proceeding.  This avoids the race where code is sent before raw REPL
-  // mode is confirmed and ends up echoed by the normal REPL.
-  private _pendingMicroPythonCode: string | null = null;
-  private _serialBuffer = '';
-  private _replState: 'idle' | 'banner_seen' | 'prompt_seen' | 'raw_repl_entered' = 'idle';
+  // MicroPython: the queued project, and the session that boots the board to
+  // its raw REPL, writes the project's files onto the board filesystem and
+  // starts the program. See simulation/micropythonSession.ts.
+  private _pendingMicroPythonProgram: MpyProgram | null = null;
+  private _mpySession: MicroPythonSession | null = null;
   micropythonMode = false;
 
   constructor(boardId: string, boardKind: BoardKind) {
@@ -376,9 +431,10 @@ export class Esp32Bridge {
         case 'serial_output': {
           const text = (msg.data.data as string) ?? '';
           const uart = msg.data.uart as number | undefined;
-          if (this.onSerialData) {
-            for (const ch of text) this.onSerialData(ch, uart);
-          }
+          // What the console shows can be narrower than what the wire carried:
+          // a MicroPython upload filters its own protocol out (see below). The
+          // waveform below still gets every byte — they really were on the pin.
+          let shown = text;
           // Synthesize the per-byte UART waveform on the TX GPIO so the
           // oscilloscope shows a real frame, matching how a real ESP32
           // drives the pin.  Falls back to UART0 when no uart index is
@@ -388,55 +444,17 @@ export class Esp32Bridge {
               this.emitUartTxFrame(text.charCodeAt(i) & 0xff, uart ?? 0);
             }
           }
-          // MicroPython REPL injection — 4-stage state machine.
-          // Each stage waits for a confirmed string in the serial buffer before
-          // advancing, so we never send code before raw REPL mode is verified.
-          if (this._pendingMicroPythonCode || this._replState !== 'idle') {
-            this._serialBuffer += text;
-
-            // Stage 1: banner "Type help()" → poke UART with \r to flush ">>> "
-            // The >>> prompt has no \n so the backend UART buffer holds it until
-            // we send a byte that causes another write.
-            // The poke only fires while the prompt is STILL missing. If the
-            // backend ever delivers ">>>" on its own within 600 ms, stage 2
-            // arms Ctrl-A (+200 ms) before this timer (+800 ms) fires, and the
-            // \r then lands inside the pasted code — MicroPython reads a lone
-            // \r as a newline, so it silently cuts a source line in half. That
-            // is exactly what broke the in-browser JS engines, where the prompt
-            // arrives immediately (see pro microPythonRepl.ts).
-            if (this._replState === 'idle' && this._serialBuffer.includes('Type "help()"')) {
-              this._replState = 'banner_seen';
-              console.log('[Esp32Bridge] Stage 1: banner seen → poking UART with \\r');
-              setTimeout(() => {
-                if (this._replState !== 'banner_seen') return; // prompt already arrived
-                this._send({ type: 'esp32_serial_input', data: { bytes: [0x0d] } });
-              }, 800);
-            }
-
-            // Stage 2: ">>>" → send Ctrl+A to enter raw REPL
-            if (this._replState === 'banner_seen' && this._serialBuffer.includes('>>>')) {
-              this._replState = 'prompt_seen';
-              this._serialBuffer = '';
-              console.log('[Esp32Bridge] Stage 2: >>> seen → sending Ctrl+A');
-              setTimeout(() => {
-                this._send({ type: 'esp32_serial_input', data: { bytes: [0x01] } });
-              }, 200);
-            }
-
-            // Stage 3: "raw REPL" confirmation → now safe to send code
-            if (this._replState === 'prompt_seen' && this._serialBuffer.includes('raw REPL')) {
-              this._replState = 'raw_repl_entered';
-              const code = this._pendingMicroPythonCode!;
-              this._pendingMicroPythonCode = null;
-              this._serialBuffer = '';
-              console.log('[Esp32Bridge] Stage 3: raw REPL confirmed → sending code');
-              setTimeout(() => this._sendCodeInRawRepl(code), 200);
-            }
-
-            // Keep buffer from growing unboundedly
-            if (this._serialBuffer.length > 8192) {
-              this._serialBuffer = this._serialBuffer.slice(-1024);
-            }
+          // MicroPython project upload — see simulation/micropythonSession.ts.
+          // The session owns the boot handshake, writes the project's files to
+          // the board filesystem in bounded steps, and starts the program. It
+          // also decides what the serial console gets to see: its own hundreds
+          // of protocol exchanges stay out, the banner and the program's output
+          // go through.
+          if (this._mpySession) {
+            shown = this._mpySession.feed(text);
+          }
+          if (this.onSerialData) {
+            for (const ch of shown) this.onSerialData(ch, uart);
           }
           break;
         }
@@ -636,14 +654,7 @@ export class Esp32Bridge {
    * 5.65" UC8159c panel sat unresponsive while its firmware busy-waited.
    */
   setSensors(sensors: Array<Record<string, unknown>>): void {
-    const merged = this._pendingSensors.slice();
-    for (const s of sensors) {
-      const pin = s['pin'];
-      const idx = merged.findIndex((e) => e['pin'] === pin);
-      if (idx >= 0) merged[idx] = s;
-      else merged.push(s);
-    }
-    this._pendingSensors = merged;
+    this._pendingSensors = upsertSensorRecords(this._pendingSensors, sensors);
   }
 
   /** Returns true if a firmware has been loaded and is ready to send. */
@@ -673,8 +684,33 @@ export class Esp32Bridge {
     this._send({ type: 'esp32_serial_input', data: { bytes, uart } });
   }
 
+  /**
+   * True when a backend-emulated single-wire sensor OWNS this pad — its data
+   * line, or an HC-SR04's ECHO. The QEMU worker drives those itself, and a
+   * host-injected level outranks it, so whoever pushes one silences the sensor.
+   *
+   * The caller that makes this matter is connectDigitalInputsToMcu,
+   * thresholding the solved SPICE node. Its `sourcedNets` gate is meant to
+   * leave part-managed pins alone, but a net stops being "unsourced" the
+   * moment a real component sits on it: an HC-SR04 whose ECHO reaches the pad
+   * through the 1k/2k2 divider a real 5 V sensor needs solves at ~0 V (nothing
+   * models the sensor's output) and pinned the echo pad LOW between trigger
+   * and reply — pulseIn() then timed out forever while the worker was pulsing
+   * the pin correctly. Same shape as the in-browser engines' ownsPin guard.
+   */
+  ownsSensorPin(gpioPin: number): boolean {
+    // ONLY the single-wire sensors own a pad. The same channel registers plenty
+    // of other things — an ePaper panel's DC/BUSY pins, a membrane keypad's
+    // rows, every I2C device on a virtual 200+addr pin — and those still need
+    // the host to drive their real GPIOs. Blocking those was the difference
+    // between this guard and the in-browser engines' narrow
+    // SingleWireSensorHub.ownsPin, which is the behaviour to match.
+    return this._pendingSensors.some((s) => recordOwnsPin(s, gpioPin));
+  }
+
   /** Drive a GPIO pin from an external source (e.g. connected Arduino) */
   sendPinEvent(gpioPin: number, state: boolean): void {
+    if (this.ownsSensorPin(gpioPin)) return;
     this._send({ type: 'esp32_gpio_in', data: { pin: gpioPin, state: state ? 1 : 0 } });
   }
 
@@ -777,12 +813,7 @@ export class Esp32Bridge {
     // before the WebSocket opens (the common case when attachEvents fires
     // before the user clicks Run).
     const entry = { sensor_type: sensorType, pin, ...properties };
-    const existing = this._pendingSensors.findIndex((s) => s['pin'] === pin);
-    if (existing >= 0) {
-      this._pendingSensors[existing] = entry;
-    } else {
-      this._pendingSensors.push(entry);
-    }
+    this._pendingSensors = upsertSensorRecords(this._pendingSensors, [entry]);
     // Also send immediately if already connected (re-attach on hot reload)
     if (this._connected) {
       this._send({ type: 'esp32_sensor_attach', data: entry });
@@ -843,91 +874,53 @@ export class Esp32Bridge {
   }
 
   /**
-   * Queue user MicroPython code for injection after the REPL boots.
-   * The code will be sent via raw-paste protocol once `>>>` is detected.
+   * Queue the user's MicroPython project for the board.
+   *
+   * `files` are the project's other .py modules; they are written onto the
+   * board filesystem before `main` runs, which is how a MicroPython library
+   * works on real hardware — and, since #219, one bounded step at a time
+   * rather than one 36 KB string literal. See simulation/micropythonSession.ts.
    */
-  setPendingMicroPythonCode(code: string): void {
-    this._pendingMicroPythonCode = code;
-    this._serialBuffer = '';
-    this._replState = 'idle';
+  setPendingMicroPythonProgram(program: MpyProgram): void {
+    this._pendingMicroPythonProgram = program;
     this.micropythonMode = true;
+    this.armMicroPythonSession();
+  }
+
+  /** Back-compat entry point: a program with no extra files. */
+  setPendingMicroPythonCode(code: string): void {
+    this.setPendingMicroPythonProgram({ files: [], main: code });
+  }
+
+  /**
+   * (Re)arm the upload for a fresh boot: the session tracks one boot handshake,
+   * and queueing a program is what precedes every run.
+   */
+  private armMicroPythonSession(): void {
+    this._mpySession?.dispose();
+    this._mpySession = this._pendingMicroPythonProgram
+      ? new MicroPythonSession(
+          (bytes) => this.sendSerialBytes(bytes),
+          this._pendingMicroPythonProgram,
+          {
+            tag: `Esp32Bridge:${this.boardId}`,
+            // QEMU's own timings, not the in-browser engines'. Over here the
+            // chardev holds the prompt until something else writes, so the
+            // poke has to wait longer for the prompt to arrive on its own —
+            // 800/200 is what this backend has been shipping.
+            pokeDelayMs: 800,
+            stageDelayMs: 200,
+            onNotice: (line) => {
+              for (const ch of line) this.onSerialData?.(ch, 0);
+            },
+          },
+        )
+      : null;
   }
 
   /** Check if this bridge is in MicroPython mode */
   isMicroPythonMode(): boolean {
     return this.micropythonMode;
-  }
-
-  /**
-   * Send code bytes to QEMU UART, then Ctrl+D to execute.
-   * Called ONLY after "raw REPL; CTRL-B to exit" has been confirmed in the
-   * serial buffer (stage 3), so we are guaranteed to be in raw REPL mode.
-   */
-  /**
-   * Sanitize MicroPython source code before sending to the raw REPL.
-   *
-   * MicroPython v1.20 on ESP32 uses a byte-oriented tokenizer that doesn't
-   * handle non-ASCII bytes in source code.  Multi-byte UTF-8 sequences
-   * (e.g. Spanish accents: á=\xC3\xA1, ú=\xC3\xBA) in comments confuse the
-   * tokenizer and produce SyntaxError at the wrong line.
-   *
-   * Safe to strip non-ASCII only from comments because:
-   *  - String literals with non-ASCII would already fail on MicroPython's
-   *    default build (no wide-unicode support on ESP32).
-   *  - Identifiers must be ASCII.
-   */
-  private static _sanitizeForRepl(code: string): string {
-    // 1. Strip UTF-8 BOM if present
-    let s = code.startsWith('\uFEFF') ? code.slice(1) : code;
-    // 2. Normalize line endings to LF
-    s = s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    // 3. Replace non-ASCII in line-comments with '?' so the line is preserved
-    s = s.replace(/^([ \t]*#.*)$/gm, (line) => line.replace(/[^\x00-\x7F]/g, '?'));
-    // 4. Replace non-ASCII in inline comments (after code on the same line)
-    s = s.replace(/([ \t]+#.*)$/gm, (comment) => comment.replace(/[^\x00-\x7F]/g, '?'));
-    return s;
-  }
-
-  private _sendCodeInRawRepl(code: string): void {
-    const sanitized = Esp32Bridge._sanitizeForRepl(code);
-    console.log(
-      `[Esp32Bridge:${this.boardId}] Sending ${sanitized.length} bytes to raw REPL + Ctrl+D`,
-    );
-    if (sanitized !== code) {
-      console.log(
-        `[Esp32Bridge:${this.boardId}] Code was sanitized (non-ASCII in comments stripped)`,
-      );
-    }
-    const codeBytes = Array.from(new TextEncoder().encode(sanitized));
-    console.log(
-      `[Esp32Bridge:${this.boardId}] Sending ${codeBytes.length} bytes in chunks to raw REPL`,
-    );
-
-    // The ESP32 UART RX FIFO is 128 bytes in hardware (and in QEMU's emulation).
-    // Sending >128 bytes in one qemu_picsimlab_uart_receive() call overflows the
-    // FIFO — the extra bytes are silently dropped, corrupting the injected code
-    // (e.g. "time.sleep" becomes "ti" causing NameError).
-    // Use ≤64-byte chunks with a 150 ms gap so QEMU drains the FIFO between sends.
-    const CHUNK_SIZE = 64;
-    const CHUNK_DELAY_MS = 150;
-    let offset = 0;
-
-    const sendChunk = () => {
-      if (offset >= codeBytes.length) {
-        // All bytes delivered — wait for QEMU to finish processing the last chunk
-        setTimeout(() => {
-          this.sendSerialBytes([0x04]); // Ctrl+D → compile & execute
-          this._replState = 'idle';
-          console.log(`[Esp32Bridge:${this.boardId}] Ctrl+D sent — code executing`);
-        }, 300);
-        return;
-      }
-      const chunk = codeBytes.slice(offset, offset + CHUNK_SIZE);
-      this.sendSerialBytes(chunk);
-      offset += CHUNK_SIZE;
-      setTimeout(sendChunk, CHUNK_DELAY_MS);
-    };
-    sendChunk();
   }
 
   /**

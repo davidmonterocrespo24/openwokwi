@@ -37,7 +37,14 @@ export function Voltmeter({ id }: VoltmeterProps) {
         pinName: pin,
       })),
     );
-    const netLookup = buildPinNetLookup(wires, groundPins, vccPins);
+    // Aux-rail pins (VIN / 5V / off-voltage 3V3) so probing them reads the
+    // rail's own voltage — and so the n0/n1 numbering matches the solver's.
+    const auxPins = boards.flatMap((b) => {
+      const aux = (BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default).aux;
+      if (!aux) return [];
+      return aux.pins.map((pin) => ({ componentId: b.id, pinName: pin, volts: aux.volts }));
+    });
+    const netLookup = buildPinNetLookup(wires, groundPins, vccPins, auxPins);
     return readVoltmeter(
       { id, metadataId: 'instr-voltmeter', properties: {} },
       netLookup,

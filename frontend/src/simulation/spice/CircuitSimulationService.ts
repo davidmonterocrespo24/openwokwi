@@ -150,6 +150,13 @@ export class CircuitSimulationService {
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly EDGE_DRAIN_GAP_MS = 33;
 
+  /** Pins the drain has already forced one netlist rebuild for, keyed
+   *  `${boardId}|${pinName}`. See `scheduleEdgeDrain` — this is what keeps
+   *  the self-heal from looping forever on a pin that can never get a
+   *  V-source (unwired GPIO). Cleared whenever a rebuild changes the
+   *  V-source list, so a pin that becomes wired later heals again. */
+  private drainHealAttempted = new Set<string>();
+
   /** Drain pendingMcuEdges after a short gap (coalescing: one timer). */
   private scheduleEdgeDrain(): void {
     if (this.stopped || this.drainTimer !== null) return;
@@ -159,14 +166,43 @@ export class CircuitSimulationService {
       const edges = Array.from(this.pendingMcuEdges.values());
       this.pendingMcuEdges.clear();
       const ctx = this.loadedContext;
+      let needsRebuild = false;
       for (const edge of edges) {
+        const pinKey = `${edge.boardId}|${edge.pinName}`;
         const expected = `v_${sanitizeSpiceId(edge.boardId)}_${sanitizeSpiceId(edge.pinName)}`.toLowerCase();
         const hasSource = ctx?.voltageSources.some(
           (vs) => vs.toLowerCase() === expected,
         );
-        if (!hasSource) continue;
+        if (!hasSource) {
+          // Same self-heal `handleMcuEdge` does for a first edge: the pin
+          // wasn't in `outputPins` when this netlist was built, so there is
+          // no V-source to alter and `alterSource` would be a silent no-op.
+          // Re-queue and rebuild instead of dropping the edge.
+          //
+          // Dropping was deliberate (it stops the self-heal → tick →
+          // self-heal loop for a pin that is wired to nothing), but it also
+          // silently killed pins that only LOOK unsourced because they were
+          // classified as outputs after this netlist was built. That is the
+          // common case for any sketch driving several pins between yields:
+          // the first pin's edge triggers the rebuild, every sibling edge
+          // lands mid-solve, and the drain then threw them away — so those
+          // pins stayed at their build-time voltage forever. Symptom: the
+          // 4-bit binary counter example blinked bit 0 and left bits 1-3
+          // dark while the firmware counted correctly on serial.
+          //
+          // The loop guard is now per-pin instead of blanket: heal a given
+          // pin at most once per netlist, then fall back to dropping.
+          if (this.drainHealAttempted.has(pinKey)) continue;
+          this.drainHealAttempted.add(pinKey);
+          this.pendingMcuEdges.set(pinKey, edge);
+          needsRebuild = true;
+          continue;
+        }
+        this.drainHealAttempted.delete(pinKey);
         void this.handleMcuEdge(edge.boardId, edge.pinName, edge.state, edge.vcc);
       }
+      // One rebuild for the whole drain, not one per edge.
+      if (needsRebuild) void this.tick();
     }, CircuitSimulationService.EDGE_DRAIN_GAP_MS);
   }
 
@@ -198,6 +234,7 @@ export class CircuitSimulationService {
     this.stopped = true;
     this.pending = false;
     this.pendingMcuEdges.clear();
+    this.drainHealAttempted.clear();
     if (this.drainTimer !== null) {
       clearTimeout(this.drainTimer);
       this.drainTimer = null;
@@ -347,6 +384,16 @@ export class CircuitSimulationService {
 
     // Cache the load context so handleMcuEdge can publish without
     // re-running buildInputFromStore + buildNetlist.
+    //
+    // A rebuild that changed the V-source list is a new topology as far as
+    // the drain's per-pin heal guard is concerned: re-arm it so a pin that
+    // has just become drivable (newly wired, or newly classified as an
+    // output) can heal again instead of staying permanently written off.
+    const sourcesChanged =
+      this.loadedContext === null ||
+      this.loadedContext.voltageSources.length !== voltageSources.length ||
+      this.loadedContext.voltageSources.some((vs, i) => vs !== voltageSources[i]);
+    if (sourcesChanged) this.drainHealAttempted.clear();
     this.loadedContext = {
       pinNetMap,
       nets,

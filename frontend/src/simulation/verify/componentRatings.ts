@@ -40,7 +40,17 @@ export const COMPONENT_RATINGS: Record<string, ComponentRating> = {
     supplyPins: [
       { name: '3V3', absMaxVoltage: 3.6 },
       { name: 'VIN', absMaxVoltage: 6 },
+      // Alias: some variants / saved projects label the supply pin VCC
+      // (regulator input, same tolerance as VIN).
+      { name: 'VCC', absMaxVoltage: 6 },
     ],
+    gndPins: ['GND'],
+  },
+  // 4-pin I2C-only module (GND/VCC/SCL/SDA, see Ssd1306I2cElement.ts) — same
+  // panel as ssd1306, supply comes in on the single VCC pin.
+  'ssd1306-i2c-4pin': {
+    label: 'SSD1306 OLED (I2C)',
+    supplyPins: [{ name: 'VCC', absMaxVoltage: 6 }],
     gndPins: ['GND'],
   },
   ili9341: { label: 'ILI9341 display', supplyPins: [{ name: 'VCC', absMaxVoltage: 6 }], gndPins: ['GND'] },

@@ -20,15 +20,26 @@
 
     <!-- ═══════════════════════════════════════════════
          GOOGLE ANALYTICS 4
-         Replace G-XXXXXXXXXX with your real Measurement ID
-         (analytics.google.com → Admin → Data Streams → Measurement ID)
+         The Measurement ID below is velxio.dev's, so the tag only loads on
+         velxio.dev hostnames (plus the Velxio Desktop shell). Self-hosted
+         copies of the app send nothing — swap in your own ID AND hostname
+         (analytics.google.com → Admin → Data Streams → Measurement ID) if you
+         want analytics on your deployment.
     ═══════════════════════════════════════════════ -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HPD8HTV3TG"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-HPD8HTV3TG');
+      (function () {
+        var h = location.hostname;
+        if (h !== 'velxio.dev' && h !== 'www.velxio.dev' && h !== 'tauri.localhost') return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-HPD8HTV3TG';
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', 'G-HPD8HTV3TG');
+      })();
     </script>
 
     <!-- ═══════════════════════════════════════════════

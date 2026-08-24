@@ -274,17 +274,22 @@ export const CircuitPreview: React.FC<CircuitPreviewProps> = ({
     const boardKind = example.boardType ?? (isBoardless ? null : 'arduino-uno');
     const boardDef = boardKind ? BOARD_DEFS[boardKind] : undefined;
 
+    // Same defensive read as the gallery's search haystack: overlay example
+    // factories cast their result, so a missing `components` reaches here as
+    // undefined and this preview is exactly where it lands — it renders as the
+    // fallback whenever an example's thumbnail 404s.
+    const components = example.components ?? [];
+
     // Check if the board is explicitly listed in components[]
-    const boardInComponents = example.components.some((c) => isBoardType(c.type));
+    const boardInComponents = components.some((c) => isBoardType(c.type));
 
     if (boardDef && !boardInComponents && !isBoardless) {
       // Board is implicit (pico, esp32, nano examples) — inject at default position
       // Position it to the left of the other components
-      const minCompX =
-        example.components.length > 0 ? Math.min(...example.components.map((c) => c.x)) : 400;
+      const minCompX = components.length > 0 ? Math.min(...components.map((c) => c.x)) : 400;
       const avgCompY =
-        example.components.length > 0
-          ? example.components.reduce((s, c) => s + c.y, 0) / example.components.length
+        components.length > 0
+          ? components.reduce((s, c) => s + c.y, 0) / components.length
           : 150;
       const boardX = Math.max(40, minCompX - boardDef.w - 60);
       const boardY = Math.max(40, avgCompY - boardDef.h / 2);
@@ -292,7 +297,7 @@ export const CircuitPreview: React.FC<CircuitPreviewProps> = ({
     }
 
     // Add all components from the example
-    example.components.forEach((c) => {
+    components.forEach((c) => {
       // For board components that ARE in components[], use the board SVG def
       const def =
         isBoardType(c.type) && boardDef ? boardDef : getCompDef(c.type, c.properties ?? {});

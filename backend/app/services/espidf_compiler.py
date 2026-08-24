@@ -60,6 +60,50 @@ _USE_PERSISTENT_DIR = (
 )
 
 
+# ── Per-library include roots (Arduino-faithful layout) ──────────────────────
+# The merged `user_libs_all` component used to copy every library's files into
+# ONE interleaved tree and then put EVERY directory that held a file on the
+# component's public INCLUDE_DIRS. That is the root cause of the header-shadow
+# bug class: a library's private internals — FastLED's host-test
+# `src/platforms/stub/Arduino.h`, its `src/fl/stl/asio/http/http_parser.h`,
+# LovyanGFX's `src/lgfx/internal/limits.h` — landed on the global -I and
+# hijacked `#include`s issued by OTHER libraries, by the arduino-esp32 core and
+# by ESP-IDF itself. Every fix was another name in `_SHADOW_STD_HEADERS`, i.e.
+# chasing symptoms: the denylist grows with every library that ships a
+# generically-named internal header.
+#
+# arduino-cli — the resolver every other Velxio board family already delegates
+# to — shares one global -I list too, but adds exactly ONE directory per
+# library: `<lib>/src` for the recursive layout, `<lib>` for the legacy flat
+# one, never a subdirectory (its header index is non-recursive, so
+# `src/sub/foo.h` is only ever reachable as `<sub/foo.h>`). `utility/` stays
+# private to the library that owns it. arduino-esp32 does the same as an IDF
+# component: one public include dir per bundled library.
+#
+# So: keep the single component — a component per library would trade this bug
+# for REQUIRES-order shadowing (IDF exports component includes as plain -I,
+# never -isystem) plus IDF-component name collisions — but give each library
+# its own subtree and publish only its include root.
+#
+# Set VELXIO_PER_LIB_ROOTS=0 to fall back to the legacy interleaved layout
+# without rebuilding the image (rollback hatch).
+_PER_LIB_ROOTS = (
+    os.environ.get('VELXIO_PER_LIB_ROOTS', '1')
+    not in ('0', 'false', 'False', '')
+)
+
+
+def _sanitise_lib_dirname(name: str) -> str:
+    """Component-relative directory name for a library.
+
+    Cache folder names carry `@version-hash` suffixes (`fastled@3.10.5-017d…`)
+    and user libs can be named anything; keep the characters that are safe in a
+    path AND inside a quoted CMake string, fold the rest.
+    """
+    safe = re.sub(r'[^A-Za-z0-9_.@-]', '_', name).strip('.')
+    return safe or 'lib'
+
+
 def _idf_version_signature() -> str:
     """Snapshot of the ESP-IDF + arduino-esp32 toolchain version. Used to
     invalidate persistent build dirs after an upstream submodule bump (the
@@ -175,7 +219,13 @@ def _run_with_streaming(
 # coldest. Each variant is a full ESP-IDF build tree (~240 MB). Distinct
 # variants = distinct (board options x resolved library set). The global ccache
 # means an evicted-then-rebuilt variant warms up in seconds.
-_MAX_BUILD_VARIANTS = 12
+# Was 12. Each variant is a FULL ~1 GB build tree holding its own copies of
+# the same ESP-IDF component objects, so 46 of them had grown to 25 GB while
+# ccache - the cache that actually serves EVERY target and variant - sat
+# capped at 8 GB, permanently full (99.97%, 153 evictions, 47% hit rate).
+# Fewer trees, a bigger shared cache: a variant that gets evicted rebuilds
+# quickly FROM ccache, but a ccache miss recompiles from source.
+_MAX_BUILD_VARIANTS = 6
 
 
 def _evict_cold_variants(target_dir: Path, keep: int) -> None:
@@ -193,6 +243,158 @@ def _evict_cold_variants(target_dir: Path, keep: int) -> None:
     for d in variants[:len(variants) - keep]:
         logger.info(f'[espidf] LRU-evicting cold build variant {d.name}')
         shutil.rmtree(d, ignore_errors=True)
+
+
+def _ninja_log_step_count(build_dir: 'str | Path') -> int:
+    """Number of completed build steps recorded in ``build_dir/.ninja_log``
+    (0 when absent/unreadable). Diagnostics only — used to say how far a
+    timed-out build got."""
+    try:
+        with open(Path(build_dir) / '.ninja_log', encoding='utf-8', errors='replace') as fh:
+            return max(0, sum(1 for _ in fh) - 1)  # first line is the header
+    except OSError:
+        return 0
+
+
+# ── .ino prototype generation ────────────────────────────────────────────────
+# arduino-cli runs ctags over the sketch and injects forward declarations so
+# the classic Arduino idiom — helpers defined AFTER setup()/loop() that use
+# them — compiles. This pipeline writes sketch.ino.cpp itself and never did,
+# so every such sketch died with "'foo' was not declared in this scope".
+# This is a conservative ctags stand-in: it only emits prototypes for
+# top-level, single-signature-line function definitions and skips anything
+# ambiguous (templates, methods, default args, function-pointer params).
+
+_INO_CTRL_KEYWORDS = frozenset((
+    'if', 'else', 'for', 'while', 'switch', 'do', 'return', 'sizeof',
+    'catch', 'case', 'new', 'delete', 'throw', 'goto',
+))
+
+_INO_FUNC_RE = re.compile(
+    r'^[ \t]*([A-Za-z_][A-Za-z0-9_:<>,\*&\s]*?[\s\*&])'   # return type part
+    r'([A-Za-z_]\w*)'                                      # function name
+    r'[ \t]*\(([^;{}()]*)\)'                               # params (no nesting)
+    r'[ \t\r\n]*\{',
+    re.M,
+)
+
+
+def _blank_noncode(source: str) -> str:
+    """Return a same-length copy with comments, string/char literals and
+    preprocessor lines replaced by spaces (newlines preserved), so brace
+    counting and signature matching never trip on their contents."""
+    out = list(source)
+    i, n = 0, len(source)
+    line_start = True
+    while i < n:
+        c = source[i]
+        if line_start and source[i:].lstrip(' \t')[:1] == '#':
+            # blank the whole preprocessor line (incl. continuations)
+            while i < n:
+                if source[i] == '\n' and source[i - 1] != '\\':
+                    break
+                if source[i] != '\n':
+                    out[i] = ' '
+                i += 1
+            line_start = True
+            i += 1
+            continue
+        line_start = c == '\n'
+        if c == '/' and i + 1 < n and source[i + 1] == '/':
+            while i < n and source[i] != '\n':
+                out[i] = ' '
+                i += 1
+            continue
+        if c == '/' and i + 1 < n and source[i + 1] == '*':
+            out[i] = out[i + 1] = ' '
+            i += 2
+            while i < n and not (source[i] == '*' and i + 1 < n and source[i + 1] == '/'):
+                if source[i] != '\n':
+                    out[i] = ' '
+                i += 1
+            if i < n:
+                out[i] = out[i + 1] = ' '
+                i += 2
+            continue
+        if c in ('"', "'"):
+            quote = c
+            i += 1
+            while i < n and source[i] != quote:
+                if source[i] == '\\':
+                    out[i] = ' '
+                    i += 1
+                    if i < n and source[i] != '\n':
+                        out[i] = ' '
+                    i += 1
+                    continue
+                if source[i] != '\n':
+                    out[i] = ' '
+                i += 1
+            i += 1
+            continue
+        i += 1
+    return ''.join(out)
+
+
+def generate_ino_prototypes(source: str) -> str:
+    """Insert forward declarations for top-level function definitions right
+    before the first one, followed by a #line directive so compiler error
+    line numbers keep matching the un-inserted text. Returns the source
+    unchanged when nothing safe to declare is found."""
+    scan = _blank_noncode(source)
+
+    # depth prefix: depth[i] = brace depth just before scan[i]
+    depths = []
+    d = 0
+    for ch in scan:
+        depths.append(d)
+        if ch == '{':
+            d += 1
+        elif ch == '}':
+            d = max(0, d - 1)
+
+    protos: list[str] = []
+    seen: set[str] = set()
+    first_pos: int | None = None
+    for m in _INO_FUNC_RE.finditer(scan):
+        sig_start = m.start()
+        if depths[m.end() - 1] != 0:
+            continue  # method body / nested — the '{' must open at depth 0
+        rtype = ' '.join(m.group(1).split())
+        name = m.group(2)
+        params = ' '.join(m.group(3).split())
+        if not rtype or name in _INO_CTRL_KEYWORDS:
+            continue
+        first_tok = rtype.split()[0] if rtype.split() else ''
+        if first_tok in _INO_CTRL_KEYWORDS:
+            continue
+        if '::' in rtype or '::' in name or 'operator' in rtype:
+            continue  # class methods / operators declare themselves
+        if '<' in rtype or '>' in rtype or 'template' in rtype.split():
+            continue  # templated heads/returns — never guess those
+        if '=' in params or '{' in params:
+            continue  # default args would be re-stated -> hard error
+        # a `template<...>` head on a preceding line makes a bare prototype wrong
+        lookback = scan[max(0, sig_start - 160):sig_start]
+        if re.search(r'template\s*<[^<>]*>\s*$', lookback):
+            continue
+        proto = f'{rtype} {name}({params});'
+        if proto not in seen:
+            seen.add(proto)
+            protos.append(proto)
+        if first_pos is None:
+            first_pos = sig_start
+
+    if not protos or first_pos is None:
+        return source
+
+    insert_line = source.count('\n', 0, first_pos) + 1
+    block = (
+        '// Velxio: auto-generated forward declarations (.ino semantics)\n'
+        + '\n'.join(protos)
+        + f'\n#line {insert_line}\n'
+    )
+    return source[:first_pos] + block + source[first_pos:]
 
 
 def _prepare_persistent_project_dir(
@@ -374,7 +576,7 @@ class ESPIDFCompiler:
 
     # Targets that only exist in ESP-IDF v5.x — the pinned v4.4.7 tree
     # predates them, so they build against idf5_path instead of idf_path.
-    _IDF5_TARGETS: frozenset[str] = frozenset({'esp32c6'})
+    _IDF5_TARGETS: frozenset[str] = frozenset({'esp32c6', 'esp32p4', 'esp32c5'})
 
     # Flash offset where each chip's boot ROM expects the 2nd-stage
     # bootloader. ESP32 / ESP32-S2 use 0x1000; every newer chip (S3, C2,
@@ -383,6 +585,8 @@ class ESPIDFCompiler:
     _BOOTLOADER_OFFSETS: dict[str, int] = {
         'esp32': 0x1000,
         'esp32s2': 0x1000,
+        'esp32p4': 0x2000,
+        'esp32c5': 0x2000,
     }
 
     def _is_esp32c3(self, board_fqbn: str) -> bool:
@@ -393,6 +597,16 @@ class ESPIDFCompiler:
         """Return True if FQBN targets ESP32-C6 (RISC-V, IDF v5.x only)."""
         f = board_fqbn.lower()
         return 'esp32c6' in f or 'esp32-c6' in f
+
+    def _is_esp32p4(self, board_fqbn: str) -> bool:
+        """Return True if FQBN targets ESP32-P4 (RISC-V, IDF v5.x only)."""
+        f = board_fqbn.lower()
+        return 'esp32p4' in f or 'esp32-p4' in f
+
+    def _is_esp32c5(self, board_fqbn: str) -> bool:
+        """Return True if FQBN targets ESP32-C5 (RISC-V, IDF v5.x only)."""
+        f = board_fqbn.lower()
+        return 'esp32c5' in f or 'esp32-c5' in f
 
     def _idf_root(self, use_idf5: bool) -> str:
         """The ESP-IDF tree a compile builds against."""
@@ -447,6 +661,9 @@ class ESPIDFCompiler:
         error rather than being pattern-translated into something it
         isn't.
         """
+        if idf_target == 'esp32c5':
+            # No arduino-esp32 core supports the C5 yet — IDF-native only.
+            return False
         if idf_target in self._IDF5_TARGETS:
             return self.has_arduino5
         return self.has_arduino or self.has_arduino5
@@ -490,6 +707,29 @@ class ESPIDFCompiler:
     # Cache: boards.txt is a few hundred KB and never changes at runtime.
     _variant_cache: dict = {}
 
+    @staticmethod
+    def _fqbn_board_id_and_options(board_fqbn: str) -> tuple[str, dict]:
+        """Split an arduino FQBN into (board_id, menu-option dict).
+
+        arduino-cli syntax: ``vendor:arch:board_id[:Menu1=val1,Menu2=val2]``.
+        The espidf lane must understand the 4-part option-suffix form too,
+        not just plain 3-part FQBNs — the C3-LCDkit board def pins
+        ``CDCOnBoot=cdc`` this way (the real kit has no UART bridge; its only
+        console is the USB Serial/JTAG port). Menu keys a caller does not
+        recognise are simply ignored.
+        """
+        parts = board_fqbn.split(':')
+        opts: dict = {}
+        if len(parts) >= 4 and parts[3]:
+            for kv in parts[3].split(','):
+                if '=' in kv:
+                    k, v = kv.split('=', 1)
+                    opts[k.strip()] = v.strip()
+            board_id = parts[2]
+        else:
+            board_id = parts[-1]
+        return board_id.split('?')[0].strip(), opts
+
     def _arduino_variant(self, board_fqbn: str, idf_target: str) -> str:
         """The Arduino VARIANT for this FQBN, from arduino-esp32's boards.txt.
 
@@ -503,7 +743,7 @@ class ESPIDFCompiler:
         is read rather than guessed; anything not found falls back to the chip,
         which is the previous behaviour.
         """
-        board_id = board_fqbn.split(':')[-1].split('?')[0].strip()
+        board_id, _ = self._fqbn_board_id_and_options(board_fqbn)
         if not board_id:
             return idf_target
         key = (board_id, idf_target)
@@ -559,10 +799,16 @@ class ESPIDFCompiler:
           ESP32S3 expose UART0's default RX pin (GPIO44) as a plain Dx pin,
           so building them with Serial on UART0 is not just unfaithful: a
           pinMode() on that pin tears the UART driver down mid-sketch.
+
+        A ``CDCOnBoot`` menu option in the FQBN suffix overrides the board's
+        boards.txt default, mirroring arduino-cli
+        (``<id>.menu.CDCOnBoot.cdc.build.cdc_on_boot=1``): the C3-LCDkit pins
+        ``esp32:esp32:esp32c3:CDCOnBoot=cdc`` so its console matches the real
+        kit, which only exposes the USB Serial/JTAG port.
         """
-        board_id = board_fqbn.split(':')[-1].split('?')[0].strip()
+        board_id, menu_opts = self._fqbn_board_id_and_options(board_fqbn)
         if board_id in self._board_flags_cache:
-            return self._board_flags_cache[board_id]
+            return self._apply_menu_overrides(self._board_flags_cache[board_id], menu_opts)
         flags = {'board': None, 'cdc_on_boot': False}
         roots = [
             r
@@ -588,6 +834,19 @@ class ESPIDFCompiler:
             if flags['board'] is not None:
                 break
         self._board_flags_cache[board_id] = flags
+        return self._apply_menu_overrides(flags, menu_opts)
+
+    @staticmethod
+    def _apply_menu_overrides(flags: dict, menu_opts: dict) -> dict:
+        """Overlay FQBN menu options on the boards.txt base flags.
+
+        Only ``CDCOnBoot`` is understood today (``cdc`` -> 1, ``default`` ->
+        the boards.txt value). Returns a copy so the per-board cache never
+        holds an override.
+        """
+        cdc = menu_opts.get('CDCOnBoot')
+        if cdc == 'cdc':
+            return {**flags, 'cdc_on_boot': True}
         return flags
 
     def _idf_target(self, board_fqbn: str) -> str:
@@ -598,6 +857,10 @@ class ESPIDFCompiler:
             return 'esp32c6'
         if self._is_esp32s3(board_fqbn):
             return 'esp32s3'
+        if self._is_esp32p4(board_fqbn):
+            return 'esp32p4'
+        if self._is_esp32c5(board_fqbn):
+            return 'esp32c5'
         # Default to esp32 (Xtensa LX6) for the original ESP32 / ESP32-S2
         return 'esp32'
 
@@ -622,6 +885,77 @@ class ESPIDFCompiler:
         logger.info(
             '[espidf] Declared managed components: %s', ', '.join(sorted(deps))
         )
+
+    # include -> managed component (name, version). Each of these headers
+    # ships in a registry component that neither the template nor
+    # arduino-esp32's own manifest depends on, so a sketch using it dies
+    # with "No such file or directory" unless the dependency is declared
+    # (the esp_camera.h lesson, generalized for the Espressif devkit
+    # boards' display/touch stacks).
+    _MANAGED_COMPONENT_INCLUDES: tuple[tuple[str, str, str], ...] = (
+        (r'esp_camera\.h', 'espressif/esp32-camera', '^2.0.4'),
+        (r'esp_lcd_st77916\.h', 'espressif/esp_lcd_st77916', '*'),
+        (r'esp_lcd_touch_cst816s\.h', 'espressif/esp_lcd_touch_cst816s', '*'),
+        (r'esp_lcd_gc9a01\.h', 'espressif/esp_lcd_gc9a01', '*'),
+        (r'esp_lcd_ek79007\.h', 'espressif/esp_lcd_ek79007', '*'),
+        # The building blocks Espressif's OWN board demos are made of — the
+        # C3-LCDkit knob_panel drives its WS2812 through led_strip and its
+        # EC11 through knob+button, the P4 devkit's panel is a GT911, and
+        # every audio demo on the VoCat/P4 goes through esp_codec_dev. A
+        # visitor pasting official example code hit "No such file or
+        # directory" on all four.
+        (r'led_strip\.h', 'espressif/led_strip', '*'),
+        (r'iot_button\.h', 'espressif/button', '*'),
+        (r'iot_knob\.h', 'espressif/knob', '*'),
+        (r'esp_lcd_touch_gt911\.h', 'espressif/esp_lcd_touch_gt911', '*'),
+        (r'esp_codec_dev\.h', 'espressif/esp_codec_dev', '*'),
+        # LVGL and its BSP glue: every official board demo's UI is built on
+        # them, so without these a visitor cannot paste a single screen of
+        # esp-dev-kits code. The dependency is only declared when the source
+        # includes the header, so nothing else pays for the bigger build.
+        (r'lvgl\.h', 'lvgl/lvgl', '*'),
+        (r'esp_lvgl_port\.h', 'espressif/esp_lvgl_port', '*'),
+    )
+
+    def _detect_managed_components(self, code: str) -> dict:
+        """Managed components the source explicitly #includes."""
+        deps: dict[str, str] = {}
+        for pattern, name, version in self._MANAGED_COMPONENT_INCLUDES:
+            if re.search(r'#include\s*[<"]' + pattern + r'[">]', code):
+                deps[name] = version
+        return deps
+
+    # IDF components that ship INSIDE the IDF tree (not the registry) and are
+    # NOT on an Arduino sketch's include path by default. arduino-esp32 3.x
+    # keeps most of its requires PRIVATE, so a sketch that includes one of
+    # these dies with "No such file or directory" while the very same header
+    # resolves fine from a user library (whose merged component requires it).
+    # Hit while writing the ESP32-S3-EYE camera example: esp_lcd_panel_io.h
+    # compiled only when an unrelated Adafruit library happened to be present.
+    _IDF_COMPONENT_INCLUDES: tuple[tuple[str, str], ...] = (
+        (r'esp_lcd_panel_io\.h', 'esp_lcd'),
+        (r'esp_lcd_panel_ops\.h', 'esp_lcd'),
+        (r'esp_lcd_panel_vendor\.h', 'esp_lcd'),
+        (r'esp_lcd_types\.h', 'esp_lcd'),
+        (r'esp_lcd_mipi_dsi\.h', 'esp_lcd'),
+        (r'esp_cache\.h', 'esp_mm'),
+        (r'esp_ldo_regulator\.h', 'esp_hw_support'),
+        (r'esp_psram\.h', 'esp_psram'),
+    )
+
+    def _detect_idf_components(self, code: str) -> list[str]:
+        """IDF-tree components the source #includes, that exist in this IDF."""
+        wanted: list[str] = []
+        for pattern, comp in self._IDF_COMPONENT_INCLUDES:
+            if comp in wanted:
+                continue
+            if not re.search(r'#include\s*[<"]' + pattern + r'[">]', code):
+                continue
+            if self.idf_path and os.path.isdir(
+                os.path.join(self.idf_path, 'components', comp)
+            ):
+                wanted.append(comp)
+        return wanted
 
     def _detect_camera_usage(self, code: str) -> bool:
         """Does the sketch use the ESP32 camera driver?
@@ -1024,6 +1358,22 @@ class ESPIDFCompiler:
         'ctype.h', 'errno.h', 'time.h', 'stddef.h', 'stdint.h', 'setjmp.h',
         'signal.h', 'locale.h', 'wchar.h', 'stdbool.h', 'stdarg.h', 'float.h',
         'algorithm.h', 'memory.h', 'alloca.h', 'new.h',
+        # Not a C standard header, but the same shadowing mechanism: FastLED
+        # ships a host-test stub `src/platforms/stub/Arduino.h`. With that dir
+        # on the global -I, any OTHER merged library's `#include <Arduino.h>`
+        # (e.g. U8g2lib.cpp) resolves to the stub instead of the arduino-esp32
+        # core — 'yield' undeclared, and fl::string pollutes String overload
+        # resolution inside the core's WString.h. FastLED itself only reaches
+        # the stub via the file-relative "platforms/stub/Arduino.h", which
+        # still resolves with the directory off -I.
+        'arduino.h',
+        # Same story with an IDF component header: IDF's esp_http_server.h
+        # does #include <http_parser.h> (the http_parser component's enum
+        # with HTTP_GET/HTTP_POST/...). FastLED ships its own
+        # fl/stl/asio/http/http_parser.h and references it path-qualified
+        # only, so keep its directory off -I or the IDF include resolves to
+        # FastLED's file and every httpd_method_t use fails to compile.
+        'http_parser.h',
     })
 
     # arduino-esp32 uses a single library architecture id ("esp32") across
@@ -1111,8 +1461,14 @@ class ESPIDFCompiler:
         """Normalise a library name for manifest matching: lowercased, only
         alphanumerics. So "Adafruit GFX Library", "Adafruit_GFX_Library" and
         "adafruitgfxlibrary" all compare equal — the Library Manager display
-        name and the on-disk folder name differ only by separators/case."""
-        return ''.join(ch for ch in (name or '').lower() if ch.isalnum())
+        name and the on-disk folder name differ only by separators/case.
+
+        A manifest entry may carry an install/pin suffix after '@'
+        ("M5GFX@0.2.26-df5ac6900fe7", "Lib@wokwi:hash"); only the base name
+        identifies the library on disk, so the suffix is stripped before
+        normalising — otherwise a pinned entry never matches its own folder
+        and the compiler treats the lib as undeclared."""
+        return ''.join(ch for ch in (name or '').split('@', 1)[0].lower() if ch.isalnum())
 
     def _library_in_manifest(self, lib_root: Path, allowed_norm: set[str]) -> bool:
         """True if this library is in the project's declared manifest.
@@ -1231,10 +1587,15 @@ class ESPIDFCompiler:
         arduino-esp32 libs and bundled esp32_libs are always allowed (they are
         platform-provided, not user installs).
 
-        All library files are copied flat into one directory, so every header is
-        visible to every other header and source file without any cross-component
-        REQUIRES propagation — which is unreliable in ESP-IDF 4.x for deeply
-        nested transitive dependencies.
+        Layout (see the _PER_LIB_ROOTS note at module scope): every library is
+        copied into its OWN subtree of the component and exports exactly ONE
+        include root — `<lib>/src`, or `<lib>` for the flat legacy layout, with
+        `utility/` kept PRIVATE. That is arduino-cli's model, and the reason a
+        library's private internals can no longer hijack another library's (or
+        the core's, or ESP-IDF's) `#include`s. One component is deliberate: a
+        component per library would swap this failure mode for REQUIRES-order
+        shadowing plus IDF component-name collisions, and buys no caching that
+        ccache does not already provide.
 
         Search priority per header:
           1. arduino_libs (user-installed via Library Manager) → merge into component
@@ -1270,6 +1631,23 @@ class ESPIDFCompiler:
         seen_names: set[str] = set()
         header_to_comp: dict[str, str] = {}
         found_any = False
+
+        # Per-library bookkeeping for the Arduino-faithful layout
+        # (see _PER_LIB_ROOTS):
+        #   lib_include_roots — ONE component-relative include root per library,
+        #                       in resolution order (arduino-cli's -I order).
+        #   lib_priv_roots    — legacy-layout `utility/` dirs. PRIVATE so they
+        #                       reach the library sources that need them without
+        #                       entering the sketch's namespace, exactly as
+        #                       arduino-cli scopes them to that library's units.
+        #   root_header_owner — root header basename -> first library that
+        #                       published it, for collision reporting.
+        #   lib_prefix_by_name— library dir name -> unique sanitised subdir.
+        lib_include_roots: list[str] = []
+        lib_priv_roots: list[str] = []
+        root_header_owner: dict[str, str] = {}
+        lib_prefix_by_name: dict[str, str] = {}
+        used_prefixes: set[str] = set()
 
         headers_to_resolve: list[str] = list(ext_headers)
         # Headers the SKETCH itself includes (vs transitive pulls found by
@@ -1383,12 +1761,36 @@ class ESPIDFCompiler:
                 excluded_dirs = {
                     '.git', '.github', '.vscode', '__pycache__',
                     'docs', 'doc', 'example', 'examples', 'test', 'tests',
-                    'extras', 'ci', 'fuzz', 'fuzzing', 'benchmark', 'benchmarks',
+                    'ci', 'fuzz', 'fuzzing', 'benchmark', 'benchmarks',
                 }
+                # `extras/` is header-only in the merge: FastLED's unity build
+                # (src/fl/build/extras+.cpp) does #include
+                # "extras/_build.cpp.hpp", so dropping the whole dir breaks the
+                # build with "No such file". Its opt-in shims are all
+                # .cpp.hpp/.h fragments; copy those, but never compile a
+                # .c/.cpp that happens to live there (extras/ traditionally
+                # holds repo-only content).
+                header_only_dirs = {'extras'}
 
                 def _should_include(rel_path: Path) -> bool:
                     parts = rel_path.parts
-                    if any(part.lower() in excluded_dirs for part in parts[:-1]):
+                    # A dir named test/examples/docs/... at the REPO level is
+                    # repo-only content: fully excluded. The same name NESTED
+                    # inside src/ is library code — FastLED has src/fl/test/
+                    # whose _build.cpp.hpp the unity build #includes — so
+                    # nested matches are demoted to header-only (fragments
+                    # copied, sources never compiled) instead of dropped.
+                    if parts[0].lower() in excluded_dirs and len(parts) > 1:
+                        return False
+                    nested_junk = any(
+                        p.lower() in excluded_dirs for p in parts[1:-1]
+                    )
+                    if not has_src_layout and nested_junk:
+                        return False
+                    if (rel_path.suffix.lower() in ('.c', '.cpp')
+                            and (nested_junk
+                                 or any(p.lower() in header_only_dirs
+                                        for p in parts[:-1]))):
                         return False
                     # Copy compiled sources (.c/.cpp) AND every flavour of header
                     # or text-included fragment. `.inl`/`.inc`/`.ipp`/`.tcc` are
@@ -1409,21 +1811,84 @@ class ESPIDFCompiler:
                     # presumed to be buildable source.
                     return True
 
+                # Destination subtree. Per-library roots keep each library in
+                # its OWN directory, so two libraries shipping the same
+                # relative path can no longer collapse into a single
+                # silently-picked copy; legacy mode interleaves them under the
+                # component root (first-resolved wins).
+                first_copy = lib_dir_name not in lib_prefix_by_name
+                if _PER_LIB_ROOTS:
+                    if first_copy:
+                        _prefix = _sanitise_lib_dirname(lib_dir_name)
+                        if _prefix in used_prefixes:
+                            _n = 2
+                            while f'{_prefix}_{_n}' in used_prefixes:
+                                _n += 1
+                            _prefix = f'{_prefix}_{_n}'
+                        used_prefixes.add(_prefix)
+                        lib_prefix_by_name[lib_dir_name] = _prefix
+                    lib_prefix = lib_prefix_by_name[lib_dir_name]
+                    dest_root = comp_dir / lib_prefix
+                else:
+                    lib_prefix = ''
+                    lib_prefix_by_name.setdefault(lib_dir_name, '')
+                    dest_root = comp_dir
+
                 for f in lib_root.rglob('*'):
                     if not f.is_file():
                         continue
                     rel_path = f.relative_to(lib_root)
                     if not _should_include(rel_path):
                         continue
-                    # Track file by its relative path to preserve structure
-                    file_key = str(rel_path).replace('\\', '/')
+                    # Track file by its COMPONENT-relative path: it preserves
+                    # structure, and in legacy mode it is also the cross-library
+                    # dedup key.
+                    rel_key = str(rel_path).replace('\\', '/')
+                    file_key = f'{lib_prefix}/{rel_key}' if lib_prefix else rel_key
                     if file_key not in seen_names:
-                        dest = comp_dir / rel_path
+                        dest = dest_root / rel_path
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(f, dest)
                         seen_names.add(file_key)
                     if f.suffix in ('.cpp', '.c') and file_key not in cpp_files:
                         cpp_files.append(file_key)
+
+                if _PER_LIB_ROOTS and first_copy:
+                    # arduino-cli's `SourceDir`: `<lib>/src` for the recursive
+                    # layout, `<lib>` for the flat legacy one. Nothing else.
+                    lib_include_roots.append(
+                        f'{lib_prefix}/src' if has_src_layout else lib_prefix
+                    )
+                    if not has_src_layout and (lib_root / 'utility').is_dir():
+                        lib_priv_roots.append(f'{lib_prefix}/utility')
+                    # With one include root per library these root-level headers
+                    # are the ONLY ones that can still shadow anything, so they
+                    # must not be silent — the Arduino IDE reports the same
+                    # thing as "Multiple libraries were found for X.h".
+                    _src_dir = (lib_root / 'src') if has_src_layout else lib_root
+                    try:
+                        for _entry in sorted(_src_dir.iterdir()):
+                            if not _entry.is_file():
+                                continue
+                            if _entry.suffix.lower() not in ('.h', '.hpp', '.hh', '.hxx'):
+                                continue
+                            _owner = root_header_owner.setdefault(_entry.name, lib_dir_name)
+                            if _owner != lib_dir_name:
+                                logger.warning(
+                                    f'[espidf] header collision: <{_entry.name}> is '
+                                    f'published by both "{_owner}" and '
+                                    f'"{lib_dir_name}" — "{_owner}" wins (its '
+                                    f'include root comes first)'
+                                )
+                            if _entry.name.lower() in self._SHADOW_STD_HEADERS:
+                                logger.warning(
+                                    f'[espidf] "{lib_dir_name}" publishes '
+                                    f'{_entry.name} at its include root — that '
+                                    f'shadows the toolchain/core header for every '
+                                    f'library in this build'
+                                )
+                    except OSError:
+                        pass
 
                 # Scan newly copied headers for transitive includes.
                 # Use rglob so libs with `src/` layout (e.g. GxEPD2, ArduinoJson)
@@ -1432,7 +1897,10 @@ class ESPIDFCompiler:
                 # ALL header extensions (.h/.hpp/.hh/.hxx/.inc): C++ libs like
                 # M5Unified put the transitive `#include <M5GFX.h>` in a .hpp,
                 # so a `*.h`-only scan silently drops that dependency.
-                for lib_file in comp_dir.rglob('*'):
+                # Per-library roots let this scan the library that was JUST
+                # copied instead of re-walking every library merged so far —
+                # same result (resolved_headers dedups), a fraction of the I/O.
+                for lib_file in (dest_root if _PER_LIB_ROOTS else comp_dir).rglob('*'):
                     if lib_file.suffix.lower() not in ('.h', '.hpp', '.hh', '.hxx', '.inc'):
                         continue
                     try:
@@ -1467,26 +1935,50 @@ class ESPIDFCompiler:
         # a stray `#include <limits.h>` deep in FreeRTOS resolves to the
         # library's copy and breaks the build. The files stay copied so the
         # owning library's file-relative includes still resolve.
-        shadow_dirs: set[str] = set()
-        for file_key in seen_names:
-            if PurePosixPath(file_key).name.lower() in self._SHADOW_STD_HEADERS:
-                parent = str(PurePosixPath(file_key).parent)
-                if parent and parent != '.':
-                    shadow_dirs.add(parent)
-
-        include_dirs: set[str] = {'.'}
-        for file_key in seen_names:
-            parent = str(PurePosixPath(file_key).parent)
-            if parent and parent != '.' and parent not in shadow_dirs:
-                include_dirs.add(parent)
-
-        if shadow_dirs:
-            logger.info(
-                f'[espidf] kept {len(shadow_dirs)} dir(s) off -I to avoid '
-                f'shadowing standard headers: {sorted(shadow_dirs)}'
+        priv_include_dirs_line = ''
+        if _PER_LIB_ROOTS:
+            # ONE include root per library, in resolution order. This is the
+            # whole fix: a library's internals stay reachable by its own sources
+            # through file-relative includes, and by nobody else. No denylist
+            # needed for subdirectories because no subdirectory is ever exported.
+            include_dirs_line = 'INCLUDE_DIRS ' + ' '.join(
+                f'"{d}"' for d in ['.'] + lib_include_roots
             )
+            if lib_priv_roots:
+                priv_include_dirs_line = 'PRIV_INCLUDE_DIRS ' + ' '.join(
+                    f'"{d}"' for d in lib_priv_roots
+                )
+            logger.info(
+                f'[espidf] include roots ({len(lib_include_roots)} librar'
+                f'{"y" if len(lib_include_roots) == 1 else "ies"}): '
+                f'{lib_include_roots}'
+                + (f' | private: {lib_priv_roots}' if lib_priv_roots else '')
+            )
+        else:
+            # Legacy interleaved layout: every directory holding a copied file
+            # is exported, minus the hand-maintained shadow denylist.
+            shadow_dirs: set[str] = set()
+            for file_key in seen_names:
+                if PurePosixPath(file_key).name.lower() in self._SHADOW_STD_HEADERS:
+                    parent = str(PurePosixPath(file_key).parent)
+                    if parent and parent != '.':
+                        shadow_dirs.add(parent)
 
-        include_dirs_line = 'INCLUDE_DIRS ' + ' '.join(f'"{d}"' for d in sorted(include_dirs))
+            include_dirs: set[str] = {'.'}
+            for file_key in seen_names:
+                parent = str(PurePosixPath(file_key).parent)
+                if parent and parent != '.' and parent not in shadow_dirs:
+                    include_dirs.add(parent)
+
+            if shadow_dirs:
+                logger.info(
+                    f'[espidf] kept {len(shadow_dirs)} dir(s) off -I to avoid '
+                    f'shadowing standard headers: {sorted(shadow_dirs)}'
+                )
+
+            include_dirs_line = 'INCLUDE_DIRS ' + ' '.join(
+                f'"{d}"' for d in sorted(include_dirs)
+            )
 
         # LovyanGFX's Bus_EPD.cpp (e-paper bus, compiled unconditionally as part
         # of the M5GFX merge) includes <esp_lcd_panel_io.h>, which is provided by
@@ -1506,9 +1998,19 @@ class ESPIDFCompiler:
         # at a time (nvs.h, then esp_efuse.h, ... — M5GFX/M5Unified touch
         # several). Require the standard set Arduino-facing libraries lean
         # on, guarded on existence so both IDF generations stay happy.
+        # The tail of the list covers headers Arduino IDE exposes through the
+        # core's global include path but a merged IDF component must REQUIRE
+        # explicitly — FastLED 3.10 alone pulls <esp_http_server.h> (fl/net),
+        # <esp_cache.h> (esp_mm), <esp_heap_caps.h> (heap), <esp_ota_ops.h>
+        # (app_update), <esp_bt.h> (bt), <esp_psram.h>, and esp_hw_support /
+        # esp_rom / log / esp_system headers from its RMT/I2S drivers. All
+        # entries stay guarded on the component existing in the IDF tree.
         for _comp in ('nvs_flash', 'efuse', 'esp_timer', 'driver',
                       'spi_flash', 'esp_adc', 'esp_wifi', 'esp_event',
-                      'esp_netif', 'esp_partition'):
+                      'esp_netif', 'esp_partition', 'esp_http_server',
+                      'http_parser', 'esp_mm', 'esp_hw_support', 'heap',
+                      'esp_system', 'esp_rom', 'log', 'app_update', 'bt',
+                      'esp_psram', 'esp_pm'):
             for _root in filter(None, (self.idf5_path, self.idf_path)):
                 if os.path.isdir(os.path.join(_root, 'components', _comp)):
                     extra_requires += f' {_comp}'
@@ -1540,15 +2042,43 @@ class ESPIDFCompiler:
                 ' alloca=__builtin_alloca memcpy_P=memcpy memcmp_P=memcmp)\n'
             )
 
+        # The -Werror relaxations the main component gets, for the same reason
+        # but stronger: these are LIBRARY sources the user cannot even edit.
+        # M5Stack's own MahonyAHRS.cpp (the fast inverse square root reading a
+        # float through a long*) fails under -Werror=uninitialized, which made
+        # installing the vendor's library kill every build that used it. Same
+        # INTERFACE-library caveat as defs_block: no sources, no options.
+        warns_block = ''
+        if cpp_files:
+            warns_block = (
+                '# User libraries must compile as they do in the Arduino IDE.\n'
+                'target_compile_options(${COMPONENT_LIB} PRIVATE\n'
+                '    -Wno-error=comment -Wno-error=parentheses -Wno-error=sign-compare\n'
+                '    -Wno-error=narrowing -Wno-error=write-strings\n'
+                '    -Wno-error=missing-field-initializers -Wno-error=reorder\n'
+                '    -Wno-error=unused-variable -Wno-error=unused-but-set-variable\n'
+                '    -Wno-error=format -Wno-error=maybe-uninitialized\n'
+                '    -Wno-error=uninitialized)\n'
+            )
+
+        _priv_cmake_line = (
+            f'    {priv_include_dirs_line}\n' if priv_include_dirs_line else ''
+        )
         cmake_content = (
-            '# Auto-generated by Velxio — all user libraries merged into one component.\n'
-            '# Directory structure preserved for libraries like ArduinoJson with src/ layout.\n'
+            '# Auto-generated by Velxio — user libraries as one IDF component.\n'
+            '# Each library keeps its own subtree and exports exactly ONE include\n'
+            '# root (<lib>/src, or <lib> for the flat legacy layout), matching\n'
+            "# arduino-cli's resolution semantics. Library internals stay\n"
+            '# reachable through file-relative includes and never enter another\n'
+            "# library's — or the core's — include path.\n"
             'idf_component_register(\n'
             f'    {srcs_line}\n'
             f'    {include_dirs_line}\n'
+            f'{_priv_cmake_line}'
             f'    REQUIRES {arduino_comp_name}{extra_requires}\n'
             ')\n'
             f'{defs_block}'
+            f'{warns_block}'
         )
         (comp_dir / 'CMakeLists.txt').write_text(cmake_content, encoding='utf-8')
         logger.info(
@@ -1597,6 +2127,24 @@ class ESPIDFCompiler:
         # Dead only when we recognise EVERY identifier as false-on-ESP32.
         return not all(i in self._PP_FALSE for i in idents)
 
+    def _pp_branch_is_provably_true(self, expr: str) -> bool:
+        """True only when EVERY identifier is a macro known-true on ESP32 —
+        the only case where the #elif/#else siblings are provably dead.
+
+        This must stay distinct from _pp_branch_is_live: an UNKNOWN condition
+        is treated as live for scanning, but it must NOT mark the branch
+        chain as taken. GxEPD2 guards its GFX base class as
+        `#if ENABLE_GxEPD2_GFX ... #elif ... #else #include <Adafruit_GFX.h>`
+        with ENABLE_GxEPD2_GFX defaulting to 0 — treating the unknown #if as
+        taken pruned the #else, silently dropped the Adafruit_GFX dependency
+        and broke every GxEPD2 e-paper example (found by the gallery compile
+        smoke, 2026-08-15)."""
+        idents = [
+            i for i in self._PP_IDENT_RE.findall(expr)
+            if i not in ('defined', 'ifdef', 'ifndef')
+        ]
+        return bool(idents) and all(i in self._PP_TRUE for i in idents)
+
     def _detect_external_includes(
         self, code: str, own_files: set[str] | None = None
     ) -> list[str]:
@@ -1637,21 +2185,33 @@ class ESPIDFCompiler:
             if line.startswith('#'):
                 dtv = line[1:].lstrip()
                 if dtv.startswith(('ifdef', 'ifndef', 'if ', 'if(')):
+                    # `taken` gates whether LATER #elif/#else arms are dead.
+                    # It must be set only by PROVABLY-true conditions: an
+                    # unknown #if is scanned as live, but its #else must stay
+                    # live too — the real compiler may well take it (the
+                    # GxEPD2 ENABLE_GxEPD2_GFX default-0 pattern).
                     if dtv.startswith('ifdef'):
                         live = self._pp_branch_is_live(dtv[5:])
+                        taken = self._pp_branch_is_provably_true(dtv[5:])
                     elif dtv.startswith('ifndef'):
-                        # #ifndef X is live unless X is known-defined here.
+                        # #ifndef X is live unless X is known-defined here,
+                        # and provably TRUE when X is known-undefined.
                         idents = self._PP_IDENT_RE.findall(dtv[6:])
                         live = not any(i in self._PP_TRUE for i in idents)
+                        taken = bool(idents) and all(i in self._PP_FALSE for i in idents)
                     else:
                         live = self._pp_branch_is_live(dtv[2:])
-                    stack.append((live, live))
+                        taken = self._pp_branch_is_provably_true(dtv[2:])
+                    stack.append((live, taken))
                     continue
                 if dtv.startswith('elif'):
                     if stack:
                         _cur, taken = stack[-1]
                         live = (not taken) and self._pp_branch_is_live(dtv[4:])
-                        stack[-1] = (live, taken or live)
+                        stack[-1] = (
+                            live,
+                            taken or self._pp_branch_is_provably_true(dtv[4:]),
+                        )
                     continue
                 if dtv.startswith('else'):
                     if stack:
@@ -1777,17 +2337,23 @@ class ESPIDFCompiler:
             'examples',
             'test',
             'tests',
-            'extras',
             'ci',
             'fuzz',
             'fuzzing',
             'benchmark',
             'benchmarks',
         }
+        # Same header-only treatment of extras/ as _generate_merged_component:
+        # unity builds may #include "extras/..." fragments.
+        header_only_dirs = {'extras'}
 
         def should_include(relative_path: Path) -> bool:
             parts = relative_path.parts
             if any(part.lower() in excluded_dirs for part in parts[:-1]):
+                return False
+            if (relative_path.suffix.lower() in ('.c', '.cpp')
+                    and any(p.lower() in header_only_dirs
+                            for p in parts[:-1])):
                 return False
             if relative_path.suffix not in ('.h', '.hpp', '.c', '.cpp'):
                 return False
@@ -2029,7 +2595,7 @@ class ESPIDFCompiler:
             # resolve. The old xtensa-only glob wrongly rejected RISC-V-only
             # roots such as the v5.x install used for esp32c6.
             xtensa_glob = 'tools/xtensa-esp32-elf/*/xtensa-esp32-elf/bin'
-            if idf_target in ('esp32c3', 'esp32c6'):
+            if idf_target in ('esp32c3', 'esp32c6', 'esp32p4', 'esp32c5'):
                 required_globs: tuple[str, ...] = (
                     'tools/riscv32-esp-elf/*/riscv32-esp-elf/bin',
                 )
@@ -2345,9 +2911,20 @@ class ESPIDFCompiler:
 
         # ESP32-C3 / ESP32-C6 have no external PSRAM controller — silently
         # disable so a stale field from an upgraded project doesn't trip up
-        # the build.
-        if idf_target in ('esp32c3', 'esp32c6'):
+        # the build. P4/C5 modules DO carry PSRAM, but the in-browser engines
+        # run without it for now (the P4 engine models PSRAM as optional and
+        # firmware built with SPIRAM would fail honestly on a board that does
+        # not declare it) — keep it off until the engines validate it.
+        if idf_target in ('esp32c3', 'esp32c6', 'esp32c5'):
             normalized['psram'] = 'disabled'
+
+        # The P4-Function-EV module always carries 32 MB AP-hex PSRAM and
+        # esp_lcd allocates DSI framebuffers from it unconditionally - the
+        # board's flagship peripheral needs it. Default ON unless the
+        # request explicitly says otherwise (the UI only sends the field
+        # once the user opens the board-options modal).
+        if idf_target == 'esp32p4' and 'psram' not in (opts or {}):
+            normalized['psram'] = 'enabled'
 
         # ESP32-C3 / ESP32-C6 top out at 160 MHz — clamp the historical 240
         # default (and any stale higher value) instead of failing the build.
@@ -2407,7 +2984,7 @@ class ESPIDFCompiler:
         drops: tuple[str, ...] = ()
         if not arduino_mode:
             drops += self._IDF5_PUREIDF_DROP_PREFIXES
-        elif idf_target in ('esp32c3', 'esp32c6'):
+        elif idf_target in ('esp32c3', 'esp32c6', 'esp32c5'):
             # Arduino v5 on a single-core RISC-V chip: the running-core
             # options are hidden by `depends on !FREERTOS_UNICORE`, so drop
             # just those two (keep the rest of the Arduino/BT symbols).
@@ -2415,10 +2992,18 @@ class ESPIDFCompiler:
                 'CONFIG_ARDUINO_RUNNING_CORE',
                 'CONFIG_ARDUINO_EVENT_RUNNING_CORE',
             )
-        if idf_target in ('esp32c3', 'esp32c6'):
+        if idf_target in ('esp32c3', 'esp32c6', 'esp32c5'):
             drops += (
                 'CONFIG_SPIRAM',
                 'CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240',
+            )
+        if idf_target == 'esp32p4':
+            # The P4's CPU-frequency kconfig choices (360/400) do not overlap
+            # the classic 240/160/80/40 set the template renders — drop the
+            # whole group and let IDF's own default stand. SPIRAM renders
+            # with the P4's own hex-mode symbols (see the PSRAM chunk).
+            drops += (
+                'CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ',
             )
         if idf_target != 'esp32':
             drops += ('CONFIG_ESPTOOLPY_FLASHFREQ_26M',)
@@ -2434,11 +3019,18 @@ class ESPIDFCompiler:
         for line in rendered.splitlines():
             if line.startswith(drops):
                 continue
-            # IDF 5.0 renamed ESP_TASK_WDT → ESP_TASK_WDT_EN.
+            # IDF 5.0 split ESP_TASK_WDT into ESP_TASK_WDT_EN (compile the
+            # implementation) and ESP_TASK_WDT_INIT (auto-start at boot).
+            # The v4.4 template's `=n` used to become `EN=n`, which compiles
+            # the API out entirely — every sketch calling esp_task_wdt_add/
+            # reset (Firebase's ESP32 client does internally) died at link
+            # with "undefined reference to esp_task_wdt_*". Keep the intent
+            # (no watchdog running under emulation) while linking the API:
+            # compile it in, never auto-start it.
             if line.startswith('CONFIG_ESP_TASK_WDT='):
-                line = line.replace(
-                    'CONFIG_ESP_TASK_WDT=', 'CONFIG_ESP_TASK_WDT_EN=', 1
-                )
+                lines.append('CONFIG_ESP_TASK_WDT_EN=y')
+                lines.append('CONFIG_ESP_TASK_WDT_INIT=n')
+                continue
             lines.append(line)
         return '\n'.join(lines) + '\n'
 
@@ -2492,10 +3084,26 @@ class ESPIDFCompiler:
         psram_chunks: list[str] = []
         if psram_mode == 'disabled':
             psram_chunks.append('CONFIG_SPIRAM=n')
+        elif idf_target == 'esp32p4':
+            # The P4 has its own Kconfig.spiram: 16-line AP hex is the only
+            # line mode, and the classic speed/mode symbols (80M, QUAD/OCT)
+            # do not exist — emitting them breaks kconfgen. 200M is the
+            # tree's default and rev0-safe (250M needs rev >= 3).
+            psram_chunks.append('CONFIG_SPIRAM=y')
+            psram_chunks.append('CONFIG_SPIRAM_USE_MALLOC=y')
+            psram_chunks.append('CONFIG_SPIRAM_MODE_HEX=y')
+            psram_chunks.append('CONFIG_SPIRAM_SPEED_200M=y')
+            # The boot-time memory test walks the WHOLE 32 MB before app_main;
+            # on emulated silicon that is tens of millions of guest accesses of
+            # pure startup latency ("Disable this for slightly faster startup",
+            # Kconfig.spiram.common). The RAM is modelled, not physical - there
+            # is nothing to find.
+            psram_chunks.append('CONFIG_SPIRAM_MEMTEST=n')
         else:
             psram_chunks.append('CONFIG_SPIRAM=y')
             psram_chunks.append('CONFIG_SPIRAM_USE_MALLOC=y')
             psram_chunks.append('CONFIG_SPIRAM_SPEED_80M=y')
+            psram_chunks.append('CONFIG_SPIRAM_MEMTEST=n')  # see the P4 note
             if psram_mode == 'opi':
                 psram_chunks.append('CONFIG_SPIRAM_MODE_OCT=y')
             else:
@@ -2522,6 +3130,18 @@ class ESPIDFCompiler:
         if use_idf5:
             rendered = self._fixup_sdkconfig_for_idf5(
                 rendered, idf_target, arduino_mode
+            )
+        if idf_target == 'esp32p4':
+            # The in-browser esp32p4js engine runs the ONLY published P4 mask
+            # ROM (rev0), and from silicon v3.0 IDF switches ROM symbol tables
+            # (esp32p4.rom.eco5.ld moves rom_spiflash_legacy_data) — firmware
+            # built for v3 reads a flash descriptor the rev0 ROM never wrote
+            # and rejects every partition. Pin the build to rev0 so images
+            # boot on the engine (project/esp32p4-js-emulator/STATUS.md).
+            rendered += (
+                '\n# Velxio: esp32p4js runs the rev0 mask ROM\n'
+                'CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y\n'
+                'CONFIG_ESP32P4_REV_MIN_0=y\n'
             )
         return rendered
 
@@ -2916,6 +3536,10 @@ class ESPIDFCompiler:
                     # never share a configured build/ — the cmake cache and
                     # every object file are tied to the IDF tree.
                     + f'|idf:{5 if use_idf5 else 4}|ard:{int(arduino_mode)}'
+                    # The user-libs layout changes every object path and the
+                    # component's include list, so the two modes must never
+                    # share a configured build/ (stale objects + cmake cache).
+                    + f'|libroots:{int(_PER_LIB_ROOTS)}'
                     + _lang_token
                 ).encode()
             ).hexdigest()[:12]
@@ -2986,7 +3610,14 @@ class ESPIDFCompiler:
                         self._suggest_libraries_for_headers(missing)
                     )
                     return retry
-                # Both failed: the scoped error is the more informative one.
+                # Both failed. The retry saw every installed library, so ITS
+                # error is the sketch's real one — the scoped attempt stops at
+                # the first undeclared transitive dependency, which is an
+                # artifact of the scope, not of the sketch. Prefer it whenever
+                # it carries text; fall through to the scoped result otherwise.
+                if str(retry.get('error') or retry.get('stderr') or '').strip():
+                    retry['scope_retry_failed'] = True
+                    return retry
         return result
 
     async def _compile_in_dir(
@@ -3098,12 +3729,27 @@ class ESPIDFCompiler:
         partition_csv = self._render_partition_csv(board_options['partitionScheme'])
         (project_dir / 'partitions.csv').write_text(partition_csv, encoding='utf-8')
 
-        # Get sketch content
+        # Get sketch content — Arduino tab semantics: EVERY .ino is part of
+        # the sketch. The main file (literal sketch.ino, else the first .ino
+        # sent) comes first so its globals are visible to the other tabs,
+        # and the rest are concatenated after it in alphabetical order —
+        # exactly what arduino-cli/the IDE do. #line markers keep compiler
+        # diagnostics pointing at the real file/line of each tab.
+        ino_files = [f for f in files if f['name'].endswith('.ino')]
         main_content = ''
-        for f in files:
-            if f['name'].endswith('.ino'):
-                main_content = f['content']
-                break
+        if ino_files:
+            main_ino = next(
+                (f for f in ino_files if f['name'] == 'sketch.ino'),
+                ino_files[0],
+            )
+            rest = sorted(
+                (f for f in ino_files if f is not main_ino),
+                key=lambda f: f['name'],
+            )
+            main_content = '\n'.join(
+                f'#line 1 "{f["name"]}"\n{f["content"]}'
+                for f in [main_ino] + rest
+            )
         if not main_content and files:
             main_content = files[0]['content']
 
@@ -3118,11 +3764,21 @@ class ESPIDFCompiler:
         # it inside that branch broke pure ESP-IDF compiles with
         # UnboundLocalError at the result step (2026-08-05 regression).
         merged_libs_report: dict[str, str] = {}
+        _all_text = '\n'.join(f.get('content', '') for f in files)
         if pure_idf:
-            _all_text = '\n'.join(f.get('content', '') for f in files)
             has_wifi = self._detect_idf_wifi_usage(_all_text)
         else:
-            has_wifi = self._detect_wifi_usage(main_content)
+            # Scan the WHOLE project, not just the entry sketch. A header that
+            # includes WiFi.h is as much a WiFi project as an .ino that does,
+            # and judging it WiFi-less used to be fatal: the QEMU worker then
+            # left the radio out of the machine and the firmware's first touch
+            # of the MAC panicked with LoadStorePIFAddrError (issue #260).
+            # The pure-IDF branch above always read every file; this one had
+            # been reading only main_content.
+            has_wifi = self._detect_wifi_usage(_all_text)
+            # Normalization still rewrites only the entry sketch: it edits
+            # string literals in place, and the SSID that matters is the one
+            # WiFi.begin() is called with.
             main_content = self._normalize_wifi_for_qemu(main_content)
 
         # Arduino-as-component only when compile() decided so: the core must
@@ -3162,6 +3818,18 @@ class ESPIDFCompiler:
                     'stdout': '',
                     'stderr': '',
                 }
+            # Registry components the sources #include (esp_lcd_st77916 for
+            # the VoCat display example, etc.) — same resolution the arduino
+            # branch gets; without the manifest the header simply does not
+            # exist and the build dies at the first #include.
+            pure_src = '\n'.join(
+                str(f.get('content', '')) for f in files if str(f.get('name', '')).endswith(
+                    ('.ino', '.cpp', '.c', '.h', '.hpp')
+                )
+            )
+            managed_pure = self._detect_managed_components(pure_src)
+            if managed_pure:
+                self._add_managed_components(project_dir, managed_pure)
         elif arduino_mode:
             # Arduino-as-component mode: copy sketch as .cpp
             sketch_cpp = project_dir / 'main' / 'sketch.ino.cpp'
@@ -3181,6 +3849,10 @@ class ESPIDFCompiler:
                     '#include "Arduino.h"\n' + compat_include.rstrip('\n'),
                     1,
                 )
+            # arduino-cli injects ctags prototypes; this path must too, or
+            # helpers defined after loop() fail with "not declared in this
+            # scope". Applied AFTER the prepends so #line stays accurate.
+            main_content = generate_ino_prototypes(main_content)
             sketch_cpp.write_text(main_content, encoding='utf-8')
 
             # Copy additional files (.h, .cpp)
@@ -3243,7 +3915,13 @@ class ESPIDFCompiler:
                 # / OSS self-host.
                 arduino_libs = libraries_dir or self._find_arduino_libraries_dir()
 
-                component_names, _ = self._resolve_library_components(
+                # Heavy sync filesystem work (BFS header resolution + copying
+                # thousands of library files — FastLED alone takes minutes).
+                # Run it off the event loop like cmake/ninja below, or the
+                # loop starves: /compile/start responses never flush and the
+                # client dies on its 30s timeout while the build is fine.
+                component_names, _ = await asyncio.to_thread(
+                    self._resolve_library_components,
                     ext_headers, arduino_libs, esp32_libs,
                     arduino_comp_name, user_libs_dir,
                     allowed_libraries=allowed_libraries,
@@ -3282,16 +3960,51 @@ class ESPIDFCompiler:
                     ('.ino', '.cpp', '.c', '.h', '.hpp')
                 )
             )
-            if self._detect_camera_usage(sketch_src):
-                self._add_managed_components(
-                    project_dir, {'espressif/esp32-camera': '^2.0.4'}
-                )
+            managed = self._detect_managed_components(sketch_src)
+            if managed:
+                self._add_managed_components(project_dir, managed)
+
+            # Same idea for components that live in the IDF tree rather than the
+            # registry: they need to be in main's REQUIRES or the sketch cannot
+            # see their headers.
+            idf_comps = self._detect_idf_components(sketch_src)
+            if idf_comps:
+                cmake_path = project_dir / 'main' / 'CMakeLists.txt'
+                cmake_text = cmake_path.read_text(encoding='utf-8')
+                missing = [c for c in idf_comps if c not in cmake_text]
+                if missing:
+                    for old_req in [
+                        r'REQUIRES ${_arduino_comp_name}',
+                        f'REQUIRES {arduino_comp_name}',
+                    ]:
+                        if old_req in cmake_text:
+                            cmake_text = cmake_text.replace(
+                                old_req, old_req + ' ' + ' '.join(missing), 1
+                            )
+                            cmake_path.write_text(cmake_text, encoding='utf-8')
+                            logger.info(
+                                f'[espidf] main REQUIRES += {" ".join(missing)} '
+                                '(IDF components the sketch includes)'
+                            )
+                            break
         else:
             # Pure ESP-IDF mode (no Arduino component usable for this
             # target). Remove Arduino main.cpp to avoid conflict.
             main_cpp = project_dir / 'main' / 'main.cpp'
             if main_cpp.exists():
                 main_cpp.unlink()
+
+            # Pure-IDF sources need the same include->component resolution the
+            # arduino branch gets (e.g. the VoCat display example includes
+            # esp_lcd_st77916.h from the component registry).
+            idf_src = '\n'.join(
+                f.get('content', '') for f in files if str(f.get('name', '')).endswith(
+                    ('.ino', '.cpp', '.c', '.h', '.hpp')
+                )
+            )
+            managed_idf = self._detect_managed_components(idf_src)
+            if managed_idf:
+                self._add_managed_components(project_dir, managed_idf)
 
             if self._contains_app_main(main_content):
                 # The user's code is already a plain ESP-IDF program —
@@ -3350,6 +4063,11 @@ class ESPIDFCompiler:
             f'-DIDF_TARGET={idf_target}',
             '-DCMAKE_BUILD_TYPE=Release',
             f'-DSDKCONFIG_DEFAULTS={project_dir / "sdkconfig.defaults"}',
+            # IDF re-validates its python env on every configure (~1s of a
+            # ~9s configure). The image pins that env at build time and the
+            # entrypoint has already exercised it, so tell IDF it was checked
+            # externally - the same escape hatch idf.py uses for itself.
+            '-DPYTHON_DEPS_CHECKED=1',
             str(project_dir),
         ]
 
@@ -3379,6 +4097,10 @@ class ESPIDFCompiler:
         try:
             cmake_result = await asyncio.to_thread(_run_cmake)
         except subprocess.TimeoutExpired:
+            logger.error(
+                f'[espidf] cmake configure timed out after {cmake_timeout}s '
+                f'in {build_dir}'
+            )
             return {
                 'success': False,
                 'error': f'ESP-IDF cmake configure timed out ({cmake_timeout}s)',
@@ -3418,9 +4140,24 @@ class ESPIDFCompiler:
         try:
             ninja_result = await asyncio.to_thread(_run_ninja)
         except subprocess.TimeoutExpired:
+            # Silent before — a 600s failure left no server-side trace at all,
+            # so a slow-box incident (2026-08-17: cold S3 variant, ccache
+            # missing on every object) had to be reconstructed from the
+            # variant's .ninja_log. Say where it happened and how far it got.
+            done_steps = _ninja_log_step_count(build_dir)
+            logger.error(
+                f'[espidf] ninja build timed out after {NINJA_TIMEOUT_S}s in '
+                f'{build_dir} ({done_steps} steps logged)'
+            )
             return {
                 'success': False,
-                'error': f'ESP-IDF build timed out ({NINJA_TIMEOUT_S}s)',
+                # ninja is incremental and the variant dir persists: the
+                # objects built so far are kept, so retrying picks up where
+                # this attempt stopped instead of starting over.
+                'error': (
+                    f'ESP-IDF build timed out ({NINJA_TIMEOUT_S}s) — the partial '
+                    f'build is kept; compile again to resume where it stopped'
+                ),
                 'stdout': '',
                 'stderr': '',
             }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { decideEngine, getInstantEngine } from '../lib/instantEngine';
 import {
+  getBoardSeedFiles,
   getProBoard,
   getGuestSetup,
   isProBoardSimulator,
@@ -26,8 +27,9 @@ import type { I2CDevice } from '../simulation/I2CBusManager';
 import type { RP2040I2CDevice } from '../simulation/RP2040Simulator';
 import type { Wire, WireInProgress, WireEndpoint } from '../types/wire';
 import type { BoardKind, BoardInstance, LanguageMode, WifiStatus } from '../types/board';
-import { BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, isPiBoardKind, isStm32BoardKind } from '../types/board';
+import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, EMULATED_WIFI_SSIDS, isPiBoardKind, isStm32BoardKind } from '../types/board';
 import { boardGateDecision, proBoardFeatureName, triggerProUpgradePrompt } from '../lib/proBoardGate';
+import { getSerialTxInterceptor } from '../lib/proHardwareSerial';
 import { calculatePinPosition } from '../utils/pinPositionCalculator';
 import { useOscilloscopeStore } from './useOscilloscopeStore';
 import { RaspberryPi3Bridge } from '../simulation/RaspberryPi3Bridge';
@@ -36,9 +38,9 @@ import { createEsp32Bridge } from '../simulation/Esp32BridgeFactory';
 import { Stm32Bridge, stm32PinNameToLinear } from '../simulation/Stm32Bridge';
 import { STM32_LED } from '../components/velxio-components/Stm32BluePillElement';
 import { useEditorStore } from './useEditorStore';
+import { fingerprintSources } from '../utils/sourceFingerprint';
 import { useVfsStore } from './useVfsStore';
 import { buildProjectSdImage, decodeSdFiles, bytesToB64 } from '../utils/sdCardFiles';
-import { boardPinToNumber, isBoardComponent } from '../utils/boardPinMapping';
 import {
   autoWireColor,
   DEFAULT_WIRE_COLOR,
@@ -63,29 +65,16 @@ import {
   setInterconnectRuntime,
 } from '../simulation/Interconnect';
 import { SENSOR_CONTROLS, getSensorControl } from '../simulation/sensorControlConfig';
+import { SINGLE_WIRE_SENSOR_MODELS } from '../simulation/sensorModels';
+import { traceBoardGpio } from '../simulation/PinTrace';
 import { dispatchSensorUpdate } from '../simulation/SensorUpdateRegistry';
 
 // ── Sensor pre-registration ──────────────────────────────────────────────────
-// Maps component metadataId → { sensorType, dataPinName, propertyKeys }
-// Used to pre-register sensors in the start_esp32 payload so the QEMU worker
-// has them ready before the firmware starts executing (prevents race conditions).
-const SENSOR_COMPONENT_MAP: Record<
-  string,
-  {
-    sensorType: string;
-    dataPinName: string;
-    propertyKeys: string[];
-    extraPins?: Record<string, string>; // extra pin mappings: prop name → component pin name
-  }
-> = {
-  dht22: { sensorType: 'dht22', dataPinName: 'SDA', propertyKeys: ['temperature', 'humidity'] },
-  'hc-sr04': {
-    sensorType: 'hc-sr04',
-    dataPinName: 'TRIG',
-    propertyKeys: ['distance'],
-    extraPins: { echo_pin: 'ECHO' },
-  },
-};
+// Sensors whose model drives its own line (DHT22, HC-SR04) — declared once in
+// simulation/sensorModels, which the ESP32 bridge also reads to know which pads
+// the host must not touch. Used here to pre-register them in the start_esp32
+// payload so the worker has them before the firmware runs.
+const SENSOR_COMPONENT_MAP = SINGLE_WIRE_SENSOR_MODELS;
 
 // ── I2C sensor pre-registration ───────────────────────────────────────────────
 // I2C sensors use virtual pins (200 + i2c_addr) instead of real GPIO pins.
@@ -122,21 +111,23 @@ const I2C_SENSOR_MAP: Record<
 };
 
 // ── Legacy type aliases (keep external consumers working) ──────────────────
-export type BoardType = 'arduino-uno' | 'arduino-nano' | 'arduino-mega' | 'raspberry-pi-pico';
+/**
+ * The active board's kind.
+ *
+ * This was a four-literal union left over from when those were the only boards
+ * Velxio had, while setBoardType below already handled the whole space by
+ * casting to BoardKind. The stale narrow type is one of the three copies that
+ * made an ESP32 project unimportable (#268) — the zip importer and the import
+ * dispatcher each carried their own. It is BoardKind, which is what it always
+ * was at runtime; the overlay's kinds register into that union too.
+ */
+export type BoardType = BoardKind;
 
-export const BOARD_FQBN: Record<BoardType, string> = {
-  'arduino-uno': 'arduino:avr:uno',
-  'arduino-nano': 'arduino:avr:nano:cpu=atmega328',
-  'arduino-mega': 'arduino:avr:mega',
-  'raspberry-pi-pico': 'rp2040:rp2040:rpipico',
-};
-
-export const BOARD_LABELS: Record<BoardType, string> = {
-  'arduino-uno': 'Arduino Uno',
-  'arduino-nano': 'Arduino Nano',
-  'arduino-mega': 'Arduino Mega 2560',
-  'raspberry-pi-pico': 'Raspberry Pi Pico',
-};
+// BOARD_FQBN and BOARD_LABELS used to live here: two more four-board records
+// from the same era, exported and imported by nothing. The names that are
+// actually used are BOARD_KIND_LABELS (types/board.ts, exhaustive over
+// BoardKind) and the fqbn each board declares. Removed rather than widened —
+// a fifth stale copy of "Velxio has four boards" is not worth keeping.
 
 export const DEFAULT_BOARD_POSITION = { x: 50, y: 50 };
 export const ARDUINO_POSITION = DEFAULT_BOARD_POSITION;
@@ -214,11 +205,26 @@ class Esp32BridgeShim {
     this.bridge.sendSerialBytes(Array.from(new TextEncoder().encode(text)));
   }
   /**
-   * Feed bytes into a hardware UART's RX from an external part (GPS module,
+   * Feed RAW BYTES into a hardware UART's RX. Use this, not `feedUart`, for
+   * anything that is not text.
+   *
+   * `feedUart`/`serialWrite` take a string and run it through TextEncoder,
+   * which is UTF-8: every byte >= 0x80 comes out as TWO bytes. That is
+   * invisible for NMEA or AT chatter and silently fatal for a binary frame —
+   * a reply of `AA 55 04 00 FF FD 01 FD 55 AA` reaches the guest as
+   * `C2 AA 55 04 00 C3 BF C3 BD 01 C3 BD 55 C2 AA` and no parser recovers.
+   * Byte-oriented device models (framed UART protocols with checksums and
+   * 0xAA/0x55 sync words) need the bytes to arrive as written.
+   */
+  sendSerialBytes(bytes: number[], uart = 0): void {
+    this.bridge.sendSerialBytes(bytes, uart);
+  }
+  /**
+   * Feed TEXT into a hardware UART's RX from an external part (GPS module,
    * a wired peer board via Interconnect, …). Uniform seam across simulators
    * (`sim.feedUart(uart, data)`). The backend QEMU worker routes the bytes
    * into the requested UART (0 = Serial / GPIO3, 2 = Serial2 / GPIO16 on
-   * the classic ESP32 pinout).
+   * the classic ESP32 pinout). Text only — see `sendSerialBytes` above.
    */
   feedUart(uart: number, data: string): boolean {
     this.bridge.sendSerialBytes(Array.from(new TextEncoder().encode(data)), uart);
@@ -323,6 +329,19 @@ class Esp32BridgeShim {
   registerSensor(type: string, pin: number, properties: Record<string, unknown>): boolean {
     this.bridge.sendSensorAttach(type, pin, properties);
     return true; // backend handles the protocol
+  }
+
+  /** Pins a backend-emulated single-wire sensor drives itself. The generic
+   *  seam connectDigitalInputsToMcu asks before thresholding a pin into the
+   *  guest — see simulation/partPinOwnership for the same rule on the part
+   *  side. Both exist because they know different halves: the part layer knows
+   *  what the canvas attached, the bridge knows what the worker was told. */
+  ownsPin(pin: number): boolean {
+    // Optional call on purpose: this shim wraps whichever bridge the build
+    // installed (the OSS QEMU one, or an overlay's in-browser engine), and a
+    // missing answer must degrade to "not owned", never to a TypeError thrown
+    // inside the SPICE subscription.
+    return this.bridge.ownsSensorPin?.(pin) ?? false;
   }
 
   /**
@@ -695,7 +714,7 @@ class Esp32BridgeShim {
 // race window.
 
 function makeLedcDutyHandler(boardId: string) {
-  return (duty: { channel: number; duty_pct: number }) => {
+  return (duty: { channel: number; duty_pct: number; freq_hz?: number }) => {
     const boardPm = pinManagerMap.get(boardId);
     const router = signalRouterMap.get(boardId);
     if (!boardPm || !router) return;
@@ -706,6 +725,10 @@ function makeLedcDutyHandler(boardId: string) {
     // pins via the GPIO Matrix (rare but documented in TRM). Iterate
     // all of them — each gets its own updatePwm call.
     for (const pin of pins) {
+      // The carrier frequency rides alongside, when the engine knows it: a
+      // speaker listener reads it back with getPwmFreq to play the sketch's
+      // actual note rather than a canned one.
+      if (duty.freq_hz && duty.freq_hz > 0) boardPm.setPwmFreq(pin, duty.freq_hz);
       boardPm.updatePwm(pin, dutyCycle);
     }
   };
@@ -793,10 +816,17 @@ class Stm32BridgeShim {
     this.bridge.sendPinEvent(pin, state);
   }
 
+  /** Raw-byte counterpart of `feedUart` — see the note on the ESP32 shim:
+   *  feedUart is UTF-8 and mangles any byte >= 0x80, so binary protocols
+   *  must use this. */
+  sendSerialBytes(bytes: number[], uart = 0): void {
+    this.bridge.sendSerialBytes(bytes, uart);
+  }
   /**
-   * Feed bytes into a hardware USART's RX from an external part (GPS module,
+   * Feed TEXT into a hardware USART's RX from an external part (GPS module,
    * a wired peer board via Interconnect, …). Uniform seam across simulators
    * (`sim.feedUart(uart, data)`). uart 0 = USART1 (PA10 RX), 1 = USART2 (PA3).
+   * Text only — see `sendSerialBytes` above.
    */
   feedUart(uart: number, data: string): boolean {
     this.bridge.sendSerialBytes(Array.from(new TextEncoder().encode(data)), uart);
@@ -961,6 +991,34 @@ function isEsp32Kind(kind: BoardKind): boolean {
   if (ESP32_KINDS.has(kind) || ESP32_RISCV_KINDS.has(kind)) return true;
   // Overlay-registered ESP32-class boards route through the same bridge path.
   return getProBoard(kind)?.esp32Family !== undefined;
+}
+
+/**
+ * Does this sketch need the emulated WiFi NIC?
+ *
+ * Single source of truth for two callers that must agree: startBoard(),
+ * which decides whether QEMU gets `-nic` at all, and
+ * loadMicroPythonProgram(), which decides whether to shadow `network`
+ * with the offline stub. Disagreement between them is precisely the
+ * failure reported in #262 — a real driver with no device behind it, or
+ * a stub in front of a device that works.
+ *
+ * Arduino is detected from its includes; MicroPython from its import
+ * forms. `from network import WLAN` is listed because omitting it left
+ * hasWifi false for a sketch that genuinely uses WiFi, and the board
+ * then hung for ~26s on a peripheral that was never attached.
+ */
+export function sketchUsesWifi(files: Array<{ content: string }>): boolean {
+  return files.some(
+    (f) =>
+      f.content.includes('#include <WiFi.h>') ||
+      f.content.includes('#include <esp_wifi.h>') ||
+      f.content.includes('#include "WiFi.h"') ||
+      f.content.includes('WiFi.begin(') ||
+      /import\s+network\b/.test(f.content) ||
+      /from\s+network\s+import\b/.test(f.content) ||
+      /network\.WLAN/.test(f.content),
+  );
 }
 
 function isRiscVEsp32Kind(kind: BoardKind): boolean {
@@ -1262,6 +1320,16 @@ const { append: appendSerial } = createSerialBatcher((perBoard) => {
     return { boards, serialOutput: globalOut };
   });
 });
+
+/**
+ * Pro overlay seam: append bytes coming from a REAL board's UART (Web
+ * Serial hardware monitor) into a board's serial output. Goes through the
+ * same per-frame batcher as simulator bytes, so the SerialMonitor needs no
+ * changes and hardware chatter cannot trigger the per-byte set() storm.
+ */
+export function appendHardwareSerial(boardId: string, chunk: string): void {
+  appendSerial(boardId, chunk);
+}
 
 // ── Store ─────────────────────────────────────────────────────────────────
 export const useSimulatorStore = create<SimulatorState>((set, get) => {
@@ -1601,6 +1669,19 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         }
       }
 
+      // Arduino is the default language everywhere EXCEPT on a board that has
+      // no FQBN at all: the ESP32-C5 kits have no arduino-esp32 core, so a
+      // board seeded into 'arduino' can never compile and the toolbar's
+      // language select (which hides the Arduino option for them) would show
+      // a value it does not carry. Seed those into a mode they can run.
+      const seededLanguage: LanguageMode = BOARD_KIND_FQBN[boardKind]
+        ? 'arduino'
+        : BOARD_SUPPORTS_MICROPYTHON.has(boardKind)
+          ? 'micropython'
+          : BOARD_SUPPORTS_ESPIDF.has(boardKind)
+            ? 'espidf'
+            : 'arduino';
+
       const newBoard: BoardInstance = {
         id,
         boardKind,
@@ -1612,7 +1693,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         serialBaudRate: 0,
         serialMonitorOpen: false,
         activeFileGroupId: `group-${id}`,
-        languageMode: 'arduino',
+        languageMode: seededLanguage,
       };
 
       set((s) => {
@@ -1638,8 +1719,24 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
           simulator: simulatorMap.get(nextActive) ?? s.simulator,
         };
       });
-      // Create the editor file group for this board
-      useEditorStore.getState().createFileGroup(`group-${id}`);
+      // Create the editor file group for this board. A board that ships its
+      // own seed code (vendor library boards: M5Stack, UNIHIKER, ...) gets it
+      // here — the editor's family default is an LED_BUILTIN blink / an
+      // RPi.GPIO script, neither of which runs on such a board, so the very
+      // first Run on a freshly placed board would fail. QEMU-Linux boards seed
+      // their guest script ('python'); everything else starts in Arduino mode.
+      const seedMode = isPiBoardKind(boardKind) ? 'python' : 'arduino';
+      useEditorStore
+        .getState()
+        .createFileGroup(`group-${id}`, getBoardSeedFiles(boardKind, seedMode));
+      // The seed sketch includes the board's vendor library, so declare it in
+      // the board's manifest (= the compile resolution scope) right away.
+      const seedLibs = getProBoard(boardKind)?.defaultLibraries;
+      if (seedLibs?.length) {
+        set((s) => ({
+          boards: s.boards.map((b) => (b.id === id ? { ...b, libraries: [...seedLibs] } : b)),
+        }));
+      }
       // If this board is now the active one (it's the first board, or the
       // previously-active board was removed), point the editor at its file
       // group too. The canvas board picker calls addBoard directly WITHOUT
@@ -1893,9 +1990,15 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         }
       }
 
+      // Remember what this program was built from, so the Flash dialog can
+      // tell a fresh build from one the user has edited past.
+      const compiledSourceHash = fingerprintSources(
+        board,
+        useEditorStore.getState().getGroupFiles(board.activeFileGroupId),
+      );
       set((s) => {
         const boards = s.boards.map((b) =>
-          b.id === boardId ? { ...b, compiledProgram: program } : b,
+          b.id === boardId ? { ...b, compiledProgram: program, compiledSourceHash } : b,
         );
         const isActive = s.activeBoardId === boardId;
         return {
@@ -1924,33 +2027,78 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         const b64 = uint8ArrayToBase64(padToFlashSize(firmware, board.boardKind));
         esp32Bridge.loadFirmware(b64);
 
-        // Queue code injection for after REPL boots. Multi-file projects:
-        // every .py file other than the entry point gets materialized to the
-        // MicroPython filesystem (via a prelude executed inside the same raw
-        // REPL paste) before main.py runs, so `import mylib` resolves.
-        // Without this, ESP32 projects with helper modules crashed at runtime
-        // with ModuleNotFoundError.
+        // Queue the project for after the REPL boots. Multi-file projects:
+        // every .py file other than the entry point is materialized onto the
+        // MicroPython filesystem before main runs, so `import mylib` resolves.
+        //
+        // They travel as FILES, not as source inlined into the program. Inlining
+        // is what issue #219 was: a 36 KB library became one Python string
+        // literal, so compiling it asked a PSRAM-less ESP32 for one contiguous
+        // 36 KB allocation and the board answered MemoryError. The bridge now
+        // writes each one in bounded steps — see simulation/micropythonSession.ts.
         const mainFile = files.find((f) => f.name === 'main.py') ?? files[0];
         if (mainFile) {
           const auxFiles = files.filter(
             (f) => f !== mainFile && f.name.endsWith('.py'),
           );
-          const preludeLines = auxFiles.map((f) => {
-            // JSON.stringify produces an ASCII-safe Python-compatible
-            // string literal (both languages share the same \n \r \t \" \\
-            // escapes, and JSON does not emit any escape Python rejects).
-            const lit = JSON.stringify(f.content);
-            const path = JSON.stringify(f.name);
-            return `with open(${path},'w') as _f:\n    _f.write(${lit})`;
-          });
+
+          // Does this run get a real, WORKING network driver? Two gates:
+          //  - the sketch must want WiFi (must match what startBoard()
+          //    decides, because that is what attaches the NIC device —
+          //    see sketchUsesWifi()), and
+          //  - the backend must be able to serve MicroPython's esp_wifi
+          //    blob. The QEMU worker can (issue #262 was reproduced and
+          //    fixed there). An overlay bridge that routes MicroPython to
+          //    an in-browser engine declares `micropythonWifiSupported =
+          //    false` until the engine models what that blob touches —
+          //    handing it the real driver today stalls esp_wifi_init with
+          //    no output at all, which is strictly worse than the stub.
+          //    Absent property (plain OSS bridge) means supported.
+          const bridgeMpyWifi = (
+            esp32Bridge as { micropythonWifiSupported?: boolean }
+          ).micropythonWifiSupported;
+          // Does this run get the REAL network driver? Only one thing decides
+          // it now: whether the backend behind this board models the radio.
+          //
+          // It used to also require the sketch to look like a WiFi sketch,
+          // because without a NIC `network.WLAN(STA_IF)` hangs forever on
+          // status bits nothing sets, and the stub was the lesser evil. The
+          // QEMU worker attaches the radio unconditionally since #260 — the
+          // chip has one whether or not the sketch uses it — so that condition
+          // no longer describes anything real, and keeping it would put the
+          // stub in front of a working device whenever the scan misread the
+          // sketch. That is the #262 failure, from the other direction.
+          //
+          // Known gap, not introduced here: QEMU's S3 machine models no radio
+          // at all, so a MicroPython sketch that calls WLAN() on an S3 through
+          // the backend waits on a device that is not there. That was already
+          // true when this was gated on the sketch — such a sketch set hasWifi
+          // and took the real driver either way. A sketch that never imports
+          // network is unaffected, which is why this widening is safe.
+          const wifiOn = bridgeMpyWifi !== false;
 
           // WiFi compat shim: replace `network`, `ntptime`, `urequests`
-          // with smart stubs BEFORE user main.py imports them. The
-          // picsimlab QEMU fork's esp32_wifi NIC emulation is sufficient
-          // for Arduino's lightweight WiFi.h but not for MicroPython's
-          // full esp_wifi_init path — calling `network.WLAN(STA_IF)`
-          // hangs forever waiting for peripheral status bits QEMU never
-          // sets, tripping the FreeRTOS task watchdog after ~26s.
+          // with smart stubs BEFORE user main.py imports them.
+          //
+          // `network` is stubbed ONLY when no NIC is attached. With one
+          // attached the real driver works (DHCP on 192.168.4.x, DNS,
+          // outbound TCP), and shadowing it made MicroPython WiFi look
+          // permanently broken while Arduino worked on the same board:
+          // scan() returned [], ifconfig() reported QEMU's SLIRP
+          // defaults, and sockets raised EHOSTUNREACH — issue #262.
+          //
+          // Without a NIC the stub still earns its place. The picsimlab
+          // QEMU fork's esp32_wifi emulation is enough for Arduino's
+          // lightweight WiFi.h but not for MicroPython's full
+          // esp_wifi_init path: `network.WLAN(STA_IF)` then hangs
+          // forever waiting for peripheral status bits QEMU never sets,
+          // tripping the FreeRTOS task watchdog after ~26s. Deleting the
+          // stub outright would trade a working-but-fake network for a
+          // hung board, so it stays as the offline fallback.
+          //
+          // ntptime and urequests are stubbed unconditionally: they back
+          // the gallery examples' clocks and weather panels, which have
+          // no emulated internet to reach either way.
           //
           // Smart stub behaviour (so examples like smart-ui-eyes WORK
           // end-to-end, not just degrade gracefully):
@@ -1967,14 +2115,59 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
           //                        useful data instead of "API Error".
           const now = new Date();
           const fakeWeatherCity = 'Simulator City';
-          const wifiStub = [
-            'import sys',
-            'import json as _json',
-            'try:',
-            '    import machine as _machine',
-            'except ImportError:',
-            '    _machine = None',
-            '',
+          // With a NIC attached: the REAL driver, behind a thin proxy that
+          // rewrites unknown SSIDs to the emulated AP. The emulated radio
+          // (QEMU esp32_wifi_ap.c and the esp32*js engines both) announces
+          // exactly four networks; a sketch that connects to its author's
+          // home SSID would scan, find nothing, and busy-wait on
+          // isconnected() forever — which is what every gallery example
+          // that ships a made-up SSID would do. Redirecting to
+          // Velxio-GUEST keeps those sketches on the REAL stack (DHCP on
+          // 192.168.4.x, DNS, outbound TCP through SLIRP) instead of
+          // reviving the fake stub for them. Known SSIDs pass through
+          // untouched, and the rewrite is announced on serial so nobody
+          // debugs a connection they didn't make.
+          const networkStub = wifiOn ? [
+            'import network as _vlx_net',
+            'import time as _vlx_time',
+            `_VLX_SSIDS = (${EMULATED_WIFI_SSIDS.map((s) => JSON.stringify(s)).join(', ')})`,
+            'class _VlxWLAN:',
+            '    def __init__(self, *a, **k):',
+            '        self._w = _vlx_net.WLAN(*a, **k)',
+            '    def connect(self, ssid=None, key=None, **kw):',
+            '        if ssid is not None and ssid not in _VLX_SSIDS:',
+            '            print("[velxio] SSID %r is not part of the emulated network; connecting to \'Velxio-GUEST\' instead" % ssid)',
+            '            ssid, key = "Velxio-GUEST", ""',
+            '        if ssid is None:',
+            '            return self._w.connect()',
+            '        return self._w.connect(ssid, key, **kw)',
+            // The sleepy poll pair. The canonical connect idiom is
+            // `while not wlan.isconnected(): pass` — a pure Python busy-wait.
+            // The emulated CPU only fast-forwards through WAITI idles, so a
+            // busy-wait pins the sim at real execution speed (~2% of the
+            // chip) and the handshake that costs ~1.5M instructions under a
+            // sleepy loop costs ~194M under a busy one — measured; it reads
+            // as "WiFi hangs". Sleeping 20ms per unanswered poll turns the
+            // user's busy loop into an idle loop without touching their code.
+            '    def isconnected(self):',
+            '        ok = self._w.isconnected()',
+            '        if not ok:',
+            '            _vlx_time.sleep_ms(20)',
+            '        return ok',
+            '    def status(self, *a):',
+            '        st = self._w.status(*a)',
+            '        _vlx_time.sleep_ms(20)',
+            '        return st',
+            '    def __getattr__(self, n):',
+            '        return getattr(self._w, n)',
+            'class _VlxNetwork:',
+            '    STA_IF = _vlx_net.STA_IF',
+            '    AP_IF = _vlx_net.AP_IF',
+            '    WLAN = _VlxWLAN',
+            '    def __getattr__(self, n):',
+            '        return getattr(_vlx_net, n)',
+            'sys.modules["network"] = _VlxNetwork()',
+          ] : [
             'class _StubWLAN:',
             '    def __init__(self, *a, **k):',
             '        self._calls = 0',
@@ -1993,6 +2186,17 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
             '    AP_IF = 1',
             '    WLAN = _StubWLAN',
             'sys.modules["network"] = _StubNetwork()',
+          ];
+
+          const wifiStub = [
+            'import sys',
+            'import json as _json',
+            'try:',
+            '    import machine as _machine',
+            'except ImportError:',
+            '    _machine = None',
+            '',
+            ...networkStub,
             '',
             '# ntptime: pre-load RTC with host UTC so localtime() works.',
             `_VLX_BOOT_UTC = (${now.getUTCFullYear()}, ${now.getUTCMonth() + 1}, ${now.getUTCDate()}, ${now.getUTCDay() || 7}, ${now.getUTCHours()}, ${now.getUTCMinutes()}, ${now.getUTCSeconds()}, 0)`,
@@ -2039,9 +2243,10 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
             'sys.modules["requests"] = _StubURequests()',
           ].join('\n');
 
-          const prelude = wifiStub + '\n' +
-            (preludeLines.length ? preludeLines.join('\n') + '\n' : '');
-          esp32Bridge.setPendingMicroPythonCode(prelude + mainFile.content);
+          esp32Bridge.setPendingMicroPythonProgram({
+            files: auxFiles.map((f) => ({ name: f.name, content: f.content })),
+            main: wifiStub + '\n' + mainFile.content,
+          });
         }
       } else {
         // Browser-side firmware+filesystem path. Any simulator exposing
@@ -2089,17 +2294,32 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       // Stop any running simulation
       if (board.running) get().stopBoard(boardId);
 
-      // Clear compiled program since language changed
+      // Clear compiled program since language changed. hasWifi goes with
+      // it: it is a property of the compiled sketch, not of the board, and
+      // only arduino-cli sets it. Keeping the old value meant a board that
+      // had been compiled as Arduino carried that verdict into a later
+      // MicroPython run, where the source-scanning fallback never fires
+      // (it only runs when hasWifi is undefined) — so a MicroPython WiFi
+      // sketch on a reused board silently got no NIC at all (#262).
       set((s) => ({
         boards: s.boards.map((b) =>
-          b.id === boardId ? { ...b, languageMode: mode, compiledProgram: null } : b,
+          b.id === boardId
+            ? { ...b, languageMode: mode, compiledProgram: null, hasWifi: undefined }
+            : b,
         ),
       }));
 
-      // Replace file group with appropriate default files and activate it
+      // Replace file group with appropriate default files and activate it.
+      // A board's own seed for the target mode wins over the family default:
+      // the MicroPython fallback is a Pico `Pin(25)` blink, which is a dead
+      // pin on an M5Stack.
       const editorStore = useEditorStore.getState();
       editorStore.deleteFileGroup(board.activeFileGroupId);
-      editorStore.createFileGroup(board.activeFileGroupId, mode);
+      const modeSeed = getBoardSeedFiles(
+        board.boardKind,
+        mode === 'micropython' || mode === 'espidf' ? mode : 'arduino',
+      );
+      editorStore.createFileGroup(board.activeFileGroupId, modeSeed ?? mode);
       editorStore.setActiveGroup(board.activeFileGroupId);
     },
 
@@ -2176,58 +2396,39 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         // has them ready before the firmware starts executing.
         const esp32Bridge = getEsp32Bridge(boardId);
         if (esp32Bridge) {
-          const { components, wires } = get();
+          const traceState = get();
+          const { components } = traceState;
           const sensors: Array<Record<string, unknown>> = [];
           for (const comp of components) {
             const sensorDef = SENSOR_COMPONENT_MAP[comp.metadataId];
             if (!sensorDef) continue;
-            // Find the wire connecting this component's data pin to the board
-            for (const w of wires) {
-              const compEndpoint =
-                w.start.componentId === comp.id && w.start.pinName === sensorDef.dataPinName
-                  ? w.start
-                  : w.end.componentId === comp.id && w.end.pinName === sensorDef.dataPinName
-                    ? w.end
-                    : null;
-              if (!compEndpoint) continue;
-              const boardEndpoint = compEndpoint === w.start ? w.end : w.start;
-              if (!isBoardComponent(boardEndpoint.componentId)) continue;
-              // Resolve GPIO pin number
-              const gpioPin = boardPinToNumber(board.boardKind, boardEndpoint.pinName);
-              if (gpioPin === null || gpioPin < 0) continue;
-              // Collect sensor properties from the component
-              const props: Record<string, unknown> = {
-                sensor_type: sensorDef.sensorType,
-                pin: gpioPin,
-              };
-              for (const key of sensorDef.propertyKeys) {
-                const val = comp.properties[key];
-                if (val !== undefined) props[key] = typeof val === 'string' ? parseFloat(val) : val;
-              }
-              // Resolve extra pins (e.g. echo_pin for HC-SR04) from wires
-              if (sensorDef.extraPins) {
-                for (const [propName, compPinName] of Object.entries(sensorDef.extraPins)) {
-                  for (const ew of wires) {
-                    const epComp =
-                      ew.start.componentId === comp.id && ew.start.pinName === compPinName
-                        ? ew.start
-                        : ew.end.componentId === comp.id && ew.end.pinName === compPinName
-                          ? ew.end
-                          : null;
-                    if (!epComp) continue;
-                    const epBoard = epComp === ew.start ? ew.end : ew.start;
-                    if (!isBoardComponent(epBoard.componentId)) continue;
-                    const extraGpio = boardPinToNumber(board.boardKind, epBoard.pinName);
-                    if (extraGpio !== null && extraGpio >= 0) {
-                      props[propName] = extraGpio;
-                    }
-                    break;
-                  }
-                }
-              }
-              sensors.push(props);
-              break; // only one data pin per sensor
+            // Resolved with the SAME wire walk the parts use, not by reading
+            // one wire's far end. A sensor pin reaches the board through a
+            // breadboard strip or a level-shifting divider just as truly as
+            // through a jumper landing on the pad, and this entry REPLACES the
+            // one the part registered (setSensors is keyed by pin) — so every
+            // pin this fails to resolve is silently lost. That is what left an
+            // HC-SR04 behind a 1k/2k2 divider with no echo pin at all: the
+            // backend fell back to TRIG+1 and pulsed a GPIO nobody was reading.
+            const gpioPin = traceBoardGpio(traceState, comp.id, sensorDef.dataPinName, boardId);
+            if (gpioPin === null) continue;
+            // Collect sensor properties from the component
+            const props: Record<string, unknown> = {
+              sensor_type: sensorDef.sensorType,
+              pin: gpioPin,
+            };
+            for (const key of sensorDef.propertyKeys) {
+              const val = comp.properties[key];
+              if (val !== undefined) props[key] = typeof val === 'string' ? parseFloat(val) : val;
             }
+            // Extra pins (e.g. echo_pin for HC-SR04) resolve the same way
+            if (sensorDef.extraPins) {
+              for (const [propName, compPinName] of Object.entries(sensorDef.extraPins)) {
+                const extraGpio = traceBoardGpio(traceState, comp.id, compPinName, boardId);
+                if (extraGpio !== null) props[propName] = extraGpio;
+              }
+            }
+            sensors.push(props);
           }
 
           // Pre-register I2C sensors (virtual pin = 200 + i2c_addr, no wire resolution needed)
@@ -2275,27 +2476,18 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
           }
           esp32Bridge.setSensors(sensors);
 
-          // Use WiFi flag set by the compiler (most reliable — avoids stale file group issues).
-          // Fall back to scanning the active file group if the flag hasn't been set yet.
-          let hasWifi = board.hasWifi;
-          if (hasWifi === undefined) {
-            const editorState = useEditorStore.getState();
-            const rawFiles = editorState.fileGroups[board.activeFileGroupId];
-            const boardFiles = rawFiles && rawFiles.length > 0 ? rawFiles : editorState.files;
-            hasWifi = boardFiles.some(
-              (f) =>
-                f.content.includes('#include <WiFi.h>') ||
-                f.content.includes('#include <esp_wifi.h>') ||
-                f.content.includes('#include "WiFi.h"') ||
-                f.content.includes('WiFi.begin(') ||
-                // MicroPython patterns — without these the WiFi NIC is never
-                // passed to QEMU, and `network.WLAN(STA_IF)` hangs forever
-                // trying to init a peripheral that doesn't exist, eventually
-                // tripping the FreeRTOS task watchdog (TG1WDT_SYS_RESET).
-                /import\s+network\b/.test(f.content) ||
-                /network\.WLAN/.test(f.content),
-            );
-          }
+          // Either signal saying "WiFi" is enough. The compiler's flag comes
+          // from the build that actually ran, which is why it is consulted at
+          // all; the source scan reads every file in the group, which the
+          // compiler's Arduino path did not until #260. Neither is authoritative
+          // alone, and an OR cannot be talked out of a true by a stale or
+          // narrower false — which is the direction that used to hurt.
+          const editorState = useEditorStore.getState();
+          const rawFiles = editorState.fileGroups[board.activeFileGroupId];
+          const boardFiles = rawFiles && rawFiles.length > 0 ? rawFiles : editorState.files;
+          // Shared with loadMicroPythonProgram's stub decision so the two
+          // cannot disagree about whether this sketch wants WiFi.
+          const hasWifi = (board.hasWifi ?? false) || sketchUsesWifi(boardFiles);
           esp32Bridge.wifiEnabled = hasWifi;
 
           // microSD — if a card is on the canvas, build a FAT16 image (project
@@ -2392,12 +2584,22 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
         // Notify an attached PIO peripheral (the pro CYW43 WiFi co-processor)
         // that the simulation started, with the board's source files so it can
         // detect WiFi usage and open its network bridge. No-op in OSS.
-        if (rpSim instanceof RP2040Simulator) {
+        //
+        // Overlay boards carry the same peripheral: the Pimoroni Pico Plus 2 W
+        // and Badger 2350 have the RM2 (the same CYW43439 die) on an RP2350
+        // simulator, which is NOT an RP2040Simulator. Without this branch they
+        // associated to the local virtual AP but never got the network bridge
+        // opened, so real internet and the Pro custom-AP config never applied
+        // — WiFi that reached an IP and could reach nothing.
+        const pioSim = rpSim as
+          | (typeof rpSim & { getPioPeripheral?: () => { onSimulationStart?: (f: unknown[]) => void } | null })
+          | null;
+        if (typeof pioSim?.getPioPeripheral === 'function') {
           const editorState = useEditorStore.getState();
           const rawFiles = editorState.fileGroups[board.activeFileGroupId];
           const boardFiles =
             rawFiles && rawFiles.length > 0 ? rawFiles : editorState.files;
-          rpSim.getPioPeripheral()?.onSimulationStart?.(boardFiles);
+          pioSim.getPioPeripheral()?.onSimulationStart?.(boardFiles);
         }
       }
 
@@ -3641,6 +3843,13 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
     serialWriteToBoard: (boardId: string, text: string) => {
       const board = get().boards.find((b) => b.id === boardId);
       if (!board) return;
+      // A connected hardware serial monitor (pro overlay) takes the input
+      // instead of the board's simulator.
+      const hardwareTx = getSerialTxInterceptor(boardId);
+      if (hardwareTx) {
+        hardwareTx(text);
+        return;
+      }
       if (isPiBoardKind(board.boardKind)) {
         const bridge = getBoardBridge(boardId);
         if (bridge) {

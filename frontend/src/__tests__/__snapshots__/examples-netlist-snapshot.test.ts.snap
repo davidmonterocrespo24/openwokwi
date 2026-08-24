@@ -2,66 +2,189 @@
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-aqi-esp 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_aqi-rpm n7 n3 220
+V_aqi-pmled_sense n3 aqi-pmled_sense_mid DC 0
+D_aqi-pmled aqi-pmled_sense_mid 0 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+.model LED_RED D(Is=1e-20 N=1.7)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-auto-night-light-using-ldr-esp32-plus-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_night-ldr_ldr vcc_rail n1 111111.11111111111
+R_night-ldr_pull n1 0 100000
+R_night-r1 n0 n2 220
+V_night-led1_sense n2 night-led1_sense_mid DC 0
+D_night-led1 night-led1_sense_mid 0 LED_YELLOW
+R_autopull_n0 n0 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_YELLOW D(Is=1e-21 N=1.8)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-battery-monitor-with-blynk-iot 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_bat-pot1_top vcc_rail n0 2179.863147605083
+R_bat-pot1_bot n0 0 7820.136852394917
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-bluetooth-based-wireless-led-control-system 1`] = `
 "* Velxio circuit
+R_ble-r1 n0 n2 220
+V_ble-led1_sense n2 ble-led1_sense_mid DC 0
+D_ble-led1 ble-led1_sense_mid n1 LED_BLUE
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_BLUE D(Is=1e-28 N=2.0)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-blynk-based-iot-relay-control-micropython 1`] = `
 "* Velxio circuit
+R_pblynk-rly_coil n1 pblynk-rly_coilmid 1000
+L_pblynk-rly_coil pblynk-rly_coilmid n3 20m
+S_pblynk-rly_no n0 n4 n1 n3 RELAY_SW
+D_pblynk-rly_fly n3 n1 D1N4148
+R_pblynk-rlamp n4 n2 220
+V_pblynk-lamp_sense n2 pblynk-lamp_sense_mid DC 0
+D_pblynk-lamp pblynk-lamp_sense_mid n3 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+.model RELAY_SW SW(Vt=1.9799999999999998 Vh=0.49499999999999994 Ron=0.05 Roff=1G)
+.model D1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n Bv=100 Ibv=0.1u)
+.model LED_RED D(Is=1e-20 N=1.7)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-blynk-controlled-dc-brushless-fan 1`] = `
 "* Velxio circuit
+R_fan-rly_coil n0 fan-rly_coilmid 1000
+L_fan-rly_coil fan-rly_coilmid n3 20m
+S_fan-rly_no n1 n4 n0 n3 RELAY_SW
+D_fan-rly_fly n3 n0 D1N4148
+R_fan-rlamp n4 n2 220
+V_fan-lamp_sense n2 fan-lamp_sense_mid DC 0
+D_fan-lamp fan-lamp_sense_mid n3 LED_BLUE
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+.model RELAY_SW SW(Vt=1.9799999999999998 Vh=0.49499999999999994 Ron=0.05 Roff=1G)
+.model D1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n Bv=100 Ibv=0.1u)
+.model LED_BLUE D(Is=1e-28 N=2.0)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-clap-toggle-switch-using-esp32-and-digital-sound-sensor-micropython 1`] = `
 "* Velxio circuit
+R_clap-btn1_sw n3 n2 1000000000
+R_clap-pull1 n1 n3 10000
+R_clap-r1 n0 n4 220
+V_clap-led1_sense n4 clap-led1_sense_mid DC 0
+D_clap-led1 clap-led1_sense_mid n1 LED_YELLOW
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+.model LED_YELLOW D(Is=1e-21 N=1.8)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-dc-motor-speed-control-web-slider 1`] = `
 "* Velxio circuit
+R_dcm-r1 n1 n4 220
+V_dcm-led1_sense n4 dcm-led1_sense_mid DC 0
+D_dcm-led1 dcm-led1_sense_mid n3 LED_RED
+R_dcm-r2 n0 n5 220
+V_dcm-led2_sense n5 dcm-led2_sense_mid DC 0
+D_dcm-led2 dcm-led2_sense_mid n3 LED_GREEN
+R_dcm-r3 n2 n6 220
+V_dcm-led3_sense n6 dcm-led3_sense_mid DC 0
+D_dcm-led3 dcm-led3_sense_mid n3 LED_BLUE
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+.model LED_RED D(Is=1e-20 N=1.7)
+.model LED_GREEN D(Is=1e-22 N=1.9)
+.model LED_BLUE D(Is=1e-28 N=2.0)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-dht11-web-server-using-esp32-and-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-dimmer-led-using-potentiometer-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_dim-pot1_top vcc_rail n1 4995.112414467253
+R_dim-pot1_bot n1 0 5004.887585532747
+R_dim-r1 n0 n2 220
+V_dim-led1_sense n2 dim-led1_sense_mid DC 0
+D_dim-led1 dim-led1_sense_mid 0 LED_YELLOW
+R_autopull_n0 n0 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_YELLOW D(Is=1e-21 N=1.8)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-dual-ir-entry-exit-detector-with-telegram-alerts 1`] = `
 "* Velxio circuit
+R_ir2-btn1_sw n4 n3 1000000000
+R_ir2-pull1 n2 n4 10000
+R_ir2-btn2_sw n5 n3 1000000000
+R_ir2-pull2 n2 n5 10000
+R_ir2-r1 n1 n6 220
+V_ir2-led1_sense n6 ir2-led1_sense_mid DC 0
+D_ir2-led1 ir2-led1_sense_mid n3 LED_RED
+R_ir2-r2 n0 n7 220
+V_ir2-led2_sense n7 ir2-led2_sense_mid DC 0
+D_ir2-led2 ir2-led2_sense_mid n3 LED_GREEN
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+.model LED_RED D(Is=1e-20 N=1.7)
+.model LED_GREEN D(Is=1e-22 N=1.9)
 .op
 .end"
 `;
@@ -74,6 +197,13 @@ exports[`netlist snapshot — 100-days (49 examples) > 100d-eeprom-simulation-us
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-esp32-ble-led-control 1`] = `
 "* Velxio circuit
+R_bleled-r1 n0 n2 220
+V_bleled-led1_sense n2 bleled-led1_sense_mid DC 0
+D_bleled-led1 bleled-led1_sense_mid n1 LED_BLUE
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_BLUE D(Is=1e-28 N=2.0)
 .op
 .end"
 `;
@@ -86,14 +216,138 @@ exports[`netlist snapshot — 100-days (49 examples) > 100d-esp32-hotspot-access
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-esp32-ir-sensor-telegram-alert-micropython 1`] = `
 "* Velxio circuit
+R_irtg-btn1_sw n2 n1 1000000000
+R_irtg-pull1 n0 n2 10000
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-esp32-oled-smart-ui-eyes-animation-time-and-weather-micropython 1`] = `
 "* Velxio circuit
-R_btn-next_sw n4 n0 1000000000
-R_btn-sel_sw n4 n1 1000000000
+V_VCC_RAIL vcc_rail 0 DC 5
+R_eyes-btn-next_sw n0 vcc_rail 1000000000
+R_eyes-btn-sel_sw n3 vcc_rail 1000000000
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-flask-server-based-led-control-using-micropython 1`] = `
+"* Velxio circuit
+R_flask-r1 n0 n2 220
+V_flask-led1_sense n2 flask-led1_sense_mid DC 0
+D_flask-led1 flask-led1_sense_mid n1 LED_GREEN
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_GREEN D(Is=1e-22 N=1.9)
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-atmospheric-monitoring-system-using-esp32-wowki-and-blynk 1`] = `
+"* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-based-dsm-smart-metering 1`] = `
+"* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_dsm-pot1_top vcc_rail n3 4995.112414467253
+R_dsm-pot1_bot n3 0 5004.887585532747
+R_dsm-pot2_top vcc_rail n4 4995.112414467253
+R_dsm-pot2_bot n4 0 5004.887585532747
+R_dsm-pot3_top vcc_rail n5 4995.112414467253
+R_dsm-pot3_bot n5 0 5004.887585532747
+R_dsm-r1 n1 n6 220
+V_dsm-led1_sense n6 dsm-led1_sense_mid DC 0
+D_dsm-led1 dsm-led1_sense_mid 0 LED_RED
+R_dsm-r2 n2 n7 220
+V_dsm-led2_sense n7 dsm-led2_sense_mid DC 0
+D_dsm-led2 dsm-led2_sense_mid 0 LED_RED
+R_dsm-r3 n0 n8 220
+V_dsm-led3_sense n8 dsm-led3_sense_mid DC 0
+D_dsm-led3 dsm-led3_sense_mid 0 LED_BLUE
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
+.model LED_RED D(Is=1e-20 N=1.7)
+.model LED_BLUE D(Is=1e-28 N=2.0)
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-environment-monitoring-with-anomaly-detection 1`] = `
+"* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-relay-control-web-server-raspberry-pi-pico-2w 1`] = `
+"* Velxio circuit
+R_prelay-rly_coil n0 prelay-rly_coilmid 1000
+L_prelay-rly_coil prelay-rly_coilmid n3 20m
+S_prelay-rly_no n0 n4 n0 n3 RELAY_SW
+D_prelay-rly_fly n3 n0 D1N4148
+R_prelay-rlamp n4 n2 220
+V_prelay-lamp_sense n2 prelay-lamp_sense_mid DC 0
+D_prelay-lamp prelay-lamp_sense_mid n1 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+.model RELAY_SW SW(Vt=1.9799999999999998 Vh=0.49499999999999994 Ron=0.05 Roff=1G)
+.model D1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n Bv=100 Ibv=0.1u)
+.model LED_RED D(Is=1e-20 N=1.7)
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-smart-irrigation-system 1`] = `
+"* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_irr-pot1_top vcc_rail n1 7067.448680351907
+R_irr-pot1_bot n1 0 2932.551319648094
+R_irr-rly_coil n0 irr-rly_coilmid 1000
+L_irr-rly_coil irr-rly_coilmid 0 20m
+S_irr-rly_no vcc_rail n3 n0 0 RELAY_SW
+D_irr-rly_fly 0 n0 D1N4148
+R_irr-rlamp n3 n2 220
+V_irr-lamp_sense n2 irr-lamp_sense_mid DC 0
+D_irr-lamp irr-lamp_sense_mid 0 LED_BLUE
+.model RELAY_SW SW(Vt=1.9799999999999998 Vh=0.49499999999999994 Ron=0.05 Roff=1G)
+.model D1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n Bv=100 Ibv=0.1u)
+.model LED_BLUE D(Is=1e-28 N=2.0)
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-joystick-controlled-servo 1`] = `
+"* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+.op
+.end"
+`;
+
+exports[`netlist snapshot — 100-days (49 examples) > 100d-joystick-direction-display-with-oled 1`] = `
+"* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
 R_autopull_n0 n0 0 100Meg
 R_autopull_n1 n1 0 100Meg
 R_autopull_n2 n2 0 100Meg
@@ -103,74 +357,36 @@ R_autopull_n4 n4 0 100Meg
 .end"
 `;
 
-exports[`netlist snapshot — 100-days (49 examples) > 100d-flask-server-based-led-control-using-micropython 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-atmospheric-monitoring-system-using-esp32-wowki-and-blynk 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-based-dsm-smart-metering 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-environment-monitoring-with-anomaly-detection 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-relay-control-web-server-raspberry-pi-pico-2w 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-iot-smart-irrigation-system 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-joystick-controlled-servo 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
-exports[`netlist snapshot — 100-days (49 examples) > 100d-joystick-direction-display-with-oled 1`] = `
-"* Velxio circuit
-.op
-.end"
-`;
-
 exports[`netlist snapshot — 100-days (49 examples) > 100d-micropython-watch 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-mq-135-gas-sensor-with-esp32-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-mq4-gas-leak-detection-system-using-esp32-and-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-mq7-co-gas-detection-esp32 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
 .op
 .end"
 `;
@@ -183,120 +399,310 @@ exports[`netlist snapshot — 100-days (49 examples) > 100d-ntp-synchronized-dig
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-ota-update-pico2w 1`] = `
 "* Velxio circuit
+R_ota-r1 n0 n2 220
+V_ota-led1_sense n2 ota-led1_sense_mid DC 0
+D_ota-led1 ota-led1_sense_mid n1 LED_GREEN
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_GREEN D(Is=1e-22 N=1.9)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-password-lock-system-using-esp32 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_lock-rl5 n11 n13 220
+V_lock-led5_sense n13 lock-led5_sense_mid DC 0
+D_lock-led5 lock-led5_sense_mid 0 LED_GREEN
+R_lock-rl4 n10 n12 220
+V_lock-led4_sense n12 lock-led4_sense_mid DC 0
+D_lock-led4 lock-led4_sense_mid 0 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
+R_autopull_n9 n9 0 100Meg
+R_autopull_n10 n10 0 100Meg
+R_autopull_n11 n11 0 100Meg
+R_autopull_n12 n12 0 100Meg
+R_autopull_n13 n13 0 100Meg
+.model LED_GREEN D(Is=1e-22 N=1.9)
+.model LED_RED D(Is=1e-20 N=1.7)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-pico-2-w-dht11-http-csv-logger 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-pico-w-async-led-control-micropython 1`] = `
 "* Velxio circuit
+R_pasync-r1 n0 n2 220
+V_pasync-led1_sense n2 pasync-led1_sense_mid DC 0
+D_pasync-led1 pasync-led1_sense_mid n1 LED_GREEN
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_GREEN D(Is=1e-22 N=1.9)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-pico-w-web-servo-controller 1`] = `
 "* Velxio circuit
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-pir-motion-detector-using-raspberry-pi-pico-2w-and-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_ppir-r1 n0 n2 220
+V_ppir-led1_sense n2 ppir-led1_sense_mid DC 0
+D_ppir-led1 ppir-led1_sense_mid 0 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_RED D(Is=1e-20 N=1.7)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-potentiometer-visualizer 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_potviz-pot1_top vcc_rail n10 4995.112414467253
+R_potviz-pot1_bot n10 0 5004.887585532747
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
+R_autopull_n9 n9 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-pulse-monitor 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-raspberry-pi-pico-2-w-thingsboard-iot 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-rgb-color-mixer-using-potentiometers-esp32-plus-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_rgb-r0 n0 n6 220
+R_rgb-r1 n1 n7 220
+R_rgb-r2 n2 n8 220
+R_rgb-pot1_top vcc_rail n3 4995.112414467253
+R_rgb-pot1_bot n3 0 5004.887585532747
+R_rgb-pot2_top vcc_rail n4 4995.112414467253
+R_rgb-pot2_bot n4 0 5004.887585532747
+R_rgb-pot3_top vcc_rail n5 4995.112414467253
+R_rgb-pot3_bot n5 0 5004.887585532747
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-servo-motor-control-with-raspberry-pi-pico-2-w-micropython 1`] = `
 "* Velxio circuit
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-single-digit-seven-segment-display-with-raspberry-pi-pico-micropython 1`] = `
 "* Velxio circuit
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-smart-home-automation-system 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_home-r16 n1 n6 220
+V_home-led16_sense n6 home-led16_sense_mid DC 0
+D_home-led16 home-led16_sense_mid 0 LED_RED
+R_home-r5 n4 n8 220
+V_home-led5_sense n8 home-led5_sense_mid DC 0
+D_home-led5 home-led5_sense_mid 0 LED_GREEN
+R_home-r4 n3 n7 220
+V_home-led4_sense n7 home-led4_sense_mid DC 0
+D_home-led4 home-led4_sense_mid 0 LED_BLUE
+R_home-r0 n2 n5 220
+V_home-led0_sense n5 home-led0_sense_mid DC 0
+D_home-led0 home-led0_sense_mid 0 LED_YELLOW
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
+.model LED_RED D(Is=1e-20 N=1.7)
+.model LED_GREEN D(Is=1e-22 N=1.9)
+.model LED_BLUE D(Is=1e-28 N=2.0)
+.model LED_YELLOW D(Is=1e-21 N=1.8)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-smart-indoor-security-system 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-smart-iot-gas-monitoring-system 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-stepper-motor-control-using-esp32-and-a4988-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-temperature-based-led-indicator-micropython-esp32 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_tled-r1 n0 n4 220
+V_tled-led1_sense n4 tled-led1_sense_mid DC 0
+D_tled-led1 tled-led1_sense_mid 0 LED_GREEN
+R_tled-r2 n1 n5 220
+V_tled-led2_sense n5 tled-led2_sense_mid DC 0
+D_tled-led2 tled-led2_sense_mid 0 LED_YELLOW
+R_tled-r3 n2 n6 220
+V_tled-led3_sense n6 tled-led3_sense_mid DC 0
+D_tled-led3 tled-led3_sense_mid 0 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+.model LED_GREEN D(Is=1e-22 N=1.9)
+.model LED_YELLOW D(Is=1e-21 N=1.8)
+.model LED_RED D(Is=1e-20 N=1.7)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-ultrasonic-led-distance-indicator-esp32-micropython 1`] = `
 "* Velxio circuit
+V_VCC_RAIL vcc_rail 0 DC 5
+R_usd-r1 n0 n3 220
+V_usd-led1_sense n3 usd-led1_sense_mid DC 0
+D_usd-led1 usd-led1_sense_mid 0 LED_GREEN
+R_usd-r2 n1 n4 220
+V_usd-led2_sense n4 usd-led2_sense_mid DC 0
+D_usd-led2 usd-led2_sense_mid 0 LED_RED
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+.model LED_GREEN D(Is=1e-22 N=1.9)
+.model LED_RED D(Is=1e-20 N=1.7)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-websocket-led-control-using-raspberry-pi-pico-w 1`] = `
 "* Velxio circuit
+R_pws-r1 n0 n2 220
+V_pws-led1_sense n2 pws-led1_sense_mid DC 0
+D_pws-led1 pws-led1_sense_mid n1 LED_BLUE
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+.model LED_BLUE D(Is=1e-28 N=2.0)
 .op
 .end"
 `;
 
 exports[`netlist snapshot — 100-days (49 examples) > 100d-wi-fi-controlled-4wd-robot-car 1`] = `
 "* Velxio circuit
+R_autopull_n0 n0 0 100Meg
+R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
+R_autopull_n3 n3 0 100Meg
+R_autopull_n4 n4 0 100Meg
+R_autopull_n5 n5 0 100Meg
+R_autopull_n6 n6 0 100Meg
+R_autopull_n7 n7 0 100Meg
+R_autopull_n8 n8 0 100Meg
 .op
 .end"
 `;
@@ -1043,9 +1449,13 @@ D_led1 led1_sense_mid 0 LED_RED
 
 exports[`netlist snapshot — circuits (41 examples) > battery-voltage-monitor 1`] = `
 "* Velxio circuit
-R_r2 n0 n1 10000
+V_bat n0 bat_int DC 9
+R_bat_esr bat_int n2 1.5
+R_r1 n0 n1 20000
+R_r2 n1 n2 10000
 R_autopull_n0 n0 0 100Meg
 R_autopull_n1 n1 0 100Meg
+R_autopull_n2 n2 0 100Meg
 .op
 .end"
 `;
@@ -1084,12 +1494,12 @@ R_autopull_n8 n8 0 100Meg
 exports[`netlist snapshot — circuits (41 examples) > bjt-common-emitter 1`] = `
 "* Velxio circuit
 R_rb1 n0 n2 47000
-R_rb2 n2 0 10000
+R_rb2 n2 0 15000
 R_rc n0 n3 4700
 R_re n1 0 1000
 Q_q1 n3 n2 n1 Q2N2222
 V_sg1 n4 0 SIN(0 0.05 1000)
-R_rin n4 n2 10000
+C_cin n4 n2 0.000001 IC=0
 .model Q2N2222 NPN(IS=1E-14 VAF=100 BF=200 IKF=0.3 XTB=1.5 BR=3 CJC=8E-12 CJE=25E-12 TR=100E-9 TF=400E-12 ITF=1 VTF=2 XTF=3 RB=10 RC=.3 RE=.2)
 .tran 5.000e-5 5.000e-3
 .end"

@@ -10,6 +10,7 @@ URL pattern:
     /api/gateway/{client_id}/{path}
     →  http://127.0.0.1:{hostfwd_port}/{path}
 """
+import asyncio
 import json
 import logging
 
@@ -66,17 +67,25 @@ async def gateway_proxy(client_id: str, path: str, request: Request) -> Response
             media_type='application/json',
         )
 
-    # ── ESP32: the server runs in QEMU, reachable via slirp hostfwd. ──
-    inst = esp_lib_manager.get_instance(client_id)
-    if inst and inst.wifi_enabled and inst.wifi_hostfwd_port != 0:
-        return await _proxy_esp32(inst, path, request)
+    # Registration races the sketch printing its URL: the in-browser engines
+    # dial their net bridge only on 'got_ip', which lands at the same moment
+    # "Server started at: ..." appears in the serial monitor — a fast click
+    # reaches here before the bridge exists. Poll briefly before giving up.
+    for attempt in range(5):
+        if attempt:
+            await asyncio.sleep(0.25)
 
-    # ── Pico W (and any other overlay-provided board): the server runs in the
-    #    browser-side lwIP, reachable only by the overlay proxying TCP into the
-    #    chip over the WS bridge. OSS has no resolver -> falls through to 404. ──
-    overlay_resp = await dispatch_gateway_proxy(client_id, path, request)
-    if overlay_resp is not None:
-        return overlay_resp
+        # ── ESP32: the server runs in QEMU, reachable via slirp hostfwd. ──
+        inst = esp_lib_manager.get_instance(client_id)
+        if inst and inst.wifi_enabled and inst.wifi_hostfwd_port != 0:
+            return await _proxy_esp32(inst, path, request)
+
+        # ── Pico W (and any other overlay-provided board): the server runs in
+        #    the browser-side lwIP, reachable only by the overlay proxying TCP
+        #    into the chip over the WS bridge. OSS has no resolver -> None. ──
+        overlay_resp = await dispatch_gateway_proxy(client_id, path, request)
+        if overlay_resp is not None:
+            return overlay_resp
 
     return Response(
         content='{"error":"No WiFi-enabled board found for this client. Make sure your sketch connected to WiFi and started a server on port 80."}',

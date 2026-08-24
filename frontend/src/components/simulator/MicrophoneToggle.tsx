@@ -62,18 +62,16 @@ export const MicrophoneToggle: React.FC<MicrophoneToggleProps> = ({ boardId }) =
       onClick={handleClick}
       disabled={!boardId || status === 'requesting'}
       title={tooltip}
+      // Static layout is in .canvas-cam-mic-btn so the toolbar @container
+      // query can collapse the label to icon-only (an inline font-size would
+      // beat it). Only state-driven styles stay inline.
+      className="canvas-cam-mic-btn"
       style={{
         backgroundColor: isOn ? 'rgba(63,185,80,0.15)' : 'transparent',
         border: `1px solid ${
           isOn ? '#3fb950' : status === 'requesting' ? '#555' : 'transparent'
         }`,
-        borderRadius: 4,
-        padding: '4px 10px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
         color,
-        fontSize: 13,
         cursor: boardId ? 'pointer' : 'not-allowed',
         animation:
           status === 'requesting' ? 'velxio-pulse 1s ease-in-out infinite' : undefined,

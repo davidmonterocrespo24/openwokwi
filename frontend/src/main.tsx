@@ -89,3 +89,22 @@ if (import.meta.env.VITE_DESKTOP) {
     .then((m) => m.mountDesktop?.())
     .catch((err) => console.warn('[desktop] failed to load hooks:', err));
 }
+
+// DEV-only: expose the core stores for E2E harnesses (the platform-bugs QA
+// harness drives the STORE paths — property updates, group switches — the
+// way the agent tools do, which raw DOM access cannot reach). Guarded by
+// import.meta.env.DEV so production bundles never ship it.
+if (import.meta.env.DEV) {
+  Promise.all([
+    import('./store/useSimulatorStore'),
+    import('./store/useEditorStore'),
+    import('./store/useElectricalStore'),
+  ]).then(([sim, ed, el]) => {
+    (window as unknown as Record<string, unknown>).__velxioStores = {
+      useSimulatorStore: sim.useSimulatorStore,
+      useEditorStore: ed.useEditorStore,
+      useElectricalStore: el.useElectricalStore,
+      getBoardSimulator: sim.getBoardSimulator,
+    };
+  });
+}

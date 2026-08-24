@@ -4,9 +4,10 @@
  * Shown (a) on a pristine `/editor` visit (over an emptied canvas), and
  * (b) from the "New workspace" button / File menu entry. Offers a blank
  * workspace plus a ready-to-run Blink starter per board family — Arduino,
- * ESP32 (one card per chip generation, XIAO variant preferred), STM32,
- * Raspberry Pi — each card carrying the same circuit thumbnail the examples
- * gallery uses (/examples-thumbs/<id>.webp, CircuitPreview fallback).
+ * ESP32 (one card per chip generation, XIAO variant preferred), M5Stack
+ * (overlay-registered all-in-ones, listed ahead of STM32), STM32, Raspberry
+ * Pi — each card carrying the same circuit thumbnail the examples gallery
+ * uses (/examples-thumbs/<id>.webp, CircuitPreview fallback).
  *
  * Selecting a board loads its gallery Blink example when one exists (full
  * wiring: 220Ω resistor + LED); boards without one get a fresh board whose
@@ -29,6 +30,7 @@ import {
   listProBoards,
   subscribeProBoards,
   getProBoardsVersion,
+  type ProBoardDef,
 } from '../../lib/proBoardRegistry';
 import { useSimulatorStore, DEFAULT_BOARD_POSITION } from '../../store/useSimulatorStore';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -49,7 +51,10 @@ interface NewProjectDialogProps {
 const BOARD_BLURBS: Record<string, string> = {
   'arduino-uno': '8-bit AVR, 32KB flash, 14 digital I/O',
   'arduino-mega': '8-bit AVR, 256KB flash, 54 digital I/O',
+  'arduino-nano': '8-bit AVR, 32KB flash, breadboard-size Uno',
+  'arduino-nano-esp32': 'ESP32-S3 in the Nano footprint, WiFi+BT (QEMU)',
   esp32: 'Xtensa LX6 dual-core, WiFi+BT, 38 GPIO (QEMU)',
+  'esp32-cam': 'ESP32 + OV2640 camera, streams to LCD (QEMU)',
   'xiao-esp32-s3': 'Seeed XIAO tiny form, 8MB flash+PSRAM (QEMU)',
   'xiao-esp32-c3': 'Seeed XIAO ESP32-C3 mini board (QEMU)',
   'stm32-bluepill': 'STM32F103C8 Cortex-M3, 64KB flash, 37 GPIO (QEMU)',
@@ -128,6 +133,10 @@ export function clearWorkspaceForStarter(): void {
 const PREFERRED_BLINK_EXAMPLE: Record<string, string> = {
   'arduino-uno': 'blink-led',
   'arduino-mega': 'mega-blink',
+  'arduino-nano': 'nano-blink',
+  // Camera board: the webcam demo IS its "blink" — the board exists to
+  // show the sensor, a bare LED sketch would be a misleading first run.
+  'esp32-cam': 'esp32cam-webcam-demo',
   esp32: 'esp32-blink-led',
   'esp32-s3': 'esp32s3-blink-led',
   'esp32-c3': 'c3-blink',
@@ -143,6 +152,10 @@ const PREFERRED_BLINK_EXAMPLE: Record<string, string> = {
   'stm32-f4-discovery': 'stm32-f4-discovery-blink',
   'stm32-olimex-h405': 'stm32-olimex-h405-blink',
   'stm32-netduino-plus2': 'stm32-netduino-plus2-blink',
+  // M5Stack all-in-ones (overlay kinds): no LED to blink — the on-LCD hello
+  // is the first run. Both ids carry a captured gallery thumb.
+  'cardputer-adv': 'cardputer-adv-hello',
+  'm5stack-core': 'm5stack-core-m5-helloworld',
 };
 
 /** Dynamic import keeps the (large) gallery data out of the editor bundle
@@ -200,6 +213,62 @@ async function applyStarter(kind: string | 'blank'): Promise<void> {
   }
 }
 
+export interface StarterSection {
+  title: string;
+  entries: Array<{ kind: string; blurb: string }>;
+}
+
+/**
+ * The card sections, in display order. Overlay-registered kinds only exist
+ * when the private overlay mounted — an OSS build simply doesn't show those
+ * cards, and a section left with no entries is not rendered at all.
+ */
+export function buildStarterSections(defs: ProBoardDef[]): StarterSection[] {
+  const oss = (k: BoardKind) => ({ kind: k as string, blurb: BOARD_BLURBS[k] ?? '' });
+  const pro = (k: string) => {
+    const d = defs.find((x) => x.kind === k);
+    return d ? [{ kind: d.kind, blurb: d.description }] : [];
+  };
+  return [
+    {
+      title: 'Arduino',
+      entries: [
+        oss('arduino-uno'),
+        oss('arduino-mega'),
+        oss('arduino-nano'),
+        oss('arduino-nano-esp32'),
+      ],
+    },
+    // One card per ESP32 chip generation, XIAO variant preferred where
+    // Seeed makes one: classic → DevKit V1, S3/C3 → XIAO, C6 → XIAO (overlay).
+    {
+      title: 'ESP32',
+      entries: [
+        oss('esp32'),
+        oss('esp32-cam'),
+        oss('xiao-esp32-s3'),
+        oss('xiao-esp32-c3'),
+        ...pro('xiao-esp32c6'),
+      ],
+    },
+    // M5Stack all-in-ones (overlay): ahead of STM32 by operator request —
+    // they run on Free and are a friendlier first pick than the Pro-gated
+    // STM32 family. Cardputer first, then the Core.
+    { title: 'M5Stack', entries: [...pro('cardputer-adv'), ...pro('m5stack-core')] },
+    { title: 'STM32', entries: STM32_BOARDS.map(oss) },
+    {
+      title: 'Raspberry Pi',
+      entries: [
+        oss('raspberry-pi-pico'),
+        ...pro('xiao-rp2040'),
+        oss('raspberry-pi-3'),
+        oss('raspberry-pi-4'),
+        oss('raspberry-pi-5'),
+      ],
+    },
+  ];
+}
+
 const ProPill: React.FC = () => (
   <span className="new-project-pro" title="Pro feature — paid plan or Velxio Desktop">
     PRO
@@ -217,42 +286,8 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ isOpen, onCl
     getProBoardsVersion,
   );
 
-  const sections = useMemo(() => {
-    const defs = listProBoards();
-    const oss = (k: BoardKind) => ({ kind: k as string, blurb: BOARD_BLURBS[k] ?? '' });
-    // Overlay-registered kinds only exist when the private overlay mounted —
-    // an OSS build simply doesn't show those cards.
-    const pro = (k: string) => {
-      const d = defs.find((x) => x.kind === k);
-      return d ? [{ kind: d.kind, blurb: d.description }] : [];
-    };
-    return [
-      { title: 'Arduino', entries: [oss('arduino-uno'), oss('arduino-mega')] },
-      // One card per ESP32 chip generation, XIAO variant preferred where
-      // Seeed makes one: classic → DevKit V1, S3/C3 → XIAO, C6 → XIAO (overlay).
-      {
-        title: 'ESP32',
-        entries: [
-          oss('esp32'),
-          oss('xiao-esp32-s3'),
-          oss('xiao-esp32-c3'),
-          ...pro('xiao-esp32c6'),
-        ],
-      },
-      { title: 'STM32', entries: STM32_BOARDS.map(oss) },
-      {
-        title: 'Raspberry Pi',
-        entries: [
-          oss('raspberry-pi-pico'),
-          ...pro('xiao-rp2040'),
-          oss('raspberry-pi-3'),
-          oss('raspberry-pi-4'),
-          oss('raspberry-pi-5'),
-        ],
-      },
-    ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proBoardsVersion]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sections = useMemo(() => buildStarterSections(listProBoards()), [proBoardsVersion]);
 
   useEffect(() => {
     if (!isOpen) return;

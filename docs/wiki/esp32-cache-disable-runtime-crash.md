@@ -278,13 +278,16 @@ The patch is already in the source tree
 `build_libqemu-esp32.sh` (Linux/macOS) and `build_libqemu-esp32-win.sh`
 (Windows MSYS2 MINGW64).
 
-### 8.1 Recommended — let the CI publish the release
+### 8.1 Recommended — let the CI build, then publish to velxio.dev
 
 `third-party/qemu-lcgamboa/.github/workflows/build-libqemu.yml` builds
 the patched libraries for **every host Velxio supports natively** and
-uploads them to the `qemu-prebuilt` release of the velxio repo:
+leaves them as 3-day build artifacts. Collect the artifact and load each
+file into the asset store with `scripts/upload-binary.sh`; nothing is
+published to GitHub, because the GPL-2.0 corresponding source has to sit
+beside the binary and velxio.dev is where it does.
 
-| Asset name in release | Host |
+| Asset name | Host |
 |---|---|
 | `libqemu-xtensa-amd64.so` / `libqemu-riscv32-amd64.so`           | Linux x86_64 |
 | `libqemu-xtensa-arm64.so` / `libqemu-riscv32-arm64.so`           | Linux ARM64 |

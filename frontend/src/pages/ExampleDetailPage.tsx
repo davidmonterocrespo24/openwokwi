@@ -300,7 +300,7 @@ export const ExampleDetailPage: React.FC = () => {
                 }}
               >
                 <span style={{ color: '#4fc3f7', fontWeight: 700 }}>✓</span>
-                {example.components.length > 0
+                {(example.components?.length ?? 0) > 0
                   ? `${example.components.length} interactive component${example.components.length > 1 ? 's' : ''} on the canvas`
                   : 'Interactive simulation canvas'}
               </li>

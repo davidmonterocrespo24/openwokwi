@@ -43,43 +43,94 @@ export interface VelxioComponent {
 }
 
 export interface ImportResult {
-  boardType: 'arduino-uno' | 'arduino-nano' | 'arduino-mega' | 'raspberry-pi-pico';
+  /**
+   * The board kind the diagram declares, or null when it declares none.
+   *
+   * A plain string, not the BoardKind union: the overlay registers its board
+   * kinds at runtime (proBoardRegistry), so a closed union here would make
+   * every pro board unimportable by construction. Null rather than a default:
+   * answering 'arduino-uno' for anything unrecognised is what made an ESP32
+   * project come back as an Uno (#268).
+   */
+  boardType: string | null;
   boardPosition: { x: number; y: number };
   components: VelxioComponent[];
   wires: Wire[];
   files: Array<{ name: string; content: string }>;
   /** Library names parsed from libraries.txt. Includes both standard Arduino Library Manager names and Wokwi-hosted entries in the form "LibName@wokwi:hash". */
   libraries: string[];
+  /**
+   * What the import could not do faithfully, in words a user can act on.
+   * Everything here used to happen silently.
+   */
+  warnings: string[];
 }
 
 // ── Board mappings ────────────────────────────────────────────────────────────
 
-// Wokwi board type → Velxio boardType
-const WOKWI_TYPE_TO_BOARD: Record<
-  string,
-  'arduino-uno' | 'arduino-nano' | 'arduino-mega' | 'raspberry-pi-pico'
-> = {
-  'wokwi-arduino-uno': 'arduino-uno',
-  'wokwi-arduino-nano': 'arduino-nano',
-  'wokwi-arduino-mega': 'arduino-mega',
-  'wokwi-raspberry-pi-pico': 'raspberry-pi-pico',
+/**
+ * Boards a real Wokwi element draws, and the Wokwi part type written for them.
+ *
+ * The membership rule is not taste, it is pin names. A diagram's connections
+ * are `partId:pinName`, and the pin names Velxio wires carry are whatever the
+ * element on the canvas calls its pins. These four render through
+ * wokwi-elements, so their names ARE Wokwi's — an Uno wire says `GND.2`, `A4`,
+ * `5V` — and a file naming them opens correctly over there.
+ *
+ * Every other board renders through a `velxio-*` element with our own names:
+ * our ESP32 calls a pin `34` where Wokwi's esp32-devkit-v1 calls it `D34`.
+ * Claiming a Wokwi board type for one of those would produce a file that loads
+ * in Wokwi and silently attaches every wire to a pin that does not exist —
+ * the same class of quiet wrongness this table caused in issue #268. So they
+ * get a Velxio type instead, and the file is honest about what it is.
+ *
+ * The split is visible elsewhere: BOARD_TAG in ComponentPickerModal.tsx names
+ * exactly these four with a `wokwi-` tag and everything else with `velxio-`.
+ */
+const WOKWI_NATIVE_BOARDS: Record<string, { type: string; id: string }> = {
+  'arduino-uno': { type: 'wokwi-arduino-uno', id: 'uno' },
+  'arduino-nano': { type: 'wokwi-arduino-nano', id: 'nano' },
+  'arduino-mega': { type: 'wokwi-arduino-mega', id: 'mega' },
+  // Velxio draws its Pico with wokwi-nano-rp2040-connect, but the type written
+  // here has always been wokwi-raspberry-pi-pico. Kept verbatim so zips
+  // exported before this change still import.
+  'raspberry-pi-pico': { type: 'wokwi-raspberry-pi-pico', id: 'pico' },
 };
 
-// Velxio boardType → Wokwi type
-const BOARD_TO_WOKWI_TYPE: Record<string, string> = {
-  'arduino-uno': 'wokwi-arduino-uno',
-  'arduino-nano': 'wokwi-arduino-nano',
-  'arduino-mega': 'wokwi-arduino-mega',
-  'raspberry-pi-pico': 'wokwi-raspberry-pi-pico',
-};
+/**
+ * Part type for every other board — the ESP32 family, the STM32s, the Pi
+ * boards, and the overlay's boards, which are runtime-registered strings the
+ * OSS build has never heard of. `board-` is Wokwi's own prefix for a custom
+ * board; the `velxio-` namespace says whose it is, and the kind rides along so
+ * the round trip is exact for a board nothing in this file knows about.
+ */
+const VELXIO_BOARD_TYPE_PREFIX = 'board-velxio-';
 
-// Velxio boardType → default Wokwi part id
-const BOARD_TO_WOKWI_ID: Record<string, string> = {
-  'arduino-uno': 'uno',
-  'arduino-nano': 'nano',
-  'arduino-mega': 'mega',
-  'raspberry-pi-pico': 'pico',
-};
+/** The Wokwi part type to write for a Velxio board kind. Never guesses. */
+export function boardKindToWokwiType(kind: string): string {
+  return WOKWI_NATIVE_BOARDS[kind]?.type ?? `${VELXIO_BOARD_TYPE_PREFIX}${kind}`;
+}
+
+/** The part id to write for a Velxio board kind (Wokwi's short names). */
+export function boardKindToWokwiPartId(kind: string): string {
+  return WOKWI_NATIVE_BOARDS[kind]?.id ?? kind;
+}
+
+/**
+ * The Velxio board kind a Wokwi part type denotes, or null when the part is
+ * not a board. Null is the point: the old code answered 'arduino-uno' for
+ * everything it did not recognise, so importing an ESP32 project produced an
+ * Uno and the real board vanished (#268).
+ */
+export function wokwiTypeToBoardKind(type: string): string | null {
+  if (type.startsWith(VELXIO_BOARD_TYPE_PREFIX)) {
+    return type.slice(VELXIO_BOARD_TYPE_PREFIX.length) || null;
+  }
+  for (const [kind, entry] of Object.entries(WOKWI_NATIVE_BOARDS)) {
+    if (entry.type === type) return kind;
+  }
+  return null;
+}
 
 // ── Pin name aliases ─────────────────────────────────────────────────────────
 
@@ -183,18 +234,43 @@ export function parseLibrariesTxt(content: string): string[] {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-export async function exportToWokwiZip(
-  files: Array<{ name: string; content: string }>,
+/**
+ * The diagram a project becomes, as a value.
+ *
+ * Split out of exportToWokwiZip so the conversion can be tested at all: the
+ * export function returns void and downloads through the DOM, so for its whole
+ * life nothing could assert on what it produced — which is why a board silently
+ * exporting as the wrong Arduino went unnoticed (#268).
+ */
+export function buildWokwiDiagram(
   components: VelxioComponent[],
   wires: Wire[],
   boardType: string,
-  projectName: string,
   boardPosition: { x: number; y: number } = { x: 50, y: 50 },
-): Promise<void> {
-  const zip = new JSZip();
-
-  const boardWokwiType = BOARD_TO_WOKWI_TYPE[boardType] ?? 'wokwi-arduino-uno';
-  const boardId = BOARD_TO_WOKWI_ID[boardType] ?? 'uno';
+  /**
+   * The board's id ON THE CANVAS, which is what its wires name. addBoard gives
+   * the first board of a kind the kind itself and later ones `${kind}-2`
+   * (useSimulatorStore.ts:1508), so the kind is the right default but not a
+   * safe assumption — the caller knows. The old code compared against three
+   * hardcoded ids, one of them ('nano-rp2040') no longer issued to anything
+   * and one board ('arduino-mega') missing outright, so those boards' wires
+   * were written pointing at a part id the diagram never defines.
+   */
+  boardCanvasId: string = boardType,
+  /**
+   * The canvas ids of the OTHER boards in this project.
+   *
+   * The format stores one board, so a wire touching a different board cannot
+   * be represented — and writing it anyway was worse than dropping it. The
+   * board being exported takes the part id its KIND maps to, which for every
+   * non-Arduino family IS the first-of-kind canvas id, so a second ESP32's
+   * wires collided with it and both boards' components came back attached to
+   * the same chip. Silently, because the file was internally consistent.
+   */
+  foreignBoardIds: readonly string[] = [],
+): WokwiDiagram {
+  const boardWokwiType = boardKindToWokwiType(boardType);
+  const boardId = boardKindToWokwiPartId(boardType);
 
   // Build parts — board first, then user components
   // Subtract boardPosition so coords are relative to the board
@@ -216,17 +292,14 @@ export async function exportToWokwiZip(
   ];
 
   // Build connections
-  const connections: [string, string, string, string[]][] = wires.map((w) => {
-    const isBoardStart =
-      w.start.componentId === 'arduino-uno' ||
-      w.start.componentId === 'arduino-nano' ||
-      w.start.componentId === 'nano-rp2040';
-    const isBoardEnd =
-      w.end.componentId === 'arduino-uno' ||
-      w.end.componentId === 'arduino-nano' ||
-      w.end.componentId === 'nano-rp2040';
-    const startId = isBoardStart ? boardId : w.start.componentId;
-    const endId = isBoardEnd ? boardId : w.end.componentId;
+  const foreign = new Set(foreignBoardIds.filter((id) => id !== boardCanvasId));
+  const connections: [string, string, string, string[]][] = wires
+    .filter((w) => !foreign.has(w.start.componentId) && !foreign.has(w.end.componentId))
+    .map((w) => {
+    // An endpoint on the board is rewritten to the board's part id; everything
+    // else keeps its component id, which is the same on both sides.
+    const startId = w.start.componentId === boardCanvasId ? boardId : w.start.componentId;
+    const endId = w.end.componentId === boardCanvasId ? boardId : w.end.componentId;
     // Breadboard seating wires round-trip as Wokwi's hidden `["$bb"]` entries.
     if (w.bb) {
       return [`${startId}:${w.start.pinName}`, `${endId}:${w.end.pinName}`, '', ['$bb']];
@@ -239,19 +312,53 @@ export async function exportToWokwiZip(
     ];
   });
 
-  const diagram: WokwiDiagram = {
+  return {
     version: 1,
     author: 'Velxio',
     editor: 'wokwi',
     parts,
     connections,
   };
+}
+
+export async function exportToWokwiZip(
+  files: Array<{ name: string; content: string }>,
+  components: VelxioComponent[],
+  wires: Wire[],
+  boardType: string,
+  projectName: string,
+  boardPosition: { x: number; y: number } = { x: 50, y: 50 },
+  boardCanvasId: string = boardType,
+  /**
+   * Library names to declare. The importer has always read libraries.txt and
+   * offered to install what it finds; the exporter never wrote one, so a
+   * project's libraries did not survive its own round trip.
+   */
+  libraries: string[] = [],
+  /** The other boards on the canvas — see buildWokwiDiagram. */
+  foreignBoardIds: readonly string[] = [],
+): Promise<void> {
+  const zip = new JSZip();
+  const diagram = buildWokwiDiagram(
+    components,
+    wires,
+    boardType,
+    boardPosition,
+    boardCanvasId,
+    foreignBoardIds,
+  );
 
   zip.file('diagram.json', JSON.stringify(diagram, null, 2));
   zip.file(
     'wokwi-project.txt',
     `Exported from Velxio\n\nSimulate this project on https://velxio.dev\n`,
   );
+  if (libraries.length > 0) {
+    zip.file(
+      'libraries.txt',
+      `# Wokwi Library List\n# See https://docs.wokwi.com/guides/libraries\n\n${libraries.join('\n')}\n`,
+    );
+  }
 
   for (const f of files) {
     zip.file(f.name, f.content);
@@ -268,6 +375,24 @@ export async function exportToWokwiZip(
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * Point the board's wires at the id the board actually got.
+ *
+ * importFromWokwiZip names them by the board's KIND; the canvas may have
+ * called it something else — a second board of that kind is `${kind}-2`, and a
+ * project imported onto an existing board keeps that board's id whatever its
+ * new kind. Wires naming an id nothing answers to is the failure this whole
+ * issue is made of.
+ */
+export function retargetBoardWires(wires: Wire[], fromId: string, toId: string): Wire[] {
+  if (!fromId || fromId === toId) return wires;
+  return wires.map((w) => ({
+    ...w,
+    start: w.start.componentId === fromId ? { ...w.start, componentId: toId } : w.start,
+    end: w.end.componentId === fromId ? { ...w.end, componentId: toId } : w.end,
+  }));
+}
+
 // ── Import ────────────────────────────────────────────────────────────────────
 
 export async function importFromWokwiZip(file: File): Promise<ImportResult> {
@@ -280,25 +405,54 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
   const diagramText = await diagramEntry.async('string');
   const diagram: WokwiDiagram = JSON.parse(diagramText);
 
-  // Detect board
-  const boardPart = diagram.parts.find((p) => WOKWI_TYPE_TO_BOARD[p.type]);
-  const boardType = boardPart ? WOKWI_TYPE_TO_BOARD[boardPart.type] : 'arduino-uno';
-  const boardId = boardPart?.id ?? 'uno';
+  const warnings: string[] = [];
 
-  // Velxio internal component ID for the board element (must match DOM element id)
-  const VELXIO_BOARD_ID: Record<string, string> = {
-    'arduino-uno': 'arduino-uno',
-    'arduino-nano': 'arduino-nano',
-    'arduino-mega': 'arduino-mega',
-    'raspberry-pi-pico': 'nano-rp2040',
-  };
-  const velxioBoardId = VELXIO_BOARD_ID[boardType] ?? 'arduino-uno';
+  // Detect the board. Parts that name a board come first; anything else is a
+  // component.
+  const boardParts = diagram.parts.filter((p) => wokwiTypeToBoardKind(p.type) !== null);
+  const boardPart = boardParts[0] ?? null;
+  const boardType = boardPart ? wokwiTypeToBoardKind(boardPart.type) : null;
+
+  if (!boardPart) {
+    // Do NOT invent an Uno. A diagram whose board type we do not know is a
+    // diagram whose board we would silently replace, and the user would see a
+    // circuit wired to the wrong chip with no hint why.
+    const unknown = [...new Set(diagram.parts.map((p) => p.type))].join(', ');
+    warnings.push(
+      diagram.parts.length === 0
+        ? 'The diagram has no parts, so no board could be identified.'
+        : `No board recognised in the diagram (parts: ${unknown}). The circuit was imported; add the board yourself and its wires will attach.`,
+    );
+  }
+  if (boardParts.length > 1) {
+    // Velxio canvases hold several boards, but this format writes one, and the
+    // extras used to be dropped without a word — not even as components.
+    warnings.push(
+      `The diagram declares ${boardParts.length} boards; only the first (${boardType}) was imported.`,
+    );
+  }
+
+  const boardId = boardPart?.id ?? '';
+
+  // Wires that touched the board are named by its KIND, which is the id
+  // addBoard gives the first board of a kind (useSimulatorStore.ts:1508).
+  // Whoever applies this result knows the id the board really ends up with and
+  // finishes the job with retargetBoardWires — the importer cannot, because
+  // the kind is not known until the diagram is parsed. The old code used a
+  // hardcoded map that answered 'nano-rp2040' for a Pico, an id nothing has
+  // been issued since boards became instances, so every imported Pico wire
+  // attached to a component that does not exist.
+  const velxioBoardId = boardType ?? '';
 
   // Board position from diagram. Apply a minimum offset so the board is never
   // crammed against the canvas top-left corner (Wokwi diagrams often use 0,0).
+  // With no board part there is no origin to measure from, so the components
+  // keep their own coordinates and boardPosition follows them. Defaulting the
+  // raw origin to MIN_OFFSET while leaving the offsets at 0 (what this did
+  // before) put the board 50px from the corner and the circuit somewhere else.
   const MIN_OFFSET = 50;
-  const rawBoardX = boardPart?.left ?? MIN_OFFSET;
-  const rawBoardY = boardPart?.top ?? MIN_OFFSET;
+  const rawBoardX = boardPart?.left ?? 0;
+  const rawBoardY = boardPart?.top ?? 0;
   const offsetX = rawBoardX < MIN_OFFSET ? MIN_OFFSET - rawBoardX : 0;
   const offsetY = rawBoardY < MIN_OFFSET ? MIN_OFFSET - rawBoardY : 0;
   const boardPosition = {
@@ -309,7 +463,7 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
   // Convert non-board parts to Velxio components.
   // Apply the same offset so components keep their relative position to the board.
   const components: VelxioComponent[] = diagram.parts
-    .filter((p) => !WOKWI_TYPE_TO_BOARD[p.type])
+    .filter((p) => wokwiTypeToBoardKind(p.type) === null)
     .map((p) => ({
       id: p.id,
       metadataId: wokwiTypeToMetadataId(p.type),
@@ -360,8 +514,38 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
     };
   });
 
-  // Read code files (.ino, .h, .cpp, .c)
-  const CODE_EXTS = new Set(['.ino', '.h', '.cpp', '.c']);
+  // A connection naming a part the diagram never defines attaches to nothing.
+  // Diagrams written by Velxio before #268 are exactly this: the board part
+  // says `uno` while the connections say `esp32`, because the export wrote the
+  // board's type from one table and the wires' ids from another. Importing one
+  // is not recoverable — the real board is not in the file — but arriving with
+  // half a circuit and no explanation is worse than being told.
+  //
+  // Checked against the RAW diagram, not the wires built above. Those have
+  // already had the board's id rewritten to the board KIND, and seeding the
+  // allowed set with that kind (what this did first) let a wire that literally
+  // names the kind pass as defined — which is exactly the wire a second board
+  // on the canvas writes. The check went quiet on the one case worth catching.
+  const definedIds = new Set(diagram.parts.map((p) => p.id));
+  const dangling = new Set<string>();
+  for (const [a, b] of diagram.connections) {
+    for (const ref of [a, b]) {
+      const id = ref.includes(':') ? ref.slice(0, ref.indexOf(':')) : ref;
+      if (id && !definedIds.has(id)) dangling.add(id);
+    }
+  }
+  if (dangling.size > 0) {
+    warnings.push(
+      `Some wires refer to parts the diagram does not contain (${[...dangling].join(', ')}); they were imported but attach to nothing.`,
+    );
+  }
+
+  // Read code files. The export writes every file in the project verbatim, so
+  // this list is the one that decides what comes back — and it used to admit
+  // only the Arduino four, which meant a MicroPython project round-tripped
+  // with an empty editor. Deliberately not '.txt': libraries.txt and
+  // wokwi-project.txt are metadata, read separately.
+  const CODE_EXTS = new Set(['.ino', '.h', '.hpp', '.cpp', '.cc', '.cxx', '.c', '.py', '.s']);
   const files: Array<{ name: string; content: string }> = [];
 
   for (const [filename, entry] of Object.entries(zip.files)) {
@@ -390,5 +574,5 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
     libraries.push(...parseLibrariesTxt(await libEntry.async('string')));
   }
 
-  return { boardType, boardPosition, components, wires, files, libraries };
+  return { boardType, boardPosition, components, wires, files, libraries, warnings };
 }

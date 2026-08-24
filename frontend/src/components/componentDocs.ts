@@ -56,6 +56,32 @@ export function registerComponentDoc(id: string, raw: string): void {
   cache.delete(id);
 }
 
+// Purchase-link overrides, keyed by component id. Set at runtime (overlay
+// seam below); they supersede the datasheet's `buy:` front-matter and can
+// give a Buy button to a component with no authored datasheet at all.
+const buyOverrides = new Map<string, string>();
+
+/**
+ * Overlay seam: register a purchase-URL override for a component id. A
+ * private build fetches admin-curated links (e.g. affiliate URLs) from its
+ * backend at boot and pipes them through here, so links can change without a
+ * redeploy. The override wins over the datasheet front-matter; `loadDoc`
+ * merges it, so every doc consumer — and the UTM decoration + click tracking
+ * built on `doc.buy` — picks it up with no extra wiring.
+ */
+export function registerBuyLink(id: string, url: string): void {
+  buyOverrides.set(id, url);
+  cache.delete(id);
+}
+
+/** Merge a registered buy-link override into a parsed doc (synthesising an
+ * empty-body doc when the component has no datasheet). */
+function withBuyOverride(id: string, doc: ComponentDoc | null): ComponentDoc | null {
+  const buy = buyOverrides.get(id);
+  if (!buy) return doc;
+  return { ...(doc ?? { body: '' }), buy };
+}
+
 /**
  * Decorate a datasheet Buy/Product-page URL with UTM attribution so the
  * vendor sees the referral came from Velxio. `componentId` lands in
@@ -111,20 +137,24 @@ export function hasDoc(id: string): boolean {
   return id in byId;
 }
 
-/** Load (and cache) the parsed datasheet for a component id, or null if none. */
+/** Load (and cache) the parsed datasheet for a component id, or null if none.
+ * A registered buy-link override is merged into the result (and can produce a
+ * doc for an id with no .md file — body empty, `buy` set). */
 export async function loadDoc(id: string): Promise<ComponentDoc | null> {
   if (cache.has(id)) return cache.get(id) ?? null;
   const loader = byId[id];
   if (!loader) {
-    cache.set(id, null);
-    return null;
+    const doc = withBuyOverride(id, null);
+    cache.set(id, doc);
+    return doc;
   }
   try {
-    const parsed = parseDoc(await loader());
-    cache.set(id, parsed);
-    return parsed;
+    const doc = withBuyOverride(id, parseDoc(await loader()));
+    cache.set(id, doc);
+    return doc;
   } catch {
-    cache.set(id, null);
-    return null;
+    const doc = withBuyOverride(id, null);
+    cache.set(id, doc);
+    return doc;
   }
 }

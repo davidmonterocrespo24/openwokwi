@@ -33,7 +33,7 @@
     "hero": {
       "titleLine1": "Arduino, ESP32 e Raspberry Pi.",
       "titleAccent": "Direttamente nel tuo browser.",
-      "subtitle": "Scrivi codice, collega componenti, premi esegui. 19 schede, 48+ parti, emulazione CPU reale — nessun hardware, nessuna installazione, nessun cloud.",
+      "subtitle": "Scrivi codice, collega componenti, premi esegui. 35 schede, 48+ parti, emulazione CPU reale — nessun hardware, nessuna installazione, nessun cloud.",
       "ctaPrimary": "Prova il simulatore online gratis →",
       "ctaGithub": "Vedi su GitHub",
       "trustLine": "Nessuna registrazione richiesta · Funziona al 100% nel browser · Gratuito e open-source",
@@ -43,7 +43,7 @@
       "label": "Hardware supportato",
       "titleLine1": "Ogni architettura.",
       "titleLine2": "Un solo strumento.",
-      "subtitle": "19 schede su 5 architetture CPU — AVR8, ARM Cortex-M0+, RISC-V, Xtensa e Linux. Tutte in esecuzione localmente, senza cloud."
+      "subtitle": "35 schede su 6 architetture CPU — AVR8, ARM Cortex-M, ARM Cortex-A, RISC-V, Xtensa e Linux. Incluse le schede dei partner Pimoroni, M5Stack, Seeed Studio e DFRobot. Tutto in locale, senza cloud."
     },
     "features": {
       "label": "Funzionalità",
@@ -433,5 +433,11 @@
         "privateHint": "Solo tu puoi vedere questo progetto."
       }
     }
+  },
+  "news": {
+    "kicker": "Novità",
+    "readMore": "Scopri di più",
+    "gotIt": "Ho capito",
+    "close": "Chiudi"
   }
 }

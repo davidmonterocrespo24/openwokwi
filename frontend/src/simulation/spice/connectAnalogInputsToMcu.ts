@@ -31,6 +31,7 @@ import { setAdcVoltage } from '../parts/partUtils';
 import type { BoardKind } from '../../types/board';
 import { interpolateAt } from './waveformStats';
 import { boardPinToNumber } from '../../utils/boardPinMapping';
+import { getProBoard } from '../../lib/proBoardRegistry';
 
 // Which Arduino-style pin name maps to which ADC channel, per board.
 function adcRange(prefix: string, start: number, count: number) {
@@ -119,6 +120,18 @@ const ADC_PIN_TO_GPIO: Partial<Record<BoardKind, (pinName: string, channel: numb
   'aitewinrobot-esp32c3-supermini': gpioPinFromName,
 };
 
+/**
+ * Which pads on this board reach the ADC.
+ *
+ * ADC_PIN_MAP is keyed by the BoardKind union, so an overlay board — whose kind
+ * is a runtime string, not a member of that union — could never appear in it
+ * and was skipped outright. A board registered through proBoardRegistry
+ * declares its own list instead (ProBoardDef.adcPins).
+ */
+function adcPinsFor(kind: BoardKind): Array<{ pinName: string; channel: number }> | undefined {
+  return ADC_PIN_MAP[kind] ?? getProBoard(kind)?.adcPins;
+}
+
 /** Silkscreen name -> GPIO for the ADC injection. ESP32-family boards go
  * through the canonical boardPinToNumber table (nano-esp32 'A0' -> GPIO1,
  * xiao 'D1' -> GPIO2, bare '34' -> 34, ...); AVR/ATtiny/Pico keep their
@@ -129,6 +142,13 @@ function gpioForBoardPin(kind: BoardKind, pinName: string, channel: number): num
       || kind === 'arduino-nano-esp32' || kind === 'wemos-lolin32-lite'
       || kind === 'aitewinrobot-esp32c3-supermini') {
     const n = boardPinToNumber(kind, pinName);
+    if (n != null && n >= 0) return n;
+  }
+  // An overlay board owns its pad->GPIO mapping (ProBoardDef.pinToNumber);
+  // ADC_PIN_TO_GPIO cannot hold it for the same union reason as above.
+  const proDef = getProBoard(kind);
+  if (proDef?.pinToNumber) {
+    const n = proDef.pinToNumber(pinName);
     if (n != null && n >= 0) return n;
   }
   const legacy = ADC_PIN_TO_GPIO[kind];
@@ -145,10 +165,10 @@ export function connectAnalogInputsToMcu(): () => void {
   let replayEpochLatched = false;
 
   function injectVoltagesIntoADC() {
-    const { nodeVoltages, pinNetMap } = useElectricalStore.getState();
+    const { nodeVoltages, pinNetMap, sourcedNets } = useElectricalStore.getState();
     const { boards } = useSimulatorStore.getState();
     for (const board of boards) {
-      const adcPins = ADC_PIN_MAP[board.boardKind];
+      const adcPins = adcPinsFor(board.boardKind);
       if (!adcPins) continue;
       const sim = getBoardSimulator(board.id);
       if (!sim) continue;
@@ -156,6 +176,12 @@ export function connectAnalogInputsToMcu(): () => void {
       for (const { pinName, channel } of adcPins) {
         const netName = pinNetMap.get(`${board.id}:${pinName}`);
         if (!netName) continue;
+        // Only push nets a real SPICE element drives. A part with no SPICE
+        // model (analog-joystick, sensor modules that inject directly) gets
+        // an auto pull-down, solves to 0 V, and this loop used to stomp the
+        // part's own setAdcVoltage() with that phantom 0 on every solve —
+        // the part read dead no matter what it wrote.
+        if (sourcedNets.size > 0 && !sourcedNets.has(netName)) continue;
         const v = nodeVoltages[netName];
         if (v == null) continue;
         const clamped = Math.max(0, Math.min(vMax, v));
@@ -181,7 +207,7 @@ export function connectAnalogInputsToMcu(): () => void {
     const { boards } = useSimulatorStore.getState();
     const { pinNetMap, timeWaveforms } = useElectricalStore.getState();
     for (const board of boards) {
-      const adcPins = ADC_PIN_MAP[board.boardKind];
+      const adcPins = adcPinsFor(board.boardKind);
       if (!adcPins) continue;
       const sim = getBoardSimulator(board.id);
       if (!sim) continue;
@@ -251,7 +277,7 @@ export function connectAnalogInputsToMcu(): () => void {
     pushEsp32Waveforms();
     const { boards } = useSimulatorStore.getState();
     for (const board of boards) {
-      const adcPins = ADC_PIN_MAP[board.boardKind];
+      const adcPins = adcPinsFor(board.boardKind);
       if (!adcPins) continue;
       const sim = getBoardSimulator(board.id);
       if (!sim) continue;

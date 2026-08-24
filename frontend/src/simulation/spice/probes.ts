@@ -14,6 +14,7 @@
 import type { ComponentForSpice, ElectricalSolveResult, TimeWaveforms } from './types';
 import type { Wire } from '../../types/wire';
 import { UnionFind } from './unionFind';
+import { auxRailNetName, isAuxRailNet } from './boardPinGroups';
 import { rms, mean, peak, subtract, isAC } from './waveformStats';
 
 export type ProbeKind = 'voltmeter' | 'ammeter' | 'multimeter';
@@ -81,6 +82,7 @@ export function buildPinNetLookup(
   wires: Wire[],
   groundPins: Array<{ componentId: string; pinName: string }>,
   vccPins: Array<{ componentId: string; pinName: string }>,
+  auxPins: Array<{ componentId: string; pinName: string; volts: number }> = [],
 ): (componentId: string, pinName: string) => string | null {
   const uf = new UnionFind();
   for (const w of wires) {
@@ -90,12 +92,15 @@ export function buildPinNetLookup(
   }
   for (const g of groundPins) uf.setCanonical(`${g.componentId}:${g.pinName}`, '0');
   for (const v of vccPins) uf.setCanonical(`${v.componentId}:${v.pinName}`, 'vcc_rail');
+  for (const a of auxPins) {
+    uf.setCanonical(`${a.componentId}:${a.pinName}`, auxRailNetName(a.volts));
+  }
   // Build deterministic net names matching NetlistBuilder's scheme (n0, n1, …)
   const reps = [...uf.nets()].sort();
   const netNames = new Map<string, string>();
   let counter = 0;
   for (const rep of reps) {
-    if (rep === '0' || rep === 'vcc_rail') netNames.set(rep, rep);
+    if (rep === '0' || rep === 'vcc_rail' || isAuxRailNet(rep)) netNames.set(rep, rep);
     else netNames.set(rep, `n${counter++}`);
   }
   return (componentId, pinName) => {

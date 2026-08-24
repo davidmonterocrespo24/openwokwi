@@ -8,11 +8,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  getSensorControl,
-  type SensorControl,
-  type SliderControl,
-} from '../../simulation/sensorControlConfig';
+import { getSensorControl, type SensorControl, type SliderControl, LOG_SLIDER_STEPS, logSliderToValue, logValueToSlider } from '../../simulation/sensorControlConfig';
 import { dispatchSensorUpdate, getLastSensorValues } from '../../simulation/SensorUpdateRegistry';
 import './SensorControlPanel.css';
 
@@ -115,6 +111,10 @@ export const SensorControlPanel: React.FC<SensorControlPanelProps> = ({
     const val = (values[sc.key] as number) ?? sc.defaultValue;
     const displayVal = sc.formatValue ? sc.formatValue(val) : String(val);
     const isAxisKey = AXIS_KEYS.has(sc.key);
+    // Log-scale sliders (illumination): the range input runs in POSITION
+    // space and the value is derived, so the interesting low decades get
+    // real travel instead of the first few pixels.
+    const isLog = sc.scale === 'log';
 
     return (
       <div key={sc.key} className="sensor-control-row">
@@ -124,11 +124,18 @@ export const SensorControlPanel: React.FC<SensorControlPanelProps> = ({
         <input
           type="range"
           className="sensor-slider"
-          min={sc.min}
-          max={sc.max}
-          step={sc.step}
-          value={val}
-          onChange={(e) => handleSlider(sc.key, e.target.value)}
+          min={isLog ? 0 : sc.min}
+          max={isLog ? LOG_SLIDER_STEPS : sc.max}
+          step={isLog ? 1 : sc.step}
+          value={isLog ? logValueToSlider(val, sc.min, sc.max) : val}
+          onChange={(e) =>
+            handleSlider(
+              sc.key,
+              isLog
+                ? String(logSliderToValue(parseFloat(e.target.value), sc.min, sc.max))
+                : e.target.value,
+            )
+          }
         />
         <span className="sensor-value-display">
           {displayVal}

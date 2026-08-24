@@ -76,10 +76,15 @@ if (process.env.VITE_PRO_BUILD && process.env.PRO_OVERLAY_PATH) {
 
 const exampleUrls = exampleIds.map((id) => ({
   loc: `${DOMAIN}/examples/${id}`,
-  lastmod: TODAY,
   changefreq: 'monthly',
   priority: 0.6,
 }));
+
+// No <lastmod>: this runs at build time with no per-page history to draw
+// on, so every URL used to carry the build date. A lastmod that changes on
+// every deploy for every page is provably unreliable and search engines
+// discard the whole signal; omitting it is the honest option (the projects
+// sitemap, which has real updated_at timestamps, keeps its lastmod).
 
 // Every <loc> carries a trailing slash. nginx serves the prerendered route
 // files as `<route>/index.html` and 301-redirects the slash-less form to add
@@ -94,7 +99,6 @@ ${indexable
     (r) => `
   <url>
     <loc>${DOMAIN}${r.path}${r.path.endsWith('/') ? '' : '/'}</loc>
-    <lastmod>${TODAY}</lastmod>
     <changefreq>${r.changefreq ?? 'monthly'}</changefreq>
     <priority>${r.priority ?? 0.5}</priority>
   </url>`
@@ -105,7 +109,6 @@ ${exampleUrls
     (u) => `
   <url>
     <loc>${u.loc}/</loc>
-    <lastmod>${u.lastmod}</lastmod>
     <changefreq>${u.changefreq}</changefreq>
     <priority>${u.priority}</priority>
   </url>`

@@ -74,7 +74,11 @@
       "contextMenu": {
         "rename": "Renombrar",
         "delete": "Eliminar"
-      }
+      },
+      "lastSaved": "guardado por última vez",
+      "saving": "guardando…",
+      "saved": "guardado",
+      "saveFailed": "error al guardar"
     },
     "fileTabs": {
       "unsavedChanges": "Cambios sin guardar",
@@ -168,7 +172,13 @@
         "remove": "Eliminar"
       },
       "boardOptions": "Opciones de la placa...",
-      "flashToBoard": "Grabar en placa real"
+      "flashToBoard": "Grabar en placa real",
+      "flashHint": {
+        "mpy": "Instalar MicroPython (si hace falta) y subir este proyecto a una placa real conectada por USB",
+        "mpyUnavailable": "Los proyectos MicroPython no se pueden grabar desde aquí: solo sketches de Arduino",
+        "ready": "Grabar el sketch compilado en una placa real conectada por USB",
+        "willCompile": "Compilar el sketch y grabarlo en una placa real conectada por USB"
+      }
     },
     "componentPicker": {
       "title": "Añadir componente",
@@ -404,6 +414,49 @@
       "datasheetTab": "Ficha técnica",
       "examplesTitle": "Proyectos de ejemplo",
       "productPage": "Ver producto"
+    },
+    "flash": {
+      "title": "Grabar {{board}}",
+      "close": "Cerrar",
+      "detectingPorts": "Detectando puertos serie USB...",
+      "needsDesktop": "Grabar en hardware requiere Velxio Desktop. La app web no puede acceder a los puertos serie USB locales.",
+      "noPorts": "No se detectaron puertos serie USB.",
+      "noPortsHint": "Conecta la placa a un puerto USB y pulsa Actualizar. En Linux puede que tengas que añadirte al grupo dialout:",
+      "noPortsHintLogout": "(cierra sesión y vuelve a entrar después de ejecutarlo.)",
+      "refresh": "Actualizar",
+      "refreshPorts": "Actualizar puertos",
+      "serialPort": "Puerto serie",
+      "flash": "Grabar",
+      "compileFlash": "Compilar y grabar",
+      "connectFlash": "Conectar y grabar",
+      "connectCompileFlash": "Conectar, compilar y grabar",
+      "noBuild": "Esta placa aún no tiene un programa compilado: se compilará primero y después se grabará. La salida del compilador aparece en la consola de abajo.",
+      "staleBuild": "El código cambió desde la última compilación. El sketch se recompilará antes de grabar para que la placa reciba lo que ves en el editor.",
+      "webIntro": "Graba por USB directamente desde el navegador.",
+      "webHint": "Conecta la placa por USB y pulsa el botón: el navegador te preguntará qué puerto serie usar. Cierra antes cualquier otro programa que use el puerto (monitores serie, IDEs).",
+      "mpyTwoSteps": "Este proyecto MicroPython se graba en dos pasos: primero se instala el firmware de MicroPython si la placa no lo tiene (alrededor de un minuto) y luego se suben tus archivos .py y la placa reinicia en main.py.",
+      "mpyUnavailable": "Los proyectos MicroPython no se pueden grabar en una placa real desde aquí.",
+      "compiling": "Compilando el sketch...",
+      "compilingHint": "La grabación empieza sola cuando la compilación termina bien.",
+      "flashingOn": "Grabando en {{port}}...",
+      "success": "Grabado correctamente en {{seconds}} s",
+      "compileFailed": "La compilación falló: corrige los errores de abajo y vuelve a intentarlo. {{error}}",
+      "noOutput": "(todavía sin salida)",
+      "dontUnplug": "No desconectes la placa mientras se graba.",
+      "startOver": "Empezar de nuevo",
+      "pickAnotherPort": "Elegir otro puerto",
+      "retry": "Reintentar",
+      "retryCompile": "Recompilar y grabar",
+      "cancel": "Cancelar",
+      "hide": "Ocultar",
+      "paidOnlyTitle": "Grabar placas reales forma parte de la licencia de pago de Velxio Desktop",
+      "paidOnlyBody": "Subir un sketch a una placa real conectada por USB está disponible con una licencia Personal, Commercial o Enterprise. El simulador sigue siendo gratis.",
+      "seePlans": "Ver planes",
+      "log": {
+        "compiling": "Compilando el sketch antes de grabar...",
+        "recompiling": "El código cambió desde la última compilación: recompilando antes de grabar...",
+        "compiled": "Compilación OK en {{seconds}} s. Empezando a grabar..."
+      }
     }
   },
   "about": {

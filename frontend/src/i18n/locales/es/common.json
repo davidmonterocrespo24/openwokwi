@@ -33,7 +33,7 @@
     "hero": {
       "titleLine1": "Arduino, ESP32 y Raspberry Pi.",
       "titleAccent": "Directamente en tu navegador.",
-      "subtitle": "Escribí código, conectá componentes, ejecutá. 19 placas, un agente de IA que arma circuitos por vos, emulación real de CPU, app de escritorio offline, código abierto AGPLv3.",
+      "subtitle": "Escribí código, conectá componentes, ejecutá. 35 placas, un agente de IA que arma circuitos por vos, emulación real de CPU, app de escritorio offline, código abierto AGPLv3.",
       "ctaPrimary": "Probar el simulador online gratis →",
       "ctaGithub": "Ver en GitHub",
       "trustLine": "Agente de IA incluido · Funciona offline · Código abierto AGPLv3 · Sin registro",
@@ -43,7 +43,7 @@
       "label": "Hardware compatible",
       "titleLine1": "Cada arquitectura.",
       "titleLine2": "Una sola herramienta.",
-      "subtitle": "19 placas en 5 arquitecturas de CPU: AVR8, ARM Cortex-M0+, RISC-V, Xtensa y Linux. Todo funciona localmente, sin necesidad de nube."
+      "subtitle": "35 placas en 6 arquitecturas de CPU: AVR8, ARM Cortex-M, ARM Cortex-A, RISC-V, Xtensa y Linux. Incluye placas de nuestros partners Pimoroni, M5Stack, Seeed Studio y DFRobot. Todo se ejecuta en local, sin nube."
     },
     "features": {
       "label": "Características",
@@ -433,5 +433,11 @@
         "privateHint": "Solo vos podés ver este proyecto."
       }
     }
+  },
+  "news": {
+    "kicker": "Novedades",
+    "readMore": "Leer más",
+    "gotIt": "Entendido",
+    "close": "Cerrar"
   }
 }

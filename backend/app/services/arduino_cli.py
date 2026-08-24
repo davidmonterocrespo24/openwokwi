@@ -23,6 +23,120 @@ def _looks_like_missing_header(stderr: str | None) -> bool:
     return bool(stderr and _MISSING_HEADER_RE.search(stderr))
 
 
+# ── arduino-cli error humanizer ──────────────────────────────────────────────
+# arduino-cli reports failures in two shapes: plain text on stderr, or (when
+# invoked with --format json) a JSON object {"error": "...", "warnings": [...]}
+# on stderr. We used to hand that raw blob straight to the caller, so a fresh
+# desktop install with no library index yet — and no way to reach
+# downloads.arduino.cc through the user's firewall / proxy — surfaced to the
+# in-app agent as "the library server returns a JSON error" (2026-08-17,
+# a Maker cancelled 16 minutes after subscribing). Turn the known shapes into
+# one actionable sentence and keep the raw text under a separate key.
+
+_INDEX_DOWNLOAD_MARKERS = (
+    "error downloading index",
+    "library_index.tar.bz2",
+    "library_index.json",
+    "package_index.json",
+    "error updating library index",
+    "error initializing instance",
+)
+_NETWORK_MARKERS = (
+    "downloads.arduino.cc",
+    "dial tcp",
+    "dial udp",
+    "network is unreachable",
+    "no such host",
+    "connection refused",
+    "tls handshake",
+    "i/o timeout",
+    "context deadline exceeded",
+    "proxy",
+)
+
+
+
+# ── Compiler diagnostics that need a Velxio answer, not the IDE's ────────────
+# arduino-pico gates its Bluetooth libraries behind a static_assert whose text
+# tells the user to flip "Tools->IP/Bluetooth Stack" — a menu that exists in the
+# Arduino IDE and not here. Left alone it reads like a setting we forgot to
+# expose. The truth is simpler and worth saying plainly: the CYW43439/RM2's
+# Bluetooth side is not emulated, only its WiFi side is, so there is nothing to
+# enable.
+_BT_ASSERT_MARKERS = ("_needsbt.h", "This library needs Bluetooth enabled")
+
+_BT_NOT_EMULATED_NOTE = (
+    "\n"
+    "Velxio: Bluetooth is not emulated on this board. The CYW43439 (the RM2\n"
+    "module on the Pimoroni Pico Plus 2 W, and the same chip on the Pico W)\n"
+    "is emulated for WiFi only — association, DHCP, DNS and real HTTP all\n"
+    "work — but its Bluetooth controller is not modelled, so there is no\n"
+    "'IP/Bluetooth Stack' setting to turn on here. Sketches that use WiFi.h,\n"
+    "HTTPClient or WiFiServer compile and run.\n"
+)
+
+
+def annotate_build_stderr(stderr: str | None) -> str | None:
+    """Append a Velxio-authored note to compiler output we know is misleading.
+
+    Kept separate from humanize_cli_error: that one rewrites arduino-cli's own
+    failures, this one leaves the compiler's diagnostics intact and adds context
+    underneath, because the developer still needs the real error text.
+    """
+    if not stderr:
+        return stderr
+    if any(marker in stderr for marker in _BT_ASSERT_MARKERS):
+        return stderr.rstrip() + "\n" + _BT_NOT_EMULATED_NOTE
+    return stderr
+
+
+def humanize_cli_error(raw: str | None, *, action: str = "run arduino-cli") -> str:
+    """One readable sentence for an arduino-cli failure.
+
+    `raw` is whatever arduino-cli wrote (stderr, or stdout+stderr). `action`
+    names what we were doing ("search libraries", "install Adafruit GFX") so
+    the message reads naturally in the UI and in the agent's tool result.
+    """
+    text = (raw or "").strip()
+    # JSON-shaped error (--format json): {"error": "...", "warnings": [...]}
+    if text.startswith("{"):
+        try:
+            import json as _json
+            obj = _json.loads(text)
+            if isinstance(obj, dict):
+                parts = [str(obj.get("error") or "")]
+                warns = obj.get("warnings")
+                if isinstance(warns, list):
+                    parts.extend(str(w) for w in warns)
+                text = "\n".join(p for p in parts if p).strip()
+        except ValueError:
+            pass
+    low = text.lower()
+
+    if any(m in low for m in _INDEX_DOWNLOAD_MARKERS) or (
+        "index" in low and any(m in low for m in _NETWORK_MARKERS)
+    ):
+        return (
+            f"Could not {action}: the Arduino library index is not available yet "
+            "and arduino-cli could not download it from downloads.arduino.cc. "
+            "Check your internet connection, firewall or proxy and try again."
+        )
+    if "can't download library" in low or (
+        "download" in low and any(m in low for m in _NETWORK_MARKERS)
+    ):
+        return (
+            f"Could not {action}: the download from downloads.arduino.cc failed. "
+            "Check your internet connection, firewall or proxy and try again."
+        )
+    if "not found" in low or "no library found" in low:
+        first = next((ln.strip() for ln in text.splitlines() if ln.strip()), text)
+        return f"Could not {action}: {first[:300]}"
+    if not text:
+        return f"Could not {action}: arduino-cli returned no output."
+    first = next((ln.strip() for ln in text.splitlines() if ln.strip()), text)
+    return f"Could not {action}: {first[:300]}"
+
+
 class ArduinoCLIService:
     # Board manager URLs for cores that aren't built-in
     CORE_URLS: dict[str, str] = {
@@ -61,6 +175,9 @@ class ArduinoCLIService:
 
     def __init__(self, cli_path: str = "arduino-cli"):
         self.cli_path = cli_path
+        # Cached `core list` output; see _is_core_installed. Invalidated
+        # wherever a core is installed so a fresh install is seen immediately.
+        self._installed_cores: str | None = None
         self._ensure_board_urls()
         self._ensure_core_installed()
 
@@ -156,12 +273,24 @@ class ArduinoCLIService:
         return None
 
     def _is_core_installed(self, core_id: str) -> bool:
-        """Check whether a core is currently installed."""
-        result = subprocess.run(
-            [self.cli_path, "core", "list"],
-            capture_output=True, text=True
-        )
-        return core_id in result.stdout
+        """Check whether a core is currently installed.
+
+        Memoized: this shells out to `arduino-cli core list` (~1.5 s measured)
+        and it used to run on EVERY compile of a non-AVR board, from inside an
+        async handler - so it blocked the event loop for the whole process, not
+        just the caller. Cores only appear via install_core() below, which
+        refreshes the set, and they are never removed at runtime.
+        """
+        if self._installed_cores is None:
+            try:
+                result = subprocess.run(
+                    [self.cli_path, "core", "list"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                self._installed_cores = result.stdout
+            except (subprocess.SubprocessError, OSError):
+                return False  # unknown: let the caller try to install
+        return core_id in self._installed_cores
 
     async def ensure_core_for_board(self, fqbn: str) -> dict:
         """
@@ -180,6 +309,8 @@ class ArduinoCLIService:
         version = self.CORE_INSTALL_VERSIONS.get(core_id)
         install_spec = f"{core_id}@{version}" if version else core_id
         print(f"[arduino-cli] Auto-installing core {install_spec} for board {fqbn}...")
+
+        self._installed_cores = None  # a core is about to appear
 
         def _install():
             return subprocess.run(
@@ -588,11 +719,23 @@ class ArduinoCLIService:
                         if retry.get("success"):
                             retry["manifest_incomplete"] = True
                             return retry
+                        # Both attempts failed. The retry ran in the SUPERSET
+                        # environment (every installed library visible), so its
+                        # error is the sketch's real one; the scoped attempt
+                        # stopped at the first undeclared transitive dependency,
+                        # which is an artifact of OUR scoping. Returning the
+                        # scoped error here reported a phantom missing-library
+                        # problem for a sketch whose actual bug was a typo'd
+                        # #include (2026-08-24: "Adafruit_I2CDevice.h: No such
+                        # file" for a manifest that simply never named BusIO).
+                        if (retry.get("stderr") or "").strip():
+                            retry["scope_retry_failed"] = True
+                            return retry
                     return {
                         "success": False,
                         "error": "Compilation failed",
                         "stdout": result.stdout,
-                        "stderr": result.stderr
+                        "stderr": annotate_build_stderr(result.stderr),
                     }
 
             except Exception as e:
@@ -658,8 +801,12 @@ class ArduinoCLIService:
 
             if result.returncode != 0:
                 print(f"Error searching libraries: {stderr}")
-                return {"success": False, "error": stderr}
-                
+                return {
+                    "success": False,
+                    "error": humanize_cli_error(stderr or stdout, action="search libraries"),
+                    "raw_error": stderr,
+                }
+
             import json
             try:
                 results = json.loads(stdout)
@@ -686,7 +833,13 @@ class ArduinoCLIService:
 
                 return {"success": True, "libraries": libraries}
             except json.JSONDecodeError:
-                return {"success": False, "error": "Invalid output format from arduino-cli"}
+                # rc was 0 but stdout is not JSON: arduino-cli printed a
+                # progress/warning line ahead of (or instead of) the payload.
+                return {
+                    "success": False,
+                    "error": humanize_cli_error(stderr or stdout, action="search libraries"),
+                    "raw_error": (stderr or stdout)[:2000],
+                }
 
         except Exception as e:
             print(f"Exception searching libraries: {e}")
@@ -763,7 +916,15 @@ class ArduinoCLIService:
                             "requested_version": version,
                         }
                 print(f"Failed to install {library_name}: {result.stderr}")
-                return {"success": False, "error": result.stderr, "stdout": result.stdout}
+                return {
+                    "success": False,
+                    "error": humanize_cli_error(
+                        (result.stderr or "") + "\n" + (result.stdout or ""),
+                        action=f"install {library_name}",
+                    ),
+                    "raw_error": result.stderr,
+                    "stdout": result.stdout,
+                }
 
         except Exception as e:
             print(f"Exception installing library: {e}")

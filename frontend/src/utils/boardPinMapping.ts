@@ -130,13 +130,35 @@ export const PI3_BCM_TO_PHYSICAL: Record<number, number> = Object.fromEntries(
 );
 
 /**
+ * Pad names that are a supply, ground or reset — never a GPIO.
+ *
+ * Several boards silkscreen their 3.3 V rail as "3V" and their reset as "RST",
+ * and the numeric fallback below is `parseInt(pinName, 10)`: parseInt('3V', 10)
+ * is 3, so the Wemos Lolin32 Lite's supply pad resolved to GPIO3 and the XIAO's
+ * 3V3/5V pads to GPIO3/GPIO5. A wire to the supply drove a real pin. Matching
+ * these first also turns them into -1 rather than null, which is what tells
+ * WirePin (and the ground check in SimulatorCanvas) to skip them silently.
+ */
+const POWER_PAD_RE =
+  /^(gnd|vss|vee|3v3|3v|3\.3v|5v|vcc|vdd|vin|vbus|vbat|bat|en|rst|reset|chip_pu)([._]?\d+)?$/i;
+
+/**
  * ESP32 DevKit-C GPIO pin names → GPIO numbers.
  * Pin names are GPIO numbers directly (GPIO0–GPIO39).
- * Special aliases: TX=1, RX=3.
+ * Special aliases: the UART pads (TX/RX = UART0, RX0/TX0 the same pads under
+ * their DevKit V1 silkscreen names, RX2/TX2 = UART2 on GPIO16/17).
  */
 const ESP32_PIN_MAP: Record<string, number> = {
   TX: 1,
   RX: 3,
+  // UART pads on the DevKit V1 silkscreen. Without these the four pads
+  // resolved to null: RX2/TX2 have numeric twins at the same coordinate
+  // ('16'/'17'), but RX0/TX0 do not, so they were the only route to GPIO3
+  // and GPIO1 and a wire to them did nothing at all.
+  RX0: 3,
+  TX0: 1,
+  RX2: 16,
+  TX2: 17,
   GPIO0: 0,
   GPIO1: 1,
   GPIO2: 2,
@@ -284,6 +306,10 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
   }
 
   if (boardId === 'arduino-mega') {
+    // Supply pads BEFORE the numeric parse, or '5V' reads as D5 and '3.3V' as
+    // D3 — a wire to the supply would drive a real pin, and a walk looking for
+    // "what drives this net" would stop at a rail believing it found a GPIO.
+    if (POWER_PAD_RE.test(pinName)) return -1;
     // Digital pins D0–D53 parsed numerically
     const num = parseInt(pinName, 10);
     if (!isNaN(num) && num >= 0 && num <= 53) return num;
@@ -340,6 +366,8 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
 
   // Pi Pico W — same GPIO mapping as Raspberry Pi Pico (GP0-GP28 → 0-28)
   if (boardId === 'pi-pico-w') {
+    // Same trap as the Mega below/above: '3V3' would parse as 3 and '5V' as 5.
+    if (POWER_PAD_RE.test(pinName)) return -1;
     if (pinName.startsWith('GP')) {
       const n = parseInt(pinName.substring(2), 10);
       if (!isNaN(n)) return n;
@@ -361,19 +389,42 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
     return null;
   }
 
-  // ESP32 / ESP32-S3 / ESP32-C3 — GPIO numbers used directly
-  if (boardId === 'esp32' || boardId.startsWith('esp32')) {
-    // Power / GND pins (GND, GND.1, 3V3, 3V3.1, 5V, 5V.1, etc.)
-    if (pinName.startsWith('GND') || pinName.startsWith('3V3') || pinName.startsWith('5V'))
+  // M5Stack Core: same bare-GPIO-number pads, classic ESP32 range. Without
+  // this branch the kind fell through every one below — the shared ESP32
+  // branch requires boardId.startsWith('esp32') — and every wire from the
+  // M-Bus header resolved to null: a part wired to the header never saw a
+  // signal, with nothing anywhere saying why. BAT joins the power names.
+  if (boardId === 'm5stack-core') {
+    if (
+      pinName.startsWith('GND') ||
+      pinName.startsWith('3V3') ||
+      pinName.startsWith('5V') ||
+      pinName === 'BAT'
+    )
       return -1;
-    // Try bare number first ("13" → 13)
     const num = parseInt(pinName, 10);
     if (!isNaN(num) && num >= 0 && num <= 39) return num;
+    return null;
+  }
+
+  // ESP32 / ESP32-S3 / ESP32-C3 — GPIO numbers used directly
+  if (boardId === 'esp32' || boardId.startsWith('esp32')) {
+    // Power / GND / reset pads (GND, GND.1, 3V3, 5V, EN, RST, ...)
+    if (POWER_PAD_RE.test(pinName)) return -1;
+    // Try bare number first ("13" → 13). The ceiling is per family: the
+    // classic ESP32 tops out at GPIO39, the S3 at GPIO48. A shared 39
+    // rejected the S3 DevKitC's 40/41/42/45/46/47/48 pads, so seven pads
+    // on that board resolved to null and a wire to them did nothing.
+    const maxGpio = boardId.startsWith('esp32-s3') ? 48 : 39;
+    const num = parseInt(pinName, 10);
+    if (!isNaN(num) && num >= 0 && num <= maxGpio) return num;
     return ESP32_PIN_MAP[pinName] ?? null;
   }
 
   // ESP32 variants not starting with 'esp32'
   if (boardId === 'wemos-lolin32-lite') {
+    // Supply pads first — this board silkscreens its rail "3V", not "3V3".
+    if (POWER_PAD_RE.test(pinName)) return -1;
     // Pins named "GPIO34", "GPIO32" etc → strip prefix
     if (pinName.startsWith('GPIO')) return parseInt(pinName.substring(4), 10);
     const num = parseInt(pinName, 10);
@@ -382,6 +433,7 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
   }
 
   if (boardId === 'xiao-esp32-s3' || boardId === 'arduino-nano-esp32') {
+    if (POWER_PAD_RE.test(pinName)) return -1;
     // D0-D13, A0-A7 → ESP32-S3 GPIO numbers
     const XIAO_S3_MAP: Record<string, number> = {
       D0: 1,
@@ -419,6 +471,12 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
       A5: 12,
       A6: 13,
       A7: 14,
+      // The D0/D1 positions are silkscreened RX0/TX1, so the D-names above
+      // were unreachable: GPIO44 and GPIO43 had no pad that resolved to them.
+      RX0: 44,
+      TX1: 43,
+      B0: 46,
+      B1: 0,
     };
     const map = boardId === 'arduino-nano-esp32' ? NANO_ESP32_MAP : XIAO_S3_MAP;
     if (pinName in map) return map[pinName];
@@ -428,6 +486,7 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
   }
 
   if (boardId === 'xiao-esp32-c3') {
+    if (POWER_PAD_RE.test(pinName)) return -1;
     const XIAO_C3_MAP: Record<string, number> = {
       D0: 2,
       D1: 3,
@@ -448,6 +507,7 @@ export function boardPinToNumber(boardId: string, pinName: string): number | nul
   }
 
   if (boardId === 'aitewinrobot-esp32c3-supermini') {
+    if (POWER_PAD_RE.test(pinName)) return -1;
     const num = parseInt(pinName, 10);
     if (!isNaN(num)) return num;
     return ESP32_PIN_MAP[pinName] ?? null;

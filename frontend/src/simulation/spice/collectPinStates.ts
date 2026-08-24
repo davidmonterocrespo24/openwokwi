@@ -28,6 +28,8 @@ import { boardPinToNumber } from '../../utils/boardPinMapping';
 export function pinNameToArduinoPin(pinName: string, boardKind: BoardKind): number {
   const group = BOARD_PIN_GROUPS[boardKind] ?? BOARD_PIN_GROUPS.default;
   if (group.gnd.includes(pinName) || group.vcc_pins.includes(pinName)) return -1;
+  // Aux-rail supply pins (VIN / 5V / off-voltage 3V3) are not GPIOs either.
+  if (group.aux?.pins.includes(pinName)) return -1;
   // Single source of truth: utils/boardPinMapping knows every family's
   // silkscreen->GPIO map (nano-esp32 D2->GPIO5, xiao D-pins, STM32
   // PC13->linear 45, Pico GP*, ...). This function used to be a parallel

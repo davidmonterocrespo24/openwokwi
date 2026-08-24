@@ -79,6 +79,7 @@ import {
 } from '../../lib/proBoardGate';
 import { FlashModal } from './FlashModal';
 import { isTauri as isTauriRuntimeFn } from '../../desktop/tauriBridge';
+import { webFlashAvailable, webFlashMpyAvailable } from '../../lib/proWebFlash';
 import { isEsp32Family } from '../../types/boardOptions';
 import { BoardOptionsModal } from './BoardOptionsModal';
 import { useOscilloscopeStore } from '../../store/useOscilloscopeStore';
@@ -1392,6 +1393,71 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         (w) => w.start.componentId === component.id || w.end.componentId === component.id,
       );
 
+      // 4×4 membrane keypad on an ESP32-family board: the row/column matrix
+      // scan is µs-timing-critical — firmware drives one row LOW and reads
+      // the columns back within the same loop pass, far faster than the
+      // browser↔QEMU round trip — so the matrix is emulated server-side.
+      // Attach it as a 'matrix-keypad' sensor (rows/cols GPIO lists) and
+      // stream only the pressed-key set; the QEMU worker drives the column
+      // pins synchronously from its GPIO callbacks.
+      if (component.metadataId === 'membrane-keypad') {
+        const pinGpio: Record<string, number> = {};
+        let keypadBoardId: string | null = null;
+        connectedWires.forEach((wire) => {
+          const isStartSelf = wire.start.componentId === component.id;
+          const selfEndpoint = isStartSelf ? wire.start : wire.end;
+          const otherEndpoint = isStartSelf ? wire.end : wire.start;
+          if (!isBoardComponent(otherEndpoint.componentId)) return;
+          const boardInstance = boards.find((b) => b.id === otherEndpoint.componentId);
+          const lookupKey = boardInstance ? boardInstance.boardKind : otherEndpoint.componentId;
+          const gpio = boardPinToNumber(lookupKey, otherEndpoint.pinName);
+          if (gpio !== null && gpio >= 0) {
+            pinGpio[selfEndpoint.pinName] = gpio;
+            keypadBoardId = otherEndpoint.componentId;
+          }
+        });
+        const kpRows = ['R1', 'R2', 'R3', 'R4'].map((p) => pinGpio[p] ?? -1);
+        const kpCols = ['C1', 'C2', 'C3', 'C4'].map((p) => pinGpio[p] ?? -1);
+        const kpBridge = keypadBoardId ? getEsp32Bridge(keypadBoardId) : null;
+        if (kpBridge && kpRows.every((g) => g >= 0) && kpCols.every((g) => g >= 0)) {
+          const anchorPin = kpRows[0];
+          kpBridge.sendSensorAttach('matrix-keypad', anchorPin, {
+            rows: kpRows,
+            cols: kpCols,
+          });
+          const pressed = new Set<string>();
+          const sendPressed = () =>
+            kpBridge.sendSensorUpdate(anchorPin, {
+              pressed: [...pressed].map((s) => s.split(',').map(Number)),
+            });
+          // Attach synchronously — this effect re-runs on every boards[]
+          // mutation (serial output!), and a delayed attach would open a
+          // listener-less window every re-run in which a key press is lost
+          // entirely. No sendSensorDetach on cleanup for the same reason:
+          // the worker-side install is idempotent, and detach+reattach on
+          // unrelated re-renders would wipe the pressed-key state mid-scan.
+          const kpEl = document.getElementById(component.id);
+          if (kpEl) {
+            const onPress = (e: Event) => {
+              const { row, column } = (e as CustomEvent).detail;
+              pressed.add(`${row},${column}`);
+              sendPressed();
+            };
+            const onRelease = (e: Event) => {
+              const { row, column } = (e as CustomEvent).detail;
+              pressed.delete(`${row},${column}`);
+              sendPressed();
+            };
+            kpEl.addEventListener('button-press', onPress);
+            kpEl.addEventListener('button-release', onRelease);
+            cleanups.push(() => {
+              kpEl.removeEventListener('button-press', onPress);
+              kpEl.removeEventListener('button-release', onRelease);
+            });
+          }
+        }
+      }
+
       connectedWires.forEach((wire) => {
         const isStartSelf = wire.start.componentId === component.id;
         const selfEndpoint = isStartSelf ? wire.start : wire.end;
@@ -1502,22 +1568,30 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedComponentId, recordRemoveComponent]);
 
-  // Handle component selection from modal
-  const handleSelectComponent = (metadata: ComponentMetadata) => {
-    // Anchor new components to the visible top-left of the canvas, so they
-    // appear in the user's current viewport regardless of pan/zoom (instead
-    // of growing off-screen at fixed world coords like (400, 100 + row*250)).
+  // Where the next thing added from the picker lands — components AND boards
+  // share this, so both start at the same corner and cascade over the same
+  // occupied slots (a board dropped in the corner counts as parking there for
+  // the next part, and vice versa).
+  //
+  // Anchored to the visible top-left of the canvas, so it appears in the
+  // user's current viewport regardless of pan/zoom (instead of growing
+  // off-screen at fixed world coords like (400, 100 + row*250)). From that
+  // corner it cascades down-right, taking the first FREE slot — see
+  // utils/dropSlot for why it is keyed on what is parked there rather than on
+  // how many items the project has.
+  const nextDropSlot = (): { x: number; y: number } => {
     const rect = canvasRef.current?.getBoundingClientRect();
     const z = zoomRef.current || 1;
     const screenMargin = 60; // px on screen — keeps the part off the toolbar/edge
     const worldOrigin = rect
       ? toWorld(rect.left + screenMargin, rect.top + screenMargin)
       : { x: 100, y: 100 };
+    return pickDropSlot(worldOrigin, [...components, ...boards], { step: 36 / z });
+  };
 
-    // Cascade down-right from that corner, taking the first FREE slot — see
-    // utils/dropSlot for why it is keyed on what is parked there rather than
-    // on how many components the project has.
-    const { x, y } = pickDropSlot(worldOrigin, components, { step: 36 / z });
+  // Handle component selection from modal
+  const handleSelectComponent = (metadata: ComponentMetadata) => {
+    const { x, y } = nextDropSlot();
 
     const component = createComponentFromMetadata(metadata, x, y);
     trackAddComponent(metadata.id);
@@ -2722,15 +2796,22 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     ESP32-CAM (OV2640 over I2S0 DVP) and the XIAO ESP32S3
                     Sense (OV2640-compatible over LCD_CAM). */}
                 {(activeBoard?.boardKind === 'esp32-cam' ||
-                  activeBoard?.boardKind === 'xiao-esp32s3-sense') && (
+                  activeBoard?.boardKind === 'xiao-esp32s3-sense' ||
+                  (activeBoard &&
+                    Boolean(getProBoard(activeBoard.boardKind)?.builtInCamera))) && (
                   <CameraToggle
                     boardId={activeBoard.id}
                     // The S3 esp32-camera build allocates width*height/5 bytes
                     // for a QVGA JPEG frame (15360) and stops copying at
                     // fb_size - one 1 KiB DMA half-buffer: frames must stay
                     // under ~14336 or the EOI marker is truncated (NO-EOI).
+                    // Overlay boards declare their cap on builtInCamera.
                     maxFrameBytes={
-                      activeBoard.boardKind === 'xiao-esp32s3-sense' ? 14000 : undefined
+                      activeBoard.boardKind === 'xiao-esp32s3-sense'
+                        ? 14000
+                        : ((cam) => (typeof cam === 'object' ? cam.maxFrameBytes : undefined))(
+                            getProBoard(activeBoard.boardKind)?.builtInCamera,
+                          )
                     }
                   />
                 )}
@@ -2805,9 +2886,16 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                         }
                       ).__velxio_iot_gateway_open_gate__;
                       if (gate && gate()) return;
-                      // Pico W runs in THIS tab — a new tab would background and
-                      // freeze the emulation. Show the page in an in-app iframe.
-                      if (activeBoard.boardKind === 'pi-pico-w') {
+                      // Boards whose network stack lives in THIS tab (Pico W,
+                      // and any ESP32 on the in-browser JS engine — wifiStatus
+                      // carries inBrowser) open in the in-app iframe: a new tab
+                      // backgrounds this one, the emulation gets timer-throttled,
+                      // and the in-chip server times out. QEMU boards run
+                      // backend-side, so a new tab is fine there.
+                      if (
+                        activeBoard.boardKind === 'pi-pico-w' ||
+                        activeBoard.wifiStatus?.inBrowser === true
+                      ) {
                         openDeviceGateway(gatewayUrl);
                       } else {
                         window.open(gatewayUrl, '_blank');
@@ -3442,15 +3530,31 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               },
             });
           }
-          // Flashing needs USB serial, which only the desktop shell has.
-          if (isTauriRuntime) {
+          // Flashing needs USB serial: the desktop shell always has it;
+          // on the web the pro overlay may install a Web Serial flasher
+          // for this board kind (no-op in pure OSS builds).
+          if (isTauriRuntime || webFlashAvailable(board.boardKind)) {
+            // MicroPython boards don't compile to a flash image — the store
+            // keeps the 'micropython-loaded' sentinel. They flash only when
+            // the overlay implements the MicroPython path (firmware install
+            // + raw-REPL file upload); no compile step is required there,
+            // the workspace files are always available.
+            const isMpy = board.languageMode === 'micropython';
+            const mpyWebOk =
+              isMpy && !isTauriRuntime && webFlashMpyAvailable(board.boardKind);
+            // Arduino/ESP-IDF boards are always flashable: the Flash dialog
+            // compiles first when there is no build (or a stale one).
             actions.push({
               id: 'flash',
               label: t('editor.canvas.flashToBoard'),
-              disabled: !board.compiledProgram,
-              title: board.compiledProgram
-                ? 'Flash the compiled sketch to a real USB-attached board'
-                : 'Compile the sketch first',
+              disabled: isMpy ? !mpyWebOk : false,
+              title: isMpy
+                ? mpyWebOk
+                  ? t('editor.canvas.flashHint.mpy')
+                  : t('editor.canvas.flashHint.mpyUnavailable')
+                : board.compiledProgram
+                  ? t('editor.canvas.flashHint.ready')
+                  : t('editor.canvas.flashHint.willCompile'),
               onSelect: () => {
                 setFlashModalFor(boardContextMenu.boardId);
                 setBoardContextMenu(null);
@@ -3559,13 +3663,15 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             return;
           }
           trackSelectBoard(kind);
-          const sameKind = boards.filter((b) => b.boardKind === kind);
-          const newBoardId = sameKind.length === 0 ? kind : `${kind}-${sameKind.length + 1}`;
-          const x = boardPosition.x + boards.length * 60 + 420;
-          const y = boardPosition.y + boards.length * 30;
+          // Same landing rule as components: the visible corner, first free
+          // slot. Boards used to be placed 420 world-px right of the ACTIVE
+          // board plus 60/30 px per board already on the canvas — a fixed
+          // world offset that ignored pan/zoom (so the new board could land
+          // off-screen) and that kept marching further out as boards were
+          // added, even after they had been moved away or removed.
+          const { x, y } = nextDropSlot();
           addBoard(kind, x, y);
           // file group is created inside addBoard
-          void newBoardId;
         }}
       />
 
@@ -3666,7 +3772,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
 
       {/* Hardware flash modal — opens from board context menu when
           the user has compiled the sketch + clicks "Flash to real
-          board". Only present in Tauri (web hides the menu item). */}
+          board". Present in Tauri, and on the web when the pro
+          overlay installed a Web Serial flasher for the board kind. */}
       {flashModalFor &&
         (() => {
           const b = boards.find((x) => x.id === flashModalFor);

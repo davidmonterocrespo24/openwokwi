@@ -58,7 +58,7 @@ The **Raspberry Pi Pico** and **Pico W** boards use the **RP2040** microcontroll
 
 <table>
 <tr>
-  <td align="center"><img src="img/boards/pi-pico.png" width="180" alt="Raspberry Pi Pico"/><br/><b>Raspberry Pi Pico</b></td>
+  <td align="center"><img src="img/boards/raspberry-pi-pico.png" width="180" alt="Raspberry Pi Pico"/><br/><b>Raspberry Pi Pico</b></td>
   <td align="center"><img src="img/boards/pi-pico-w.png" width="180" alt="Raspberry Pi Pico W"/><br/><b>Raspberry Pi Pico W</b></td>
 </tr>
 </table>

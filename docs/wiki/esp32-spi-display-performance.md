@@ -361,8 +361,9 @@ Building `libqemu-xtensa.dll` on the Windows dev box (MSYS2 MINGW64):
   resolves these already; a bare `ctypes.CDLL` test needs
   `os.add_dll_directory(r'C:\msys64\mingw64\bin')`.
 
-The Linux/CI build (`build_libqemu-esp32.sh` + the `qemu-prebuilt` release) needs
-the same source change; bump the prebuilt DLLs there to ship the fix.
+The Linux/CI build (`build_libqemu-esp32.sh`, whose output is collected from the
+workflow artifact and uploaded to velxio.dev) needs the same source change; bump
+the prebuilt DLLs there to ship the fix.
 
 ---
 

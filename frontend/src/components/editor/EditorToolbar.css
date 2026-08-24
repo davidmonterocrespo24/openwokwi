@@ -47,6 +47,15 @@
   overflow: hidden;
 }
 
+/* Empty (nothing renders here today), it must NOT grow: a spacer that eats
+   the surplus width turns it into a black hole between the Run group and
+   Libraries whenever the bar gets roomier — closing the AI chat is exactly
+   that. Packed, the surplus collects at ONE place instead: the boundary in
+   front of the canvas controls, which already carries a divider. */
+.toolbar-center-slot:empty {
+  flex: 0 0 0;
+}
+
 /* ── Divider ─────────────────────────────────────── */
 .tb-divider {
   width: 1px;
@@ -163,6 +172,28 @@
 }
 /* When even narrower, also collapse the board pill label. */
 @container editor-toolbar (max-width: 460px) {
+  .tb-board-pill-label {
+    display: none;
+  }
+  .tb-board-pill {
+    padding: 3px 6px;
+  }
+}
+
+/* Same two collapses when the toolbar rides inside the shared desktop bar
+   (App.css turns the wrapper's own containment off there so the bar can
+   wrap instead of overlap). The Libraries label goes with the first tier —
+   the `unified-toolbar--compact` class AppHeader sets when it measures that
+   the labelled strip does not fit (see SimulatorCanvas.css) — and the board
+   pill label with the bar's own 905px tier, so the whole row degrades in
+   step. */
+.unified-toolbar.unified-toolbar--compact .tb-libraries-label {
+  display: none;
+}
+.unified-toolbar.unified-toolbar--compact .tb-btn-libraries {
+  padding: 0 6px;
+}
+@container unified-toolbar (max-width: 905px) {
   .tb-board-pill-label {
     display: none;
   }

@@ -16,7 +16,7 @@ import type {
 } from './types';
 import type { Wire } from '../../types/wire';
 import type { BoardKind } from '../../types/board';
-import { BOARD_PIN_GROUPS } from './boardPinGroups';
+import { boardPinGroupFor } from './boardPinGroups';
 import { parseValueWithUnits } from './valueParser';
 import { PASSIVE_PRESETS } from './componentToSpice';
 
@@ -182,7 +182,7 @@ export function buildInputFromStore(snap: StoreSnapshot): BuildNetlistInput {
   }));
 
   const boards: BoardForSpice[] = snap.boards.map((b) => {
-    const group = BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default;
+    const group = boardPinGroupFor(b.boardKind);
     return {
       id: b.id,
       boardKind: b.boardKind,
@@ -190,6 +190,8 @@ export function buildInputFromStore(snap: StoreSnapshot): BuildNetlistInput {
       pins: b.pinStates,
       groundPinNames: group.gnd,
       vccPinNames: group.vcc_pins,
+      auxPinNames: group.aux?.pins,
+      auxVolts: group.aux?.volts,
     };
   });
 

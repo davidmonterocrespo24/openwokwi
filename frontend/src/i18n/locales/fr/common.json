@@ -33,7 +33,7 @@
     "hero": {
       "titleLine1": "Arduino, ESP32 & Raspberry Pi.",
       "titleAccent": "Directement dans votre navigateur.",
-      "subtitle": "Écrivez du code, câblez des composants, lancez l'exécution. 19 cartes, 48+ composants, émulation CPU réelle — sans matériel, sans installation, sans cloud.",
+      "subtitle": "Écrivez du code, câblez des composants, lancez l'exécution. 35 cartes, 48+ composants, émulation CPU réelle — sans matériel, sans installation, sans cloud.",
       "ctaPrimary": "Essayer le simulateur en ligne gratuitement →",
       "ctaGithub": "Voir sur GitHub",
       "trustLine": "Aucune inscription requise · Fonctionne à 100% dans votre navigateur · Gratuit et open-source",
@@ -43,7 +43,7 @@
       "label": "Matériel supporté",
       "titleLine1": "Chaque architecture.",
       "titleLine2": "Un seul outil.",
-      "subtitle": "19 cartes sur 5 architectures CPU — AVR8, ARM Cortex-M0+, RISC-V, Xtensa et Linux. Toutes fonctionnent localement, sans cloud."
+      "subtitle": "35 cartes sur 6 architectures CPU — AVR8, ARM Cortex-M, ARM Cortex-A, RISC-V, Xtensa et Linux. Y compris les cartes de nos partenaires Pimoroni, M5Stack, Seeed Studio et DFRobot. Tout s'exécute en local, sans cloud."
     },
     "features": {
       "label": "Fonctionnalités",
@@ -433,5 +433,11 @@
         "privateHint": "Seul vous pouvez voir ce projet."
       }
     }
+  },
+  "news": {
+    "kicker": "Nouveautés",
+    "readMore": "En savoir plus",
+    "gotIt": "Compris",
+    "close": "Fermer"
   }
 }

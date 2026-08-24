@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   searchLibraries,
@@ -9,6 +10,15 @@ import {
 } from '../../services/libraryService';
 import type { ArduinoLibrary, InstalledLibrary } from '../../services/libraryService';
 import { trackInstallLibrary } from '../../utils/analytics';
+import {
+  BUILTIN_MPY_MODULES,
+  FEATURED_MPY_PACKAGES,
+  fetchMpyPackage,
+  packageFilesInGroup,
+  searchMpyPackages,
+  writeFilesIntoGroup,
+} from '../../services/micropythonLibs';
+import type { MpyPackage } from '../../services/micropythonLibs';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { boardDisplayName } from '../../types/board';
 import './LibraryManagerModal.css';
@@ -55,6 +65,17 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
   const activeBoard = boards.find((b) => b.id === activeBoardId) ?? boards[0];
   const manifestLibs = activeBoard?.libraries ?? null;
   const declared = manifestLibs ?? [];
+
+  // ── MicroPython mode (issue #214) ─────────────────────────────────────────
+  // Same modal, different backing: a MicroPython library is a .py file in
+  // the project, so search hits the micropython-lib index (backend proxy)
+  // and "Add to project" writes the package's files into this board's file
+  // group — no libraries.json, no arduino-cli.
+  const isMpy = activeBoard?.languageMode === 'micropython';
+  const [mpyResults, setMpyResults] = useState<MpyPackage[]>([]);
+  // Bumped after add/remove so the "In project" pills re-derive from the
+  // file group (which lives outside React state).
+  const [mpyTick, setMpyTick] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ArduinoLibrary[]>([]);
@@ -168,10 +189,12 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
       setLoadingSearch(true);
       setStatusMsg(null);
       try {
-        setSearchResults(await searchLibraries(searchQuery));
+        if (isMpy) setMpyResults(await searchMpyPackages(searchQuery));
+        else setSearchResults(await searchLibraries(searchQuery));
       } catch (e: unknown) {
         setStatusMsg({ type: 'error', text: e instanceof Error ? e.message : 'Search failed' });
-        setSearchResults([]);
+        if (isMpy) setMpyResults([]);
+        else setSearchResults([]);
       } finally {
         setLoadingSearch(false);
       }
@@ -179,7 +202,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [searchQuery, isOpen]);
+  }, [searchQuery, isOpen, isMpy]);
 
   // A custom .zip upload (pro) lands in the user's per-user store; auto-declare
   // it on the active board and refresh the list. The upload BUTTON is injected
@@ -276,10 +299,90 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
     }));
   }, [searchQuery, searchResults, installedLibraries, isInstalled]);
 
+  // ── MicroPython actions ───────────────────────────────────────────────────
+  const mpyGroupId = activeBoard?.activeFileGroupId ?? null;
+  const addMpyPackage = useCallback(
+    async (name: string) => {
+      if (!mpyGroupId) return;
+      setBusyLib(name);
+      setStatusMsg(null);
+      try {
+        const files = await fetchMpyPackage(name);
+        const written = writeFilesIntoGroup(mpyGroupId, files);
+        trackInstallLibrary(`mpy:${name}`);
+        setStatusMsg({
+          type: 'success',
+          text: `"${name}" added to the workspace: ${written.join(', ')}. main.py can import it now.`,
+        });
+        setMpyTick((n) => n + 1);
+      } catch (e: unknown) {
+        const detail =
+          (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setStatusMsg({
+          type: 'error',
+          text: detail || (e instanceof Error ? e.message : `Failed to add "${name}"`),
+        });
+      } finally {
+        setBusyLib(null);
+      }
+    },
+    [mpyGroupId],
+  );
+
+  interface MpyRow {
+    name: string;
+    version: string;
+    desc: string;
+    builtin: boolean;
+    inProject: boolean;
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mpyTick re-derives from the file group
+  const mpyRows: MpyRow[] = useMemo(() => {
+    if (!isMpy || !mpyGroupId) return [];
+    const inProj = (name: string) => packageFilesInGroup(mpyGroupId, name);
+    if (searchQuery.trim()) {
+      const needle = searchQuery.trim().toLowerCase();
+      const builtins = BUILTIN_MPY_MODULES.filter((b) => b.name.includes(needle)).map((b) => ({
+        name: b.name,
+        version: '',
+        desc: b.blurb,
+        builtin: true,
+        inProject: false,
+      }));
+      return builtins.concat(
+        mpyResults.map((p) => ({
+          name: p.name,
+          version: p.version,
+          desc: p.description,
+          builtin: false,
+          inProject: inProj(p.name),
+        })),
+      );
+    }
+    return FEATURED_MPY_PACKAGES.map((f) => ({
+      name: f.name,
+      version: '',
+      desc: f.blurb,
+      builtin: false,
+      inProject: inProj(f.name),
+    })).concat(
+      BUILTIN_MPY_MODULES.map((b) => ({
+        name: b.name,
+        version: '',
+        desc: b.blurb,
+        builtin: true,
+        inProject: false,
+      })),
+    );
+  }, [isMpy, mpyGroupId, searchQuery, mpyResults, mpyTick]);
+
   if (!isOpen) return null;
   const browsing = !searchQuery.trim();
 
-  return (
+  // Portaled to <body>: the toolbar ancestor has container-type
+  // (container queries), which turns it into the containing block for
+  // position:fixed and shrank the overlay to the toolbar's box.
+  return createPortal(
     <div className="lib-modal-overlay" onClick={onClose}>
       <div className="lib-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header — the pro custom-upload button injects into .lib-modal-header */}
@@ -301,7 +404,11 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
             <span>{t('editor.libraryManager.title')}</span>
             {activeBoard && (
               <span
-                title="Libraries apply to this board (its libraries.json = compile scope)"
+                title={
+                  isMpy
+                    ? 'MicroPython: a library is a .py file in this board\'s workspace'
+                    : 'Libraries apply to this board (its libraries.json = compile scope)'
+                }
                 style={{
                   marginLeft: 8,
                   fontSize: 11,
@@ -312,7 +419,8 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                   padding: '1px 8px',
                 }}
               >
-                {boardDisplayName(activeBoard)} · {declared.length}
+                {boardDisplayName(activeBoard)}
+                {isMpy ? ' · MicroPython' : ` · ${declared.length}`}
               </span>
             )}
           </div>
@@ -358,12 +466,82 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
         {/* Single unified list */}
         <div className="lib-content">
           <div className="lib-list">
-            {browsing && loadingInstalled && (
+            {isMpy && browsing && (
+              <div className="lib-empty" style={{ padding: '10px 14px 4px' }}>
+                <p className="lib-empty-sub" style={{ margin: 0 }}>
+                  A MicroPython library is a .py file in the project — adding one
+                  writes it into this board's workspace, next to main.py. Search
+                  the official micropython-lib index above.
+                </p>
+              </div>
+            )}
+            {isMpy &&
+              mpyRows.map((row) => {
+                const busy = busyLib === row.name;
+                return (
+                  <div key={`mpy-${row.name}`} className="lib-item">
+                    <div className="lib-item-info">
+                      <div className="lib-item-header">
+                        <span className="lib-item-name">{row.name}</span>
+                        {row.builtin && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: '#8ecae6',
+                              background: '#12303f',
+                              borderRadius: 6,
+                              padding: '0 6px',
+                            }}
+                          >
+                            built into the firmware
+                          </span>
+                        )}
+                      </div>
+                      {row.desc && <p className="lib-item-desc">{row.desc}</p>}
+                    </div>
+                    <div className="lib-item-actions">
+                      {row.version && <span className="lib-item-version">{row.version}</span>}
+                      {row.builtin ? (
+                        <span className="lib-item-version" title="No install needed — just import it">
+                          import {row.name}
+                        </span>
+                      ) : row.inProject ? (
+                        <span
+                          className="lib-uninstall-btn"
+                          style={{ color: '#a5d6a7', borderColor: '#2e7d32', cursor: 'default' }}
+                          title="Its .py file is in the workspace — edit or delete it from the file explorer"
+                        >
+                          In project ✓
+                        </span>
+                      ) : (
+                        <button
+                          className="lib-install-btn"
+                          onClick={() => addMpyPackage(row.name)}
+                          disabled={busy}
+                          title="Write this package's .py files into the board's workspace"
+                        >
+                          {busy ? '…' : '+ Add to project'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            {isMpy && !browsing && !loadingSearch && mpyRows.length === 0 && (
+              <div className="lib-empty">
+                <p>{t('editor.libraryManager.noResultsFor', { query: searchQuery })}</p>
+                <p className="lib-empty-sub">
+                  Not in micropython-lib? Paste the driver as a .py file in the
+                  workspace — that is all an install does.
+                </p>
+              </div>
+            )}
+            {!isMpy && browsing && loadingInstalled && (
               <div className="lib-empty">
                 <p>{t('editor.libraryManager.loadingInstalled')}</p>
               </div>
             )}
-            {!loadingSearch && rows.length === 0 && !(browsing && loadingInstalled) && (
+            {!isMpy && !loadingSearch && rows.length === 0 && !(browsing && loadingInstalled) && (
               <div className="lib-empty">
                 <p>
                   {browsing
@@ -375,7 +553,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                 {browsing && <p className="lib-empty-sub">Search above to find and add a library.</p>}
               </div>
             )}
-            {rows.map((row, i) => {
+            {!isMpy && rows.map((row, i) => {
               const inProj = inManifest(row.name);
               const busy = busyLib === row.name;
               return (
@@ -459,6 +637,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

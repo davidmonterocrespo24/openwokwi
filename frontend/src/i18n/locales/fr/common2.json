@@ -72,7 +72,11 @@
       "contextMenu": {
         "rename": "Renommer",
         "delete": "Supprimer"
-      }
+      },
+      "lastSaved": "dernier enregistrement",
+      "saving": "enregistrement…",
+      "saved": "enregistré",
+      "saveFailed": "échec de l'enregistrement"
     },
     "fileTabs": {
       "unsavedChanges": "Modifications non enregistrées",
@@ -166,7 +170,13 @@
         "remove": "Supprimer"
       },
       "boardOptions": "Options de la carte...",
-      "flashToBoard": "Flasher la carte reelle"
+      "flashToBoard": "Flasher la carte reelle",
+      "flashHint": {
+        "mpy": "Installer MicroPython (si besoin) et envoyer ce projet vers une carte réelle branchée en USB",
+        "mpyUnavailable": "Les projets MicroPython ne peuvent pas être flashés depuis ici : sketches Arduino uniquement",
+        "ready": "Flasher le sketch compilé sur une carte réelle branchée en USB",
+        "willCompile": "Compiler le sketch et le flasher sur une carte réelle branchée en USB"
+      }
     },
     "componentPicker": {
       "title": "Ajouter un composant",
@@ -394,6 +404,49 @@
       "datasheetTab": "Fiche technique",
       "examplesTitle": "Projets d’exemple",
       "productPage": "Page produit"
+    },
+    "flash": {
+      "title": "Flasher {{board}}",
+      "close": "Fermer",
+      "detectingPorts": "Détection des ports série USB...",
+      "needsDesktop": "Le flash matériel nécessite Velxio Desktop. L'application web ne peut pas accéder aux ports série USB locaux.",
+      "noPorts": "Aucun port série USB détecté.",
+      "noPortsHint": "Branchez la carte sur un port USB et cliquez sur Actualiser. Sous Linux, il peut falloir vous ajouter au groupe dialout :",
+      "noPortsHintLogout": "(déconnectez-vous puis reconnectez-vous après l'avoir exécuté.)",
+      "refresh": "Actualiser",
+      "refreshPorts": "Actualiser les ports",
+      "serialPort": "Port série",
+      "flash": "Flasher",
+      "compileFlash": "Compiler et flasher",
+      "connectFlash": "Connecter et flasher",
+      "connectCompileFlash": "Connecter, compiler et flasher",
+      "noBuild": "Cette carte n'a pas encore de programme compilé : il sera compilé d'abord, puis flashé. La sortie du compilateur s'affiche dans la console ci-dessous.",
+      "staleBuild": "Le code a changé depuis la dernière compilation. Le sketch sera recompilé avant le flash pour que la carte reçoive ce que vous voyez dans l'éditeur.",
+      "webIntro": "Flashez par USB, directement depuis le navigateur.",
+      "webHint": "Branchez la carte en USB et cliquez sur le bouton : le navigateur demandera quel port série utiliser. Fermez d'abord tout autre programme utilisant le port (moniteurs série, IDE).",
+      "mpyTwoSteps": "Ce projet MicroPython se flashe en deux étapes : le firmware MicroPython est installé d'abord si la carte ne l'a pas (environ une minute), puis vos fichiers .py sont envoyés et la carte redémarre sur main.py.",
+      "mpyUnavailable": "Les projets MicroPython ne peuvent pas être flashés sur une carte réelle depuis ici.",
+      "compiling": "Compilation du sketch...",
+      "compilingHint": "Le flash démarre automatiquement quand la compilation réussit.",
+      "flashingOn": "Flash sur {{port}}...",
+      "success": "Flash réussi en {{seconds}} s",
+      "compileFailed": "La compilation a échoué : corrigez les erreurs ci-dessous et réessayez. {{error}}",
+      "noOutput": "(pas encore de sortie)",
+      "dontUnplug": "Ne débranchez pas la carte pendant le flash.",
+      "startOver": "Recommencer",
+      "pickAnotherPort": "Choisir un autre port",
+      "retry": "Réessayer",
+      "retryCompile": "Recompiler et flasher",
+      "cancel": "Annuler",
+      "hide": "Masquer",
+      "paidOnlyTitle": "Flasher des cartes réelles fait partie de la licence payante de Velxio Desktop",
+      "paidOnlyBody": "Envoyer un sketch vers une carte réelle branchée en USB est disponible avec une licence Personal, Commercial ou Enterprise. Le simulateur reste gratuit.",
+      "seePlans": "Voir les offres",
+      "log": {
+        "compiling": "Compilation du sketch avant le flash...",
+        "recompiling": "Le code a changé depuis la dernière compilation : recompilation avant le flash...",
+        "compiled": "Compilation OK en {{seconds}} s. Démarrage du flash..."
+      }
     }
   },
   "about": {

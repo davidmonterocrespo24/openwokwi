@@ -32,9 +32,30 @@ export interface NewsPost {
 type NewsSource = () => Promise<NewsPost | null>;
 
 let _source: NewsSource | null = null;
+let _sourceRegistered: (() => void) | null = null;
+
+// In a pro build the real source arrives via registerNewsSource() from a
+// DYNAMICALLY IMPORTED overlay chunk, and the announcement fetch fires a
+// mere 250ms after editor mount — early enough to race that import. If
+// the race is lost the OSS fallback runs instead, which on the cloud
+// deployment queries its own (empty) self-host proxy and silently shows
+// nothing. So: in pro builds getNextNews() waits — bounded — for the
+// registration before picking a source. OSS builds resolve immediately
+// and never wait.
+const PRO_BUILD = Boolean(import.meta.env.VITE_PRO_BUILD);
+const _sourceReady: Promise<void> = PRO_BUILD
+  ? new Promise((resolve) => {
+      _sourceRegistered = resolve;
+    })
+  : Promise.resolve();
+/** How long a pro build waits for the overlay chunk before degrading to
+ *  the OSS source. Generous: a lost overlay means no announcement at all
+ *  on the cloud, while the wait only delays a modal nobody is blocked on. */
+const SOURCE_WAIT_MS = 8000;
 
 export function registerNewsSource(source: NewsSource): void {
   _source = source;
+  _sourceRegistered?.();
 }
 
 const SEEN_KEY = 'velxio_news_seen';
@@ -91,6 +112,12 @@ async function ossFeedNext(): Promise<NewsPost | null> {
  */
 export async function getNextNews(): Promise<NewsPost | null> {
   try {
+    if (PRO_BUILD && !_source) {
+      await Promise.race([
+        _sourceReady,
+        new Promise<void>((resolve) => setTimeout(resolve, SOURCE_WAIT_MS)),
+      ]);
+    }
     return _source ? await _source() : await ossFeedNext();
   } catch (err) {
     // eslint-disable-next-line no-console

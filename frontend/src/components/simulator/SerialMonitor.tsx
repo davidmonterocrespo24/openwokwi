@@ -286,7 +286,13 @@ export const SerialMonitor: React.FC = () => {
               // ESP32 (QEMU slirp) hands out 192.168.4.x; the Pico W virtual
               // net hands out 10.13.37.x. Both reach their emulated server
               // through the same /api/gateway proxy, so linkify either subnet.
-              const ipRegex = /http:\/\/(?:192\.168\.4|10\.13\.37)\.(\d+)(\/[^\s]*)?/g;
+              // The http:// prefix is OPTIONAL: Arduino sketches tend to print
+              // full URLs, but MicroPython's idiom is the bare ifconfig()[0]
+              // ("Open: 192.168.4.15") — requiring the scheme left exactly
+              // those users with a dead-end IP that is unreachable outside
+              // the emulated network. The trailing dot-check keeps a longer
+              // address like 192.168.4.15.99 from half-matching.
+              const ipRegex = /(?:http:\/\/)?(?:192\.168\.4|10\.13\.37)\.(\d{1,3})(?!\d|\.\d)(\/[^\s]*)?/g;
               const matches = [...text.matchAll(ipRegex)];
 
               if (matches.length > 0) {
@@ -305,7 +311,15 @@ export const SerialMonitor: React.FC = () => {
                   const gatewayUrl = `${backendBase}/gateway/${clientId}${path}`;
 
                   parts.push(text.slice(lastIdx, start));
-                  const isPicoW = activeBoard.boardKind === 'pi-pico-w';
+                  // Boards whose network stack lives in THIS tab (Pico W, and
+                  // any ESP32 on the in-browser JS engine — wifiStatus carries
+                  // inBrowser) must open in the in-app iframe: a new tab
+                  // backgrounds this one, the emulation gets timer-throttled,
+                  // and the in-chip server times out. QEMU boards run
+                  // backend-side, so a new tab is fine there.
+                  const servesInTab =
+                    activeBoard.boardKind === 'pi-pico-w' ||
+                    activeBoard.wifiStatus?.inBrowser === true;
                   parts.push(
                     <a
                       key={i}
@@ -313,10 +327,8 @@ export const SerialMonitor: React.FC = () => {
                       target="_blank"
                       rel="noreferrer"
                       onClick={
-                        isPicoW
+                        servesInTab
                           ? (e) => {
-                              // Pico W runs in this tab; a new tab freezes the
-                              // emulation. Show the page in an in-app iframe.
                               e.preventDefault();
                               openDeviceGateway(gatewayUrl);
                             }

@@ -17,6 +17,11 @@
  *     knowing the ![](…) syntax. An explicit [label](…png) stays a link.
  *   - All links open in a new tab (the modal sits on top of the editor;
  *     navigating away would lose workspace state).
+ *
+ * The optional `onInteract` callback fires when the reader clicks a link
+ * ('link') or starts a video preview ('video'). The announcement passes
+ * a handler wired to lib/newsEvents.ts; the admin preview passes nothing,
+ * so authoring never counts as engagement.
  */
 
 import { useState } from 'react';
@@ -37,7 +42,9 @@ function youTubeId(href: string): string | null {
   return m ? m[1] : null;
 }
 
-function YouTubePreview({ id }: { id: string }) {
+export type NewsInteractKind = 'link' | 'video';
+
+function YouTubePreview({ id, onPlay }: { id: string; onPlay?: () => void }) {
   const [playing, setPlaying] = useState(false);
   if (playing) {
     return (
@@ -55,7 +62,10 @@ function YouTubePreview({ id }: { id: string }) {
     <button
       type="button"
       className="velxio-news-video velxio-news-video-thumb"
-      onClick={() => setPlaying(true)}
+      onClick={() => {
+        setPlaying(true);
+        onPlay?.();
+      }}
       aria-label="Play video"
     >
       <img src={`https://i.ytimg.com/vi/${id}/hqdefault.jpg`} alt="Video preview" loading="lazy" />
@@ -64,7 +74,13 @@ function YouTubePreview({ id }: { id: string }) {
   );
 }
 
-export function NewsMarkdown({ children }: { children: string }) {
+export function NewsMarkdown({
+  children,
+  onInteract,
+}: {
+  children: string;
+  onInteract?: (kind: NewsInteractKind, href: string) => void;
+}) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -75,9 +91,19 @@ export function NewsMarkdown({ children }: { children: string }) {
           if (id) {
             return (
               <>
-                <YouTubePreview id={id} />
+                <YouTubePreview
+                  id={id}
+                  onPlay={href ? () => onInteract?.('video', href) : undefined}
+                />
                 {text && text !== href && (
-                  <a href={href} target="_blank" rel="noreferrer">{kids}</a>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => href && onInteract?.('link', href)}
+                  >
+                    {kids}
+                  </a>
                 )}
               </>
             );
@@ -86,7 +112,14 @@ export function NewsMarkdown({ children }: { children: string }) {
             return <img src={href} alt="" loading="lazy" />;
           }
           return (
-            <a href={href} target="_blank" rel="noreferrer">{kids}</a>
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => href && onInteract?.('link', href)}
+            >
+              {kids}
+            </a>
           );
         },
         img: ({ src, alt }) => (

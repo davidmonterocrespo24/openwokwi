@@ -6,7 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  /* Above the agent side panel (z 8000): a modal is always the top task. */
+  z-index: 9000;
   backdrop-filter: blur(4px);
   animation: lib-fadeIn 0.15s ease;
 }
@@ -28,7 +29,10 @@
   border-radius: 8px;
   width: 680px;
   max-width: 95vw;
-  max-height: 80vh;
+  /* Fixed tall height (not just a cap): the list is the modal's whole
+     point, so give it the room instead of jumping sizes per search. */
+  height: min(86vh, 1000px);
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);

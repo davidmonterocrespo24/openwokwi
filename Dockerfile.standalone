@@ -257,6 +257,17 @@ COPY --from=espidf-builder /root/.espressif /root/.espressif
 
 COPY --from=espidf-builder /opt/arduino-esp32 /opt/arduino-esp32
 
+# Memoize ldgen. It re-parses every component's linker.lf with pyparsing on
+# EVERY build - measured at 15.2 s here, 41% of a whole ESP-IDF compile of a
+# one-file sketch - and its output is a pure function of its inputs. The
+# wrapper delegates to the untouched upstream script on a miss.
+COPY backend/scripts/ldgen_cache.py /tmp/ldgen_cache.py
+RUN if [ -f /opt/esp-idf/tools/ldgen/ldgen.py ]; then \
+      mv /opt/esp-idf/tools/ldgen/ldgen.py /opt/esp-idf/tools/ldgen/ldgen_upstream.py && \
+      cp /tmp/ldgen_cache.py /opt/esp-idf/tools/ldgen/ldgen.py && \
+      chmod +x /opt/esp-idf/tools/ldgen/ldgen.py; \
+    fi; rm -f /tmp/ldgen_cache.py
+
 ENV IDF_PATH=/opt/esp-idf
 ENV IDF_TOOLS_PATH=/root/.espressif
 ENV ARDUINO_ESP32_PATH=/opt/arduino-esp32
@@ -280,13 +291,24 @@ ENV IDF_CCACHE_ENABLE=1
 # compiles even though some flags (-I, -fmacro-prefix-map) embed absolute
 # paths into the command line.
 ENV CCACHE_BASEDIR=/var/lib/velxio-build
+# hash_dir=false. ESP-IDF compiles with -ggdb, and for debug builds ccache
+# folds the cwd into every cache key by default; CCACHE_BASEDIR does NOT
+# exempt it (verified with CCACHE_DEBUG on ccache 4.11: "Hashing CWD
+# /var/lib/velxio-build/esp32s3/v_<hash>/project/build"). Since each build
+# variant lives in its own dir, every variant had a private key space and a
+# cold variant of an already-built board recompiled all ~2100 IDF objects
+# from scratch — on a busy box that overran the 600s ninja timeout. With
+# hash_dir off, variants of the same board/sdkconfig share objects. The
+# only difference is DW_AT_comp_dir inside .debug_info of a reused object,
+# which never reaches the flashed .bin.
+ENV CCACHE_NOHASHDIR=1
 # Cache cap + compression set as env vars (rather than via `ccache
 # --set-config` at image-build time) because $CCACHE_DIR is a docker volume:
 # anything written into /var/cache/ccache during the RUN step is masked at
 # runtime by the volume mount. ccache reads CCACHE_MAXSIZE / CCACHE_COMPRESS
 # / CCACHE_COMPRESSLEVEL on every invocation and they override any conf-file
 # value, so the cap actually applies at runtime.
-ENV CCACHE_MAXSIZE=8G
+ENV CCACHE_MAXSIZE=20G
 ENV CCACHE_COMPRESS=1
 ENV CCACHE_COMPRESSLEVEL=6
 RUN mkdir -p /var/cache/ccache /var/lib/velxio-build /root/Arduino

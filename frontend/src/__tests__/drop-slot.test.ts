@@ -66,6 +66,27 @@ describe('pickDropSlot', () => {
     expect(slot).toEqual({ x: ORIGIN.x + 12 * STEP, y: ORIGIN.y + 12 * STEP });
   });
 
+  it('treats boards and components as one set of parked items', () => {
+    // Boards used to be placed 420 world-px right of the active board plus a
+    // per-board offset — never in the visible corner, and marching further
+    // out with every board added. The canvas now feeds boards and components
+    // through the same rule, so a board parked in the corner pushes the next
+    // component to the next slot and a component pushes the next board.
+    const boardInCorner = [{ x: ORIGIN.x, y: ORIGIN.y, boardKind: 'arduino-uno' }];
+    expect(pickDropSlot(ORIGIN, boardInCorner, { step: STEP })).toEqual({
+      x: ORIGIN.x + STEP,
+      y: ORIGIN.y + STEP,
+    });
+    const mixed = [
+      { x: ORIGIN.x, y: ORIGIN.y, metadataId: 'led' },
+      { x: ORIGIN.x + STEP, y: ORIGIN.y + STEP, boardKind: 'esp32' },
+    ];
+    expect(pickDropSlot(ORIGIN, mixed, { step: STEP })).toEqual({
+      x: ORIGIN.x + 2 * STEP,
+      y: ORIGIN.y + 2 * STEP,
+    });
+  });
+
   it('scales with zoom, since the step arrives in world units', () => {
     // The canvas passes 36 screen-px / zoom, so the gap looks the same
     // whatever the zoom level.

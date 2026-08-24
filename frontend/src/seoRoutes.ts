@@ -47,7 +47,21 @@ export const SEO_ROUTES: SeoRoute[] = [
       url: `${DOMAIN}/`,
     },
   },
-  { path: '/editor', priority: 0.9, changefreq: 'weekly' },
+  {
+    path: '/editor',
+    priority: 0.9,
+    changefreq: 'weekly',
+    // With seoMeta the route is prerendered, so nginx serves /editor/ as a
+    // real page and 301s /editor to it. Without it both forms answered 200
+    // with the homepage head, and Google indexed /editor AND /editor/ as
+    // two pages with different impressions.
+    seoMeta: {
+      title: 'Multi-Board Simulator Editor — Arduino, ESP32, RP2040, RISC-V | Velxio',
+      description:
+        'Write, compile and simulate Arduino, ESP32, Raspberry Pi Pico, ESP32-C3, and Raspberry Pi 3 code in your browser. 19 boards, 5 CPU architectures, 48+ components. Free and open-source.',
+      url: `${DOMAIN}/editor`,
+    },
+  },
   {
     path: '/examples',
     priority: 0.8,
@@ -61,160 +75,6 @@ export const SEO_ROUTES: SeoRoute[] = [
   },
 
   // ── Documentation
-  {
-    path: '/docs',
-    priority: 0.8,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Introduction | Velxio Documentation',
-      description:
-        'Learn about Velxio, the free open-source Arduino emulator with real AVR8 and RP2040 CPU emulation and 48+ interactive electronic components.',
-      url: `${DOMAIN}/docs`,
-    },
-  },
-  {
-    path: '/docs/intro',
-    priority: 0.8,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Introduction | Velxio Documentation',
-      description:
-        'Learn about Velxio, the free open-source Arduino emulator with real AVR8 and RP2040 CPU emulation and 48+ interactive electronic components.',
-      url: `${DOMAIN}/docs/intro`,
-    },
-  },
-  {
-    path: '/docs/getting-started',
-    priority: 0.8,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Getting Started | Velxio Documentation',
-      description:
-        'Get started with Velxio: use the hosted editor, self-host with Docker, or set up a local development environment. Simulate your first Arduino sketch in minutes.',
-      url: `${DOMAIN}/docs/getting-started`,
-    },
-  },
-  {
-    path: '/docs/emulator',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Emulator Architecture | Velxio Documentation',
-      description:
-        'How Velxio emulates AVR8 (ATmega328p), RP2040, and RISC-V (ESP32-C3) CPUs. Covers execution loops, peripherals, and pin mapping for all supported boards.',
-      url: `${DOMAIN}/docs/emulator`,
-    },
-  },
-  {
-    path: '/docs/esp32-emulation',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'ESP32 Emulation (Xtensa) | Velxio Documentation',
-      description:
-        'QEMU-based emulation for ESP32 and ESP32-S3 (Xtensa LX6/LX7). Covers the lcgamboa fork, libqemu-xtensa, GPIO, WiFi, I2C, SPI, RMT/NeoPixel, and LEDC/PWM.',
-      url: `${DOMAIN}/docs/esp32-emulation`,
-    },
-  },
-  {
-    path: '/docs/riscv-emulation',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'RISC-V Emulation (ESP32-C3) | Velxio Documentation',
-      description:
-        'Browser-side RV32IMC emulator for ESP32-C3, XIAO ESP32-C3, and C3 SuperMini. Covers memory map, GPIO, UART0, the ESP32 image parser, RV32IMC ISA, and test suite.',
-      url: `${DOMAIN}/docs/riscv-emulation`,
-    },
-  },
-  {
-    path: '/docs/rp2040-emulation',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'RP2040 Emulation (Raspberry Pi Pico) | Velxio Documentation',
-      description:
-        'How Velxio emulates the Raspberry Pi Pico and Pico W using rp2040js: ARM Cortex-M0+ at 133 MHz, GPIO, UART, ADC, I2C, SPI, PWM and WFI optimization.',
-      url: `${DOMAIN}/docs/rp2040-emulation`,
-    },
-  },
-  {
-    path: '/docs/raspberry-pi3-emulation',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Raspberry Pi 3 Emulation (QEMU) | Velxio Documentation',
-      description:
-        'How Velxio emulates a full Raspberry Pi 3B using QEMU raspi3b: real Raspberry Pi OS, Python + RPi.GPIO shim, dual-channel UART, VFS, and multi-board serial bridge.',
-      url: `${DOMAIN}/docs/raspberry-pi3-emulation`,
-    },
-  },
-  {
-    path: '/docs/components',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Components Reference | Velxio Documentation',
-      description:
-        'Full reference for all 48+ interactive electronic components in Velxio: LEDs, displays, sensors, buttons, potentiometers, and more. Includes wiring and property details.',
-      url: `${DOMAIN}/docs/components`,
-    },
-  },
-  {
-    path: '/docs/architecture',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Project Architecture | Velxio Documentation',
-      description:
-        'Detailed overview of the Velxio system architecture: frontend, backend, AVR8 emulation pipeline, data flows, Zustand stores, and wire system.',
-      url: `${DOMAIN}/docs/architecture`,
-    },
-  },
-  {
-    path: '/docs/third-party',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Wokwi Libraries | Velxio Documentation',
-      description:
-        'How Velxio integrates the official Wokwi open-source libraries: avr8js, wokwi-elements, and rp2040js. Covers configuration, updates, and the 48 available components.',
-      url: `${DOMAIN}/docs/third-party`,
-    },
-  },
-  {
-    path: '/docs/mcp',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'MCP Server | Velxio Documentation',
-      description:
-        'Velxio MCP Server reference: integrate AI agents (Claude, Cursor) with Velxio via Model Context Protocol. Covers tools, transports, circuit format, and example walkthroughs.',
-      url: `${DOMAIN}/docs/mcp`,
-    },
-  },
-  {
-    path: '/docs/setup',
-    priority: 0.6,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Project Status | Velxio Documentation',
-      description:
-        'Complete status of all implemented Velxio features: AVR emulation, component system, wire system, code editor, example projects, and next steps.',
-      url: `${DOMAIN}/docs/setup`,
-    },
-  },
-  {
-    path: '/docs/roadmap',
-    priority: 0.6,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'Roadmap | Velxio Documentation',
-      description:
-        "Velxio's feature roadmap: what's implemented, what's in progress, and what's planned for future releases.",
-      url: `${DOMAIN}/docs/roadmap`,
-    },
-  },
 
   // ── SEO keyword landing pages
   {
@@ -376,24 +236,31 @@ export const SEO_ROUTES: SeoRoute[] = [
   {
     path: '/v2',
     priority: 0.9,
+    // Superseded release page. Canonical points at the home (seoMeta.url)
+    // and noindex keeps it out of the sitemap: /v2 and /v2-5 were taking
+    // two brand sitelink slots (5.9k impressions, 29 clicks) that the
+    // editor and the simulator landings should hold. The page still
+    // renders for old links.
+    noindex: true,
     changefreq: 'monthly',
     seoMeta: {
       title: 'Velxio 2.0 — Multi-Board Embedded Simulator | ESP32, Raspberry Pi, Arduino, RISC-V',
       description:
         'Velxio 2.0 is here. Simulate Arduino, ESP32, Raspberry Pi Pico, and Raspberry Pi 3 in your browser. 19 boards, 68+ examples, realistic sensor simulation. Free and open-source.',
-      url: `${DOMAIN}/v2`,
+      url: `${DOMAIN}/`,
     },
   },
   {
     path: '/v2-5',
     priority: 0.9,
+    noindex: true, // see /v2
     changefreq: 'monthly',
     seoMeta: {
       title:
         'Velxio 2.5 — Arduino + SPICE Analog Circuit Simulator in Your Browser | ngspice-WASM',
       description:
         'Velxio 2.5 brings real-time analog circuit simulation via ngspice-WASM. Hybrid digital + analog co-simulation: resistors, capacitors, inductors, op-amps, transistors, voltmeters, ammeters — wired to Arduino, ESP32, RP2040 GPIO/ADC. 40+ circuit examples. Free and open-source.',
-      url: `${DOMAIN}/v2-5`,
+      url: `${DOMAIN}/`,
     },
   },
   {
@@ -436,17 +303,6 @@ export const SEO_ROUTES: SeoRoute[] = [
   },
 
   // ── GitHub Sync docs — Phase 3 D3.5 companion
-  {
-    path: '/docs/github-sync',
-    priority: 0.7,
-    changefreq: 'monthly',
-    seoMeta: {
-      title: 'GitHub Sync — Velxio Pro docs',
-      description:
-        "Velxio Pro's GitHub Sync commits every project save (sketch.ino + velxio.json + auto-generated README) to a repo you control. Setup walkthrough, security model and FAQ.",
-      url: `${DOMAIN}/docs/github-sync`,
-    },
-  },
 
   // ── Auth / admin (noindex)
   { path: '/login', noindex: true },

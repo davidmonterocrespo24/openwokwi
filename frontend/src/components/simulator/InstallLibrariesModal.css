@@ -5,7 +5,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1100;
+  /* Above the agent side panel (z 8000): a modal is always the top task. */
+  z-index: 9000;
   backdrop-filter: blur(4px);
   animation: ilib-fadeIn 0.15s ease;
 }

@@ -38,7 +38,12 @@ function serialisableBoard(b: BoardInstance) {
     activeFileGroupId: b.activeFileGroupId,
     languageMode: b.languageMode,
     serialBaudRate: b.serialBaudRate,
-    compiledProgram: b.compiledProgram,
+    // compiledProgram is deliberately NOT persisted. The firmware blob was
+    // 99.99% of a typical ESP32 save payload (~1.04 MB base64 for a bare
+    // board), pushing every real project against the request-size ceiling,
+    // and a restored binary is stale the moment the code differs from what
+    // was compiled. Sources are saved; the binary is recompiled on demand.
+    // (Loaders still accept compiledProgram from old rows.)
     // ESP32 board options + uploaded SPIFFS files. Optional, only present
     // after the user has opened Board Options... at least once. Both ride
     // inside boards_json so there's no DB migration.

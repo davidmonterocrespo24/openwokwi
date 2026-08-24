@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registerEditorCommand } from '../../lib/editorCommands';
+import { publishCompileOutput } from '../../lib/intellisenseRegistry';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
 import { useSimulatorStore, piRerunScript } from '../../store/useSimulatorStore';
 import { decideEngine } from '../../lib/instantEngine';
@@ -9,8 +10,9 @@ import { type VerificationResult } from '../../simulation/verify/circuitVerifier
 import { verifyCircuitFromStore } from '../../simulation/verify/verifyFromStore';
 import { CircuitVerificationModal } from '../simulator/CircuitVerificationModal';
 import type { BoardKind, LanguageMode } from '../../types/board';
-import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, isPiBoardKind, boardDisplayName } from '../../types/board';
+import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, fqbnForLanguage, isKnownBoardKind, isPiBoardKind, boardDisplayName } from '../../types/board';
 import { compileCode } from '../../services/compilation';
+import { compileOptionsForBoard } from '../../utils/boardCompile';
 import {
   compileRom,
   isChipProgramFile,
@@ -27,7 +29,8 @@ import { InstallLibrariesModal } from '../simulator/InstallLibrariesModal';
 import { mergeSuggestedLibraries } from '../../utils/libraryManifest';
 import { parseCompileResult, isNoiseBuildLine } from '../../utils/compilationLogger';
 import type { CompilationLog, CompileTarget } from '../../utils/compilationLogger';
-import { exportToWokwiZip } from '../../utils/wokwiZip';
+import { exportToWokwiZip, retargetBoardWires } from '../../utils/wokwiZip';
+import { wifiSsidNoteFor } from '../../utils/firmwareWifiNote';
 import { importProjectFile, PROJECT_FILE_ACCEPT } from '../../utils/importProject';
 import { readFirmwareFile } from '../../utils/firmwareLoader';
 import {
@@ -516,7 +519,7 @@ export const EditorToolbar = ({
       return;
     }
 
-    const fqbn = kind ? BOARD_KIND_FQBN[kind] : null;
+    const fqbn = kind ? fqbnForLanguage(kind, activeBoard?.languageMode) : null;
 
     if (!fqbn) {
       blog('error', `No FQBN for board kind: ${kind}`);
@@ -528,6 +531,26 @@ export const EditorToolbar = ({
     blog('info', `Starting compilation for ${boardLabel} (${fqbn})...`);
 
     try {
+      // Reconcile the two "active group" pointers before reading sources.
+      // If the editor drifted to another BOARD's group (dangling pointer
+      // after a board delete/add, a restore race), Monaco edits — and the
+      // agent's write_file calls — land in a group this compile silently
+      // ignores, shipping a stale same-named sketch.ino instead of the code
+      // on screen. Re-point the editor at the group being compiled. Chip
+      // program groups are legitimate cross-edits and stay untouched.
+      const edGroup = useEditorStore.getState().activeGroupId;
+      if (
+        activeBoard?.activeFileGroupId &&
+        edGroup !== activeBoard.activeFileGroupId &&
+        !edGroup.startsWith('group-chip-')
+      ) {
+        blog(
+          'warning',
+          `Editor file group (${edGroup}) diverged from the compiled board group ` +
+            `(${activeBoard.activeFileGroupId}) — switching the editor to the compiled group.`,
+        );
+        useEditorStore.getState().setActiveGroup(activeBoard.activeFileGroupId);
+      }
       const groupFiles = activeBoard?.activeFileGroupId
         ? useEditorStore.getState().getGroupFiles(activeBoard.activeFileGroupId)
         : files;
@@ -569,20 +592,10 @@ export const EditorToolbar = ({
             })),
           ]);
         },
-        // Per-board ESP32 build options + SPIFFS uploads. Undefined for AVR
-        // / RP2040 boards (ignored on those paths by the backend).
-        {
-          boardOptions: activeBoard?.boardOptions,
-          spiffsFiles: activeBoard?.spiffsFiles,
-          boardKind: kind ?? undefined,
-          exampleId: useProjectStore.getState().currentExampleId,
-          // P2.4 — THIS board's declared manifest (compile scope). Per-board so
-          // two boards can use different libraries without clashing.
-          libraries: activeBoard?.libraries?.length ? activeBoard.libraries : null,
-          // Pure ESP-IDF mode (issue #139): tell the backend to compile the
-          // user's app_main() sources without the arduino-esp32 component.
-          language: activeBoard?.languageMode === 'espidf' ? 'espidf' : undefined,
-        },
+        // Per-board ESP32 build options + SPIFFS uploads + manifest +
+        // language — one definition shared with the Flash dialog's
+        // compile-before-flash (utils/boardCompile.ts).
+        compileOptionsForBoard(activeBoard),
       );
 
       // After the build settles, append the structured analysis on top of
@@ -593,6 +606,13 @@ export const EditorToolbar = ({
       // already showed.
       const resultLogs = parseCompileResult(result, boardLabel, boardTarget, lastStreamedLen > 0);
       setCompileLogs((prev: CompilationLog[]) => [...prev, ...resultLogs]);
+
+      // Intellisense seam: hand the raw compiler text to the overlay so it
+      // can paint file:line markers in the editor. Empty string clears the
+      // markers after a successful build. No-op in OSS.
+      publishCompileOutput(
+        result.success ? '' : [result.stderr, result.error].filter(Boolean).join('\n'),
+      );
 
       if (result.success) {
         const program = result.hex_content ?? result.binary_content ?? null;
@@ -1053,7 +1073,7 @@ export const EditorToolbar = ({
         continue;
       }
 
-      const fqbn = BOARD_KIND_FQBN[board.boardKind];
+      const fqbn = fqbnForLanguage(board.boardKind, board.languageMode);
       if (!fqbn) {
         blog('error', 'no FQBN configured');
         boardFailed++;
@@ -1205,15 +1225,47 @@ export const EditorToolbar = ({
 
   const handleExport = async () => {
     try {
-      const {
-        components,
-        wires,
-        boardPosition,
-        boardType: legacyBoardType,
-      } = useSimulatorStore.getState();
+      const { components, wires, boards, activeBoardId, boardPosition, boardType } =
+        useSimulatorStore.getState();
+      // The board itself, not the flat legacy mirror. `boardType` only tracks
+      // the active board through setActiveBoardId/setBoardType, so a project
+      // hydrated straight into `boards` leaves it stale — and it reports every
+      // Raspberry Pi as an 'arduino-uno' on purpose (see setActiveBoardId).
+      // Exporting from it wrote the wrong board into the file; taking the kind
+      // and the canvas id off one object means they cannot disagree (#268).
+      const board = boards.find((b) => b.id === activeBoardId) ?? boards[0];
       const projectName =
         files.find((f) => f.name.endsWith('.ino'))?.name.replace('.ino', '') || 'velxio-project';
-      await exportToWokwiZip(files, components, wires, legacyBoardType, projectName, boardPosition);
+      // The other boards cannot travel: the format stores one. Their wires are
+      // left out rather than written against this board's part id, which used
+      // to re-attach their components to this chip on import — same pins, wrong
+      // board, nothing said (#268 review).
+      const foreignBoardIds = boards.filter((b) => b.id !== board?.id).map((b) => b.id);
+      const foreign = new Set(foreignBoardIds);
+      const strandedWires = wires.filter(
+        (w) => foreign.has(w.start.componentId) || foreign.has(w.end.componentId),
+      ).length;
+      await exportToWokwiZip(
+        files,
+        components,
+        wires,
+        board?.boardKind ?? boardType,
+        projectName,
+        board ? { x: board.x, y: board.y } : boardPosition,
+        board?.id,
+        board?.libraries ?? [],
+        foreignBoardIds,
+      );
+      if (foreignBoardIds.length > 0) {
+        setMessage({
+          type: 'error',
+          text:
+            `Exported the ${boardDisplayName(board!)} only — a .zip holds one board, so the ` +
+            `other ${foreignBoardIds.length === 1 ? 'board' : `${foreignBoardIds.length} boards`}` +
+            `${strandedWires > 0 ? ` and ${strandedWires} wire${strandedWires === 1 ? '' : 's'}` : ''}` +
+            ` did not travel. Save as .vlx to keep the whole project.`,
+        });
+      }
     } catch (err) {
       setMessage({ type: 'error', text: 'Export failed.' });
     }
@@ -1348,6 +1400,16 @@ export const EditorToolbar = ({
         });
       }
 
+      // A binary built elsewhere never passed through our compiler, so its
+      // WiFi SSID was never rewritten for the emulator — and the emulated
+      // radio only ever broadcasts EMULATED_WIFI_SSIDS. The firmware boots
+      // and runs perfectly and then sits there failing to associate, which
+      // reads as "the emulator is broken" (issue #270). Say it once, here,
+      // and only when the binary actually looks like it wants WiFi and names
+      // none of the networks it could reach.
+      const note = await wifiSsidNoteFor(file);
+      if (note) addLog({ timestamp: new Date(), type: 'info', message: note });
+
       if (activeBoardId) {
         compileBoardProgram(activeBoardId, result.program);
         markCompiled();
@@ -1379,12 +1441,62 @@ export const EditorToolbar = ({
       const { setComponents, setWires, setBoardType, setBoardPosition, stopSimulation } =
         useSimulatorStore.getState();
       stopSimulation();
-      if (result.boardType) setBoardType(result.boardType);
+      // A board kind this build does not know is left alone rather than
+      // coerced. The importer no longer answers 'arduino-uno' for everything
+      // it fails to recognise (#268), so say what happened instead of swapping
+      // the user's board for one the file never mentioned.
+      const importWarnings = [...result.warnings];
+      // Put the board on the canvas. `setBoardType` re-kinds the ACTIVE board,
+      // so on an empty canvas it changed nothing and the project arrived with
+      // its circuit and no chip — the reporter's "the board isn't recognized"
+      // (#268). Adding one when there is none is the other half of the fix.
+      let boardId: string | null = null;
+      if (result.boardType && isKnownBoardKind(result.boardType)) {
+        const sim = useSimulatorStore.getState();
+        const current =
+          sim.boards.find((b) => b.id === sim.activeBoardId) ?? sim.boards[0] ?? null;
+        if (current) {
+          setBoardType(result.boardType);
+          boardId = current.id;
+        } else {
+          boardId = sim.addBoard(
+            result.boardType,
+            result.boardPosition.x,
+            result.boardPosition.y,
+          );
+          // addBoard promotes the first board to active but does not sync the
+          // flat legacy fields; setActiveBoardId is where that happens, and
+          // whatever still reads `boardType` would otherwise see the board
+          // this import just replaced.
+          useSimulatorStore.getState().setActiveBoardId(boardId);
+        }
+      } else if (result.boardType) {
+        // Nothing to swap the board for, so the circuit lands on whatever is
+        // already there — and its wires have to be told, or the message would
+        // be describing something that did not happen.
+        const sim = useSimulatorStore.getState();
+        boardId = (sim.boards.find((b) => b.id === sim.activeBoardId) ?? sim.boards[0])?.id ?? null;
+        importWarnings.push(
+          boardId
+            ? `This project is for a "${result.boardType}" board, which this build does not have. The circuit was imported onto the current board.`
+            : `This project is for a "${result.boardType}" board, which this build does not have, and there is no board on the canvas to put the circuit on.`,
+        );
+      }
       setBoardPosition(result.boardPosition);
       setComponents(result.components);
-      setWires(result.wires);
+      // The wires name the board by its kind; the board on the canvas may
+      // answer to something else.
+      setWires(
+        boardId && result.boardType
+          ? retargetBoardWires(result.wires, result.boardType, boardId)
+          : result.wires,
+      );
       if (result.files.length > 0) loadFiles(result.files);
-      setMessage({ type: 'success', text: `Imported ${file.name}` });
+      setMessage(
+        importWarnings.length > 0
+          ? { type: 'error', text: `Imported ${file.name} — ${importWarnings.join(' ')}` }
+          : { type: 'success', text: `Imported ${file.name}` },
+      );
       if (result.libraries.length > 0) {
         setPendingLibraries(result.libraries);
         setInstallModalOpen(true);
@@ -1454,7 +1566,9 @@ export const EditorToolbar = ({
               pure ESP-IDF on the ESP32 family — issue #139). The board
               context pill that used to live here was removed: it duplicated
               the BoardSelector dropdown elsewhere in the toolbar. */}
-          {activeBoard && BOARD_SUPPORTS_MICROPYTHON.has(activeBoard.boardKind) && (
+          {activeBoard &&
+            (BOARD_SUPPORTS_MICROPYTHON.has(activeBoard.boardKind) ||
+              BOARD_SUPPORTS_ESPIDF.has(activeBoard.boardKind)) && (
             <select
               className="tb-lang-select"
               value={activeBoard.languageMode ?? 'arduino'}
@@ -1477,8 +1591,16 @@ export const EditorToolbar = ({
                 marginRight: 4,
               }}
             >
-              <option value="arduino">Arduino C++</option>
-              <option value="micropython">MicroPython</option>
+              {/* Arduino only when the kind actually HAS an FQBN: a board
+                  with none (the ESP32-C5 kits — no arduino-esp32 core exists)
+                  cannot compile in this mode, and offering it just lands the
+                  user on "No FQBN for board kind". */}
+              {!!BOARD_KIND_FQBN[activeBoard.boardKind] && (
+                <option value="arduino">Arduino C++</option>
+              )}
+              {BOARD_SUPPORTS_MICROPYTHON.has(activeBoard.boardKind) && (
+                <option value="micropython">MicroPython</option>
+              )}
               {BOARD_SUPPORTS_ESPIDF.has(activeBoard.boardKind) && (
                 <option value="espidf">ESP-IDF</option>
               )}

@@ -21,11 +21,37 @@
 
 export interface PioPeripheral {
   /** Process one 32-bit word the firmware bit-banged onto the bus. Returns
-   *  zero or more reply byte-blobs to repack into the RX FIFO. */
-  feedWord(word: number): Uint8Array[];
+   *  zero or more reply byte-blobs to repack into the RX FIFO.
+   *
+   *  `pioIndex`/`smIndex` say which state machine wrote it, where the host
+   *  plumbing knows (the RP2350 hook passes them; the RP2040 one does not, so
+   *  a peripheral that needs them must cope with undefined). A single-protocol
+   *  peripheral can ignore both. */
+  feedWord(word: number, pioIndex?: number, smIndex?: number): Uint8Array[];
   /** True while the firmware is streaming bulk data the peripheral wants the
-   *  plumbing to DISCARD (keep only a few words so the PIO TXSTALLs). */
+   *  plumbing to DISCARD (keep only a few words so the PIO TXSTALLs). Words
+   *  taken by this path are NOT fed to the peripheral. */
   inDiscardableWriteData(): boolean;
+  /**
+   * Optional: "I have already consumed this state machine's words; the PIO
+   * does not need to shift them out."
+   *
+   * For a peripheral that models the far end of the wire directly — an LED
+   * panel whose framebuffer we decode rather than watch arrive bit by bit —
+   * running the PIO program is pure cost. A Pimoroni Unicorn spends about
+   * 300,000 PIO cycles per refresh sitting in the program's BCD delay loops,
+   * which buys nothing once the pixels have been read out of the FIFO word.
+   *
+   * When this returns true the plumbing feeds the peripheral as usual, then
+   * drops the word instead of handing it to the PIO, and keeps TX DREQ
+   * asserted so a DREQ-paced DMA still advances. Unlike
+   * inDiscardableWriteData(), the peripheral still SEES every word — that is
+   * the whole point.
+   *
+   * Called per state machine so a peripheral only claims the one it has
+   * locked onto; another program on another SM keeps working normally.
+   */
+  consumesTxWords?(pioIndex: number, smIndex: number): boolean;
   /** Reset framing at a transfer boundary (the PIO sm.restart). */
   resetFraming(): void;
   /** Current host-wake level to drive onto GPIO24 (active-high). */

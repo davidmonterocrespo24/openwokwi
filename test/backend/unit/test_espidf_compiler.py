@@ -35,6 +35,24 @@ def make_compiler() -> ESPIDFCompiler:
     return comp
 
 
+def merged_has(component_root: Path, *rel_suffixes: str) -> bool:
+    """True when every suffix exists somewhere under the merged component.
+
+    The component's internal layout is a build-system detail that changed with
+    VELXIO_PER_LIB_ROOTS (each library now keeps its own subtree). These tests
+    care that a file WAS merged, not where — the exported include roots are
+    asserted directly in test_espidf_include_roots.py.
+    """
+    found = {
+        str(p.relative_to(component_root)).replace('\\', '/')
+        for p in component_root.rglob('*') if p.is_file()
+    }
+    return all(
+        any(f == suffix or f.endswith('/' + suffix) for f in found)
+        for suffix in rel_suffixes
+    )
+
+
 def make_library(libs_dir: Path, lib_name: str, headers: list[str],
                  sources: list[str], use_src_subdir: bool = False) -> Path:
     lib_dir = libs_dir / lib_name
@@ -283,7 +301,7 @@ class TestResolveLibraryComponents(unittest.TestCase):
         """Adafruit_GFX.h directly in sketch → copied into user_libs_all."""
         self._resolve(['Adafruit_GFX.h'])
         self.assertTrue(
-            (self.user_libs / 'user_libs_all' / 'Adafruit_GFX.h').exists(),
+            merged_has(self.user_libs / 'user_libs_all', 'Adafruit_GFX.h'),
             'Adafruit_GFX.h not copied into user_libs_all — will not be on include path',
         )
 
@@ -291,25 +309,25 @@ class TestResolveLibraryComponents(unittest.TestCase):
         """SSD1306 sketch: both GFX and SSD1306 files must be in user_libs_all."""
         self._resolve(['Wire.h', 'Adafruit_GFX.h', 'Adafruit_SSD1306.h'])
         all_dir = self.user_libs / 'user_libs_all'
-        self.assertTrue((all_dir / 'Adafruit_GFX.h').exists(),
+        self.assertTrue(merged_has(all_dir, 'Adafruit_GFX.h'),
                         'Adafruit_GFX.h missing — SSD1306.cpp will fail to compile')
-        self.assertTrue((all_dir / 'Adafruit_SSD1306.h').exists(),
+        self.assertTrue(merged_has(all_dir, 'Adafruit_SSD1306.h'),
                         'Adafruit_SSD1306.h missing')
-        self.assertTrue((all_dir / 'Adafruit_GFX.cpp').exists())
-        self.assertTrue((all_dir / 'Adafruit_SSD1306.cpp').exists())
+        self.assertTrue(merged_has(all_dir, 'Adafruit_GFX.cpp'))
+        self.assertTrue(merged_has(all_dir, 'Adafruit_SSD1306.cpp'))
 
     def test_wire_files_not_in_merged_component(self):
         """Wire is a core esp32 lib — must NOT be copied into user_libs_all."""
         self._resolve(['Wire.h', 'Adafruit_SSD1306.h'])
         all_dir = self.user_libs / 'user_libs_all'
-        self.assertFalse((all_dir / 'Wire.h').exists(),
+        self.assertFalse(merged_has(all_dir, 'Wire.h'),
                          'Wire.h was incorrectly copied — it is already in arduino-esp32')
 
     def test_transitive_gfx_discovered_via_ssd1306(self):
         """When sketch only includes SSD1306, GFX is discovered transitively."""
         self._resolve(['Adafruit_SSD1306.h'])
         self.assertTrue(
-            (self.user_libs / 'user_libs_all' / 'Adafruit_GFX.h').exists(),
+            merged_has(self.user_libs / 'user_libs_all', 'Adafruit_GFX.h'),
             'Transitive Adafruit_GFX.h not discovered — SSD1306.h includes it',
         )
 
@@ -560,15 +578,15 @@ class TestHeaderOnlyLibrary(unittest.TestCase):
     def test_header_only_library_still_exposes_its_header(self):
         cmake = self._cmake_for(['ArduinoJson.h'])
         self.assertIn('idf_component_register', cmake)
-        # The library's src/ layout is preserved, so the header lands at
-        # src/ArduinoJson.h and "src" has to be on the include path for the
+        # The library's src/ layout is preserved, and its include ROOT (the
+        # `src` dir, wherever the layout puts it) must be exported for the
         # sketch's #include <ArduinoJson.h> to resolve.
         merged = self.user_libs / 'user_libs_all'
         self.assertTrue(
-            (merged / 'src' / 'ArduinoJson.h').exists(),
+            merged_has(merged, 'src/ArduinoJson.h'),
             'ArduinoJson.h not copied — the sketch would fail on "No such file"',
         )
-        self.assertIn('INCLUDE_DIRS "." "src"', cmake)
+        self.assertRegex(cmake, r'INCLUDE_DIRS "\." "(?:[^"]+/)?src"')
 
     def test_library_with_sources_keeps_the_progmem_definitions(self):
         cmake = self._cmake_for(['LiquidCrystal_I2C.h'])

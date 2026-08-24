@@ -72,7 +72,11 @@
       "contextMenu": {
         "rename": "名前変更",
         "delete": "削除"
-      }
+      },
+      "lastSaved": "最終保存",
+      "saving": "保存中…",
+      "saved": "保存済み",
+      "saveFailed": "保存に失敗しました"
     },
     "fileTabs": {
       "unsavedChanges": "未保存の変更",
@@ -166,7 +170,13 @@
         "remove": "削除"
       },
       "boardOptions": "ボード設定...",
-      "flashToBoard": "実機に書き込む"
+      "flashToBoard": "実機に書き込む",
+      "flashHint": {
+        "mpy": "必要なら MicroPython をインストールし、このプロジェクトを USB 接続の実機にアップロードします",
+        "mpyUnavailable": "MicroPython プロジェクトはここから書き込めません(Arduino スケッチのみ)",
+        "ready": "コンパイル済みスケッチを USB 接続の実機に書き込みます",
+        "willCompile": "スケッチをコンパイルして USB 接続の実機に書き込みます"
+      }
     },
     "componentPicker": {
       "title": "コンポーネントを追加",
@@ -394,6 +404,49 @@
       "datasheetTab": "データシート",
       "examplesTitle": "サンプルプロジェクト",
       "productPage": "製品ページ"
+    },
+    "flash": {
+      "title": "{{board}} に書き込む",
+      "close": "閉じる",
+      "detectingPorts": "USB シリアルポートを検出中...",
+      "needsDesktop": "実機への書き込みには Velxio Desktop が必要です。Web アプリはローカルの USB シリアルポートにアクセスできません。",
+      "noPorts": "USB シリアルポートが見つかりません。",
+      "noPortsHint": "ボードを USB ポートに接続して「更新」を押してください。Linux では dialout グループへの追加が必要な場合があります:",
+      "noPortsHintLogout": "(実行後にログアウトして再ログインしてください。)",
+      "refresh": "更新",
+      "refreshPorts": "ポートを更新",
+      "serialPort": "シリアルポート",
+      "flash": "書き込む",
+      "compileFlash": "コンパイルして書き込む",
+      "connectFlash": "接続して書き込む",
+      "connectCompileFlash": "接続・コンパイル・書き込み",
+      "noBuild": "このボードにはまだコンパイル済みプログラムがありません。先にコンパイルしてから書き込みます。コンパイラの出力は下のコンソールに表示されます。",
+      "staleBuild": "前回のコンパイル以降にコードが変更されています。エディタの内容がボードに届くよう、書き込み前にスケッチを再コンパイルします。",
+      "webIntro": "ブラウザから直接 USB 経由で書き込みます。",
+      "webHint": "ボードを USB で接続してボタンを押すと、ブラウザが使用するシリアルポートを尋ねます。そのポートを使う他のプログラム(シリアルモニタ、IDE)は先に閉じてください。",
+      "mpyTwoSteps": "この MicroPython プロジェクトは 2 段階で書き込みます。ボードに MicroPython ファームウェアがなければ先にインストールし(約 1 分)、次に .py ファイルをアップロードして main.py で再起動します。",
+      "mpyUnavailable": "MicroPython プロジェクトはここから実機に書き込めません。",
+      "compiling": "スケッチをコンパイル中...",
+      "compilingHint": "ビルドが成功すると自動的に書き込みが始まります。",
+      "flashingOn": "{{port}} に書き込み中...",
+      "success": "{{seconds}} 秒で書き込み完了",
+      "compileFailed": "コンパイルに失敗しました。下のエラーを修正して再試行してください。{{error}}",
+      "noOutput": "(まだ出力なし)",
+      "dontUnplug": "書き込み中はボードを抜かないでください。",
+      "startOver": "最初から",
+      "pickAnotherPort": "別のポートを選ぶ",
+      "retry": "再試行",
+      "retryCompile": "再コンパイルして書き込む",
+      "cancel": "キャンセル",
+      "hide": "隠す",
+      "paidOnlyTitle": "実機への書き込みは Velxio Desktop の有料ライセンスの機能です",
+      "paidOnlyBody": "USB 接続の実機へスケッチを書き込む機能は Personal・Commercial・Enterprise ライセンスで利用できます。シミュレータ自体は無料のままです。",
+      "seePlans": "プランを見る",
+      "log": {
+        "compiling": "書き込み前にスケッチをコンパイルしています...",
+        "recompiling": "前回のビルド以降にコードが変更されました。書き込み前に再コンパイルします...",
+        "compiled": "ビルド成功 ({{seconds}} 秒)。書き込みを開始します..."
+      }
     }
   },
   "about": {

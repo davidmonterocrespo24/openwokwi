@@ -8,7 +8,12 @@
 
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+// Initialise i18next with the bundled English resources before any page
+// renders: without this every t() call in the SSR output came back as its
+// KEY ("landing.hero.titleLine1"), which is what the prerendered bodies
+// shipped once they were actually injected.
+import './i18n';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { SEO_ROUTES } from './seoRoutes';
 
 // ── SEO page components ─────────────────────────────────────────────────────
@@ -19,7 +24,27 @@ import { ExampleDetailPage } from './pages/ExampleDetailPage';
 // Map route paths to their React component. The OSS build prerenders only
 // what it ships (the examples gallery); the marketing surface lives in the
 // pro overlay and is merged in by loadRouteComponents() below.
+/**
+ * /editor is the live workspace (Monaco, WASM engines) — nothing there
+ * survives renderToString, so its prerender is a static crawlable summary.
+ * Being prerendered at all is what matters: nginx then serves /editor/ as
+ * a real page and 301s /editor to it, instead of both forms answering 200
+ * with the homepage head (Google had indexed the two as separate pages).
+ */
+const EditorSeoSummary: React.FC = () => (
+  <main>
+    <h1>Velxio Editor — multi-board circuit and code simulator</h1>
+    <p>
+      Write, compile and simulate Arduino, ESP32, ESP32-C3, ESP32-S3, Raspberry Pi
+      Pico and Raspberry Pi code in your browser, wired to a live circuit canvas
+      with SPICE analog simulation. Free, open source, no install and no account
+      needed.
+    </p>
+  </main>
+);
+
 const OSS_ROUTE_COMPONENTS: Record<string, React.FC> = {
+  '/editor': EditorSeoSummary,
   '/examples': ExamplesPage,
 };
 
@@ -36,6 +61,14 @@ export async function loadRouteComponents(): Promise<Record<string, React.FC>> {
   if (import.meta.env.VITE_PRO_BUILD) {
     const m = await import('@pro/pages/marketing');
     routeComponents = { ...OSS_ROUTE_COMPONENTS, ...m.MARKETING_ROUTE_COMPONENTS };
+    // The overlay's own namespace ("pro": landing sections, pricing...),
+    // else its t() calls render as keys too.
+    try {
+      const reg = await import('@pro/i18n/register');
+      reg.registerProI18n?.();
+    } catch (err) {
+      console.warn('  ⚠ pro i18n not registered for SSR:', (err as Error).message);
+    }
   }
   return routeComponents;
 }
@@ -83,9 +116,13 @@ export function getPrerenderedExampleRoutes() {
  */
 export function renderExample(exampleId: string): string {
   try {
+    // Mounted under its real route so useParams() sees exampleId; rendered
+    // bare it had no params and every example page SSR'd as "not found".
     return renderToString(
       <MemoryRouter initialEntries={[`/examples/${exampleId}`]}>
-        <ExampleDetailPage />
+        <Routes>
+          <Route path="/examples/:exampleId" element={<ExampleDetailPage />} />
+        </Routes>
       </MemoryRouter>,
     );
   } catch (err) {

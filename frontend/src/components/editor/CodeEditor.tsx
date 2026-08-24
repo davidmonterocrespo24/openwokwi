@@ -2,6 +2,7 @@ import Editor from '@monaco-editor/react';
 import { useEditorStore } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { registerRetroAsm, LANGUAGE_ID as RETRO_ASM_ID } from './retroAsmLanguage';
+import { attachIntellisenseMonaco } from '../../lib/intellisenseRegistry';
 
 function getLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
@@ -62,6 +63,10 @@ export const CodeEditor = () => {
           // Register the 8080/Z80 assembly language once so Monaco knows how
           // to tokenize .s / .asm files when they're opened.
           registerRetroAsm(monaco);
+          // Hand the monaco instance to the intellisense seam. Inert in OSS;
+          // with the pro overlay loaded it registers the completion engine
+          // (idempotent per monaco instance, so per-file remounts are fine).
+          attachIntellisenseMonaco(monaco);
         }}
         onChange={(value) => {
           if (activeFileId) setFileContent(activeFileId, value || '');
@@ -72,6 +77,15 @@ export const CodeEditor = () => {
           automaticLayout: true,
           scrollBeyondLastLine: false,
           wordWrap: 'on',
+          // Hover/suggest/signature widgets escape the editor's box as
+          // position:fixed overlays. Without this, a marker hover wider
+          // than the editor pane slides UNDER the simulator canvas next
+          // to it (sibling stacking context) and can't be read.
+          fixedOverflowWidgets: true,
+          // Keep quick suggestions alive inside snippet placeholders:
+          // completing `#include <|>` or an if-condition placeholder must
+          // still offer suggestions while the snippet session is active.
+          suggest: { snippetsPreventQuickSuggestions: false },
         }}
       />
     </div>

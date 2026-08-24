@@ -39,15 +39,26 @@ const PINS_PI_PICO_W = [
   { name: 'GP22', x: 97, y: 157 },
   { name: 'RUN', x: 97, y: 144 },
   { name: 'GP26', x: 97, y: 131 },
+  // Alias entries: examples and saved projects also reference the ADC pins
+  // as A0/A1/A2 (Arduino-style) — same physical pins, same coordinates.
+  // Without these the wire endpoint anchored at the board corner. Mirrors
+  // the RX2/16 dual-entry precedent in Esp32Element.
+  { name: 'A0', x: 97, y: 131 },
   { name: 'GP27', x: 97, y: 119 },
+  { name: 'A1', x: 97, y: 119 },
   { name: 'GND.7', x: 97, y: 106 },
   { name: 'GP28', x: 97, y: 93 },
+  { name: 'A2', x: 97, y: 93 },
   { name: 'ADC_VREF', x: 97, y: 81 },
   { name: '3V3', x: 97, y: 68 },
   { name: '3V3_EN', x: 97, y: 55 },
   { name: 'GND.8', x: 97, y: 42 },
   { name: 'VSYS', x: 97, y: 30 },
   { name: 'VBUS', x: 97, y: 17 },
+  // GP25 is the onboard LED, not a header pin — but pico-blink-style
+  // examples wire an external LED to it for visibility. Anchor at the LED
+  // silk so those wires stop falling back to the board corner.
+  { name: 'GP25', x: 40, y: 14 },
 ];
 
 class PiPicoWElement extends HTMLElement {

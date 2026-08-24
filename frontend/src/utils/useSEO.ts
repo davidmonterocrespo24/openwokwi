@@ -1,4 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { LOCALES, LOCALE_META, DEFAULT_LOCALE } from '../i18n/config';
+import { getLocaleFromPath, stripLocaleFromPath, localizedPath } from '../i18n/path';
+import { SEO_ROUTES } from '../seoRoutes';
 
 export interface SEOMeta {
   title: string;
@@ -29,6 +32,60 @@ function withTrailingSlash(u: string): string {
   } catch {
     return u.endsWith('/') ? u : `${u}/`;
   }
+}
+
+const DOMAIN = 'https://velxio.dev';
+const HREFLANG_ATTR = 'data-seo-hreflang';
+
+/**
+ * Pages that exist once per locale (`/es/esp32-simulator/` renders the same
+ * marketing page in Spanish): the static SEO routes plus the home. Everything
+ * else — user projects, profiles, gallery example pages — is the same
+ * English content under every prefix, so it keeps a single locale-less
+ * canonical and no hreflang.
+ */
+const LOCALIZED_ROUTE_PATHS = new Set(
+  SEO_ROUTES.filter((r) => !r.noindex).map((r) => (r.path === '/' ? '/' : r.path.replace(/\/$/, ''))),
+);
+
+function isLocalizedRoute(strippedPath: string): boolean {
+  const key = strippedPath === '/' ? '/' : strippedPath.replace(/\/$/, '');
+  return LOCALIZED_ROUTE_PATHS.has(key);
+}
+
+/**
+ * Canonical + hreflang for the current URL. For a localized route the
+ * canonical is the page's OWN locale variant (`/es/esp32-simulator/`), and
+ * every locale variant is listed as an alternate with `x-default` on the
+ * locale-less English URL. Declaring canonical=/ from /es/ told Google the
+ * Spanish page was a duplicate while it was ranking on its own; this
+ * matches what Google already does with the pages.
+ */
+function localeLinks(url: string): { canonical: string; alternates: { hreflang: string; href: string }[] } {
+  const canonicalDefault = withTrailingSlash(url);
+  let strippedPath: string;
+  try {
+    strippedPath = stripLocaleFromPath(new URL(url, DOMAIN).pathname);
+  } catch {
+    return { canonical: canonicalDefault, alternates: [] };
+  }
+  if (!isLocalizedRoute(strippedPath)) return { canonical: canonicalDefault, alternates: [] };
+  // A page whose canonical is another page (/v2 -> /) keeps that canonical
+  // as given and declares no alternates.
+  if (typeof window !== 'undefined') {
+    const herePath = stripLocaleFromPath(window.location.pathname).replace(/\/+$/, '') || '/';
+    const urlPath = strippedPath.replace(/\/+$/, '') || '/';
+    if (herePath !== urlPath) return { canonical: canonicalDefault, alternates: [] };
+  }
+  const current = typeof window !== 'undefined' ? getLocaleFromPath(window.location.pathname) : DEFAULT_LOCALE;
+  const variant = (l: (typeof LOCALES)[number]) => withTrailingSlash(`${DOMAIN}${localizedPath(strippedPath, l)}`);
+  return {
+    canonical: variant(current),
+    alternates: [
+      ...LOCALES.map((l) => ({ hreflang: LOCALE_META[l].htmlLang, href: variant(l) })),
+      { hreflang: 'x-default', href: variant(DEFAULT_LOCALE) },
+    ],
+  };
 }
 
 /**
@@ -79,7 +136,27 @@ export function useSEO({ title, description, url, ogImage, jsonLd, noindex }: SE
     }
 
     // Apply
-    const canonicalUrl = withTrailingSlash(url);
+    const { canonical: canonicalUrl, alternates } = localeLinks(url);
+    // hreflang: replace whatever the server/prerender put there (it may be
+    // another page's set — the shell is shared) with this page's own set.
+    const staleHreflang = Array.from(document.head.querySelectorAll('link[rel="alternate"][hreflang]'));
+    const removedHreflang = staleHreflang.map((el) => {
+      const clone = el.cloneNode(true) as HTMLLinkElement;
+      el.remove();
+      return clone;
+    });
+    const addedHreflang: HTMLLinkElement[] = [];
+    if (!noindex) {
+      for (const alt of alternates) {
+        const link = document.createElement('link');
+        link.rel = 'alternate';
+        link.hreflang = alt.hreflang;
+        link.href = alt.href;
+        link.setAttribute(HREFLANG_ATTR, '1');
+        document.head.appendChild(link);
+        addedHreflang.push(link);
+      }
+    }
     document.title = title;
     set(descEl, description);
     if (noindex) {
@@ -113,6 +190,8 @@ export function useSEO({ title, description, url, ogImage, jsonLd, noindex }: SE
       if (ogImage) set(ogImgEl, origOgImg);
       set(twTitleEl, origTwTitle);
       set(twDescEl, origTwDesc);
+      for (const el of addedHreflang) el.remove();
+      for (const el of removedHreflang) document.head.appendChild(el);
       if (createdCanonical && activeCanonical && document.head.contains(activeCanonical)) {
         document.head.removeChild(activeCanonical);
       } else {

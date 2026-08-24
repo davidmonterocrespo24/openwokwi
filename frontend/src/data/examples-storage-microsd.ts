@@ -194,7 +194,7 @@ export const microsdExamples: ExampleProject[] = [
       { id: 'w-miso', start: { componentId: 'esp32', pinName: '19' }, end: { componentId: 'sd1', pinName: 'MISO' }, color: '#22cc22' },
       { id: 'w-sck', start: { componentId: 'esp32', pinName: '18' }, end: { componentId: 'sd1', pinName: 'SCK' }, color: '#ffdd33' },
       { id: 'w-vcc', start: { componentId: 'esp32', pinName: '3V3' }, end: { componentId: 'sd1', pinName: 'VCC' }, color: '#ff4444' },
-      { id: 'w-gnd', start: { componentId: 'esp32', pinName: 'GND.1' }, end: { componentId: 'sd1', pinName: 'GND' }, color: '#000000' },
+      { id: 'w-gnd', start: { componentId: 'esp32', pinName: 'GND' }, end: { componentId: 'sd1', pinName: 'GND' }, color: '#000000' },
     ],
   },
 ];

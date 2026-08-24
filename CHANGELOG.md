@@ -3,6 +3,17 @@
 All notable changes to Velxio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- Browser flashing seam (`lib/proWebFlash.ts`): the board context menu's
+  "Flash to real board" and the FlashModal can now be backed by a Web Serial
+  flasher installed at runtime (used by velxio.dev for ESP32-family boards);
+  without one, web builds keep the desktop-only behavior (#248)
+- Hardware serial seams: `appendHardwareSerial` feeds real-UART bytes through
+  the serial batcher, and `lib/proHardwareSerial.ts` lets an installed monitor
+  intercept a board's serial input while attached
+
 ## [3.0.3] - 2026-08-10
 
 ### Added
@@ -252,7 +263,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Per‑board LEDC update fallback after SignalRouter rollout
 - Unused files: `wireOffsetCalculator`, `wirePathGenerator`, `wireSegments`
 - Global arduino‑libraries volume no longer needed for library resolution
-
 ## [2.0.1] - 2026-04-22
 
 ### Added

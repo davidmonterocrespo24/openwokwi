@@ -68,6 +68,8 @@ export function ElectricalOverlay({
         vcc: pg.vcc,
         groundPinNames: pg.gnd,
         vccPinNames: pg.vcc_pins,
+        auxPinNames: pg.aux?.pins,
+        auxVolts: pg.aux?.volts,
         pins: {},
       };
     });

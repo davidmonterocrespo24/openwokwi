@@ -104,6 +104,15 @@ const BOARD_DESCRIPTIONS: Record<BoardKind, string> = {
 };
 
 /**
+ * wokwi-elements ships art for boards Velxio does not emulate; the metadata
+ * auto-scan sweeps them into the registry as plain components. Listing one in
+ * the picker promises a board that will never boot, so they are hidden here —
+ * NOT deleted from components-metadata.json, because saved projects that
+ * already contain one still need the element to render.
+ */
+const UNSIMULATED_BOARD_SHELLS = new Set(['nano-rp2040-connect']);
+
+/**
  * Maker-first category order for the picker grid and the category filter.
  * Velxio's audience is hobbyist-heavy: everyday digital parts (sensors,
  * LEDs/outputs, displays, buttons) lead, while diodes/resistors/capacitors
@@ -265,6 +274,12 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     // component path drops a dead canvas part instead of a running board
     // (that is how "add a Pi 4" placed a 40-pin prop that never boots).
     components = components.filter((c) => !(c.id in BOARD_KIND_LABELS));
+
+    // wokwi-elements board shells with no simulator behind them. They come
+    // in through the metadata auto-scan and offering them reads as board
+    // support we don't have. Filtered here rather than removed from the
+    // metadata: saved projects that already placed one must keep rendering.
+    components = components.filter((c) => !UNSIMULATED_BOARD_SHELLS.has(c.id));
 
     // Maker-first ordering: most users reach for a sensor, an LED or a
     // display far more often than a bare transistor or a 74HC gate, so

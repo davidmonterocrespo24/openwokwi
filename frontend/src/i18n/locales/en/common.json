@@ -33,7 +33,7 @@
     "hero": {
       "titleLine1": "Arduino, ESP32 & Raspberry Pi.",
       "titleAccent": "Right in your browser.",
-      "subtitle": "Write code, wire up components, hit run. 19 boards, an AI agent that builds circuits for you, real CPU emulation, full offline desktop app, AGPLv3 open source.",
+      "subtitle": "Write code, wire up components, hit run. 35 boards, an AI agent that builds circuits for you, real CPU emulation, full offline desktop app, AGPLv3 open source.",
       "ctaPrimary": "Try Simulator Free Online →",
       "ctaGithub": "View on GitHub",
       "trustLine": "AI agent included · Works offline · Open source AGPLv3 · No signup needed",
@@ -43,7 +43,7 @@
       "label": "Supported Hardware",
       "titleLine1": "Every architecture.",
       "titleLine2": "One tool.",
-      "subtitle": "19 boards across 5 CPU architectures — AVR8, ARM Cortex-M0+, RISC-V, Xtensa, and Linux. All running locally, no cloud needed."
+      "subtitle": "35 boards across 6 CPU architectures — AVR8, ARM Cortex-M, ARM Cortex-A, RISC-V, Xtensa, and Linux. Including partner boards from Pimoroni, M5Stack, Seeed Studio and DFRobot. All running locally, no cloud needed."
     },
     "features": {
       "label": "Features",
@@ -433,5 +433,11 @@
         "privateHint": "Only you can see this project."
       }
     }
+  },
+  "news": {
+    "kicker": "What's new",
+    "readMore": "Read more",
+    "gotIt": "Got it",
+    "close": "Close"
   }
 }

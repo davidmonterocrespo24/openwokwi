@@ -152,9 +152,16 @@ class _UartBuffer:
         """Add one byte. Returns decoded string when a flush occurs, else None."""
         with self._lock:
             self._buf.append(byte_val)
-            # Flush on newline, carriage return, period, or max size
-            # This ensures progress dots '...' don't buffer endlessly.
-            if byte_val in (ord('\n'), ord('\r'), ord('.')) or len(self._buf) >= self.flush_size:
+            # Flush on newline, carriage return, period, EOT, or max size.
+            # The dots keep a progress line from buffering endlessly; EOT
+            # (Ctrl-D, 0x04) is there because MicroPython's raw REPL answers
+            # every statement with `OK` <EOT> traceback <EOT> `>` and not one
+            # newline in it. Held here, that answer never reaches the uploader
+            # waiting on it, and a MicroPython project times out mid-upload
+            # with the board sitting idle at the prompt. It only surfaced once
+            # the uploader started waiting for the board instead of pasting
+            # blind (see frontend simulation/micropythonSession.ts).
+            if byte_val in (ord('\n'), ord('\r'), ord('.'), 0x04) or len(self._buf) >= self.flush_size:
                 text = self._buf.decode('utf-8', errors='replace')
                 self._buf.clear()
                 return text

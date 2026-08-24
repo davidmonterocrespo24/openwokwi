@@ -74,7 +74,11 @@
       "contextMenu": {
         "rename": "Rename",
         "delete": "Delete"
-      }
+      },
+      "lastSaved": "last saved",
+      "saving": "saving…",
+      "saved": "saved",
+      "saveFailed": "save failed"
     },
     "fileTabs": {
       "unsavedChanges": "Unsaved changes",
@@ -168,7 +172,13 @@
         "remove": "Remove"
       },
       "boardOptions": "Board Options...",
-      "flashToBoard": "Flash to real board"
+      "flashToBoard": "Flash to real board",
+      "flashHint": {
+        "mpy": "Install MicroPython (if needed) and upload this project to a real USB-attached board",
+        "mpyUnavailable": "MicroPython projects cannot be flashed from here — Arduino sketches only",
+        "ready": "Flash the compiled sketch to a real USB-attached board",
+        "willCompile": "Compile the sketch and flash it to a real USB-attached board"
+      }
     },
     "componentPicker": {
       "title": "Add Component",
@@ -404,6 +414,49 @@
       "datasheetTab": "Datasheet",
       "examplesTitle": "Example projects",
       "productPage": "Product page"
+    },
+    "flash": {
+      "title": "Flash {{board}}",
+      "close": "Close",
+      "detectingPorts": "Detecting USB serial ports...",
+      "needsDesktop": "Hardware flashing requires Velxio Desktop. The web app cannot access local USB serial ports.",
+      "noPorts": "No USB serial ports detected.",
+      "noPortsHint": "Plug your board into a USB port and click Refresh. On Linux, you may need to add yourself to the dialout group:",
+      "noPortsHintLogout": "(log out and back in after running it.)",
+      "refresh": "Refresh",
+      "refreshPorts": "Refresh ports",
+      "serialPort": "Serial port",
+      "flash": "Flash",
+      "compileFlash": "Compile & flash",
+      "connectFlash": "Connect & flash",
+      "connectCompileFlash": "Connect, compile & flash",
+      "noBuild": "This board has no compiled program yet — it will be compiled first, then flashed. Compiler output shows in the console below.",
+      "staleBuild": "The code changed since the last compile. The sketch will be recompiled before flashing so the board gets what you see in the editor.",
+      "webIntro": "Flash over USB, right from the browser.",
+      "webHint": "Plug the board in via USB and click the button — your browser will ask which serial port to use. Close any other program using the port (serial monitors, IDEs) first.",
+      "mpyTwoSteps": "This MicroPython project flashes in two steps: the MicroPython firmware is installed first if the board does not have it (about a minute), then your .py files are uploaded and the board reboots into main.py.",
+      "mpyUnavailable": "MicroPython projects cannot be flashed to a real board from here.",
+      "compiling": "Compiling the sketch...",
+      "compilingHint": "Flashing starts automatically when the build succeeds.",
+      "flashingOn": "Flashing on {{port}}...",
+      "success": "Flashed successfully in {{seconds}}s",
+      "compileFailed": "Compilation failed — fix the errors below and try again. {{error}}",
+      "noOutput": "(no output yet)",
+      "dontUnplug": "Don't unplug the board while flashing.",
+      "startOver": "Start over",
+      "pickAnotherPort": "Pick another port",
+      "retry": "Retry",
+      "retryCompile": "Recompile & flash",
+      "cancel": "Cancel",
+      "hide": "Hide",
+      "paidOnlyTitle": "Flashing real boards is part of the paid Velxio Desktop license",
+      "paidOnlyBody": "Uploading a sketch to a real USB-attached board is available with a Personal, Commercial or Enterprise license. The simulator itself stays free.",
+      "seePlans": "See plans",
+      "log": {
+        "compiling": "Compiling the sketch before flashing...",
+        "recompiling": "Code changed since the last build — recompiling before flashing...",
+        "compiled": "Build OK in {{seconds}}s. Starting flash..."
+      }
     }
   },
   "about": {

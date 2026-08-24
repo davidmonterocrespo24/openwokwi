@@ -77,6 +77,37 @@ class TestPreprocessorAwareIncludeScan(unittest.TestCase):
                       '#else\n#include <C.h>\n#endif'),
             ['B.h'])
 
+    def test_else_of_an_unknown_branch_is_live(self):
+        """The GxEPD2 shape (found by the gallery compile smoke, 2026-08-15):
+
+            #if ENABLE_GxEPD2_GFX            // defaults to 0 — unknown to us
+            #include "GxEPD2_GFX.h"
+            #elif defined(_GFX_H_)
+            #define GxEPD2_GFX_BASE_CLASS GFX
+            #else
+            #include <Adafruit_GFX.h>        // what the compiler really takes
+            #endif
+
+        An UNKNOWN #if must not mark the chain as taken: pruning this #else
+        dropped Adafruit_GFX from user_libs_all and broke every GxEPD2
+        e-paper example with 'fatal error: Adafruit_GFX.h: No such file'."""
+        got = self.scan(
+            '#if ENABLE_GxEPD2_GFX\n#include "GxEPD2_GFX.h"\n'
+            '#elif defined(_GFX_H_)\n#define GxEPD2_GFX_BASE_CLASS GFX\n'
+            '#else\n#include <Adafruit_GFX.h>\n#endif')
+        self.assertIn('Adafruit_GFX.h', got)
+        # The unknown arm itself also stays live — over-reporting is the
+        # accepted cost, hiding a real dependency is not.
+        self.assertIn('GxEPD2_GFX.h', got)
+
+    def test_else_of_a_provably_true_branch_stays_dead(self):
+        """The counterweight: when the #if IS provably true on ESP32, its
+        #else really is dead and must stay pruned."""
+        self.assertEqual(
+            self.scan('#if defined(ESP32)\n#include <A.h>\n'
+                      '#else\n#include <B.h>\n#endif'),
+            ['A.h'])
+
     def test_nested_dead_block(self):
         self.assertEqual(
             self.scan('#ifdef ESP8266\n#ifdef FOO\n#include <Deep.h>\n'

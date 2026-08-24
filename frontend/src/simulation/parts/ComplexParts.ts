@@ -3,6 +3,7 @@ import type { AnySimulator } from './PartSimulationRegistry';
 import { RP2040Simulator } from '../RP2040Simulator';
 import { getADC, setAdcVoltage, emitPropertyChange } from './partUtils';
 import { registerSensorUpdate, unregisterSensorUpdate } from '../SensorUpdateRegistry';
+import { LOG_SLIDER_STEPS, logSliderToValue } from '../sensorControlConfig';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -167,9 +168,15 @@ PartSimulationRegistry.register('photoresistor-sensor', {
           const volts = (val / 1023.0) * 5.0;
           setAdcVoltage(avrSimulator, pinAO, volts);
         }
-        // Mirror to store — maps the slider 0-1023 back to lux 0-1000
-        // so the SPICE photoresistor handler re-computes its R_ldr.
-        emitPropertyChange(componentId, 'lux', Math.round((val / 1023) * 1000));
+        // Mirror to store — the slider position maps to lux LOGARITHMICALLY
+        // (same curve as the Sensors popover): an LDR's whole useful range
+        // lives in the low decades, and the linear map crammed it into the
+        // first few percent of travel.
+        emitPropertyChange(
+          componentId,
+          'lux',
+          logSliderToValue((val / 1023) * LOG_SLIDER_STEPS, 0, 1000),
+        );
       }
     };
     element.addEventListener('input', onInput);

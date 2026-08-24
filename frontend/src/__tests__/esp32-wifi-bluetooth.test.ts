@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { sketchUsesWifi } from '../store/useSimulatorStore';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -354,6 +355,54 @@ void loop() { delay(1000); }
       content.includes('#include "WiFi.h"') ||
       content.includes('WiFi.begin(');
     expect(hasWifi).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3b. The REAL detector (issue #262)
+//
+// The block above re-implements the detection inline, so it only ever
+// proves the copy in this file is self-consistent — which is how the
+// MicroPython gap below survived. These call the shipped function.
+//
+// Getting this wrong is not cosmetic: a false verdict means QEMU is
+// started without `-nic`, and MicroPython's `network.WLAN(STA_IF)` then
+// hangs ~26s on a peripheral that was never attached until the FreeRTOS
+// watchdog resets the board.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('sketchUsesWifi — the shipped detector', () => {
+  const uses = (content: string) => sketchUsesWifi([{ content }]);
+
+  it('detects the Arduino forms', () => {
+    expect(uses('#include <WiFi.h>')).toBe(true);
+    expect(uses('#include "WiFi.h"')).toBe(true);
+    expect(uses('#include <esp_wifi.h>')).toBe(true);
+    expect(uses('void setup(){ WiFi.begin("s",""); }')).toBe(true);
+  });
+
+  it('detects the MicroPython import forms', () => {
+    expect(uses('import network')).toBe(true);
+    expect(uses('import network as net')).toBe(true);
+    expect(uses('wlan = network.WLAN(network.STA_IF)')).toBe(true);
+  });
+
+  it('detects `from network import WLAN` (the #262 gap)', () => {
+    // Reported as MicroPython WiFi being "broken": this form matched
+    // neither /import\s+network\b/ nor /network\.WLAN/, so the sketch was
+    // judged WiFi-less and never got a NIC.
+    expect(uses('from network import WLAN\nw = WLAN(0)')).toBe(true);
+  });
+
+  it('stays false for sketches that touch no network', () => {
+    expect(uses('void setup(){ Serial.begin(115200); }')).toBe(false);
+    expect(uses('from machine import Pin\nPin(2).on()')).toBe(false);
+  });
+
+  it('scans every file, not just the first', () => {
+    expect(
+      sketchUsesWifi([{ content: 'from machine import Pin' }, { content: 'import network' }]),
+    ).toBe(true);
   });
 });
 

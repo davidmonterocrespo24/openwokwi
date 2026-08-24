@@ -71,6 +71,31 @@ export function calculatePinPosition(
       pin = pinInfo.find((p: any) => p.description === `GPIO${gpioNum}`);
     }
   }
+  // Generic alias fallbacks — every unresolved endpoint used to silently
+  // anchor at the board CORNER (0,0 of the element), which users read as a
+  // broken circuit. The names below are electrically identical spellings
+  // that boards/examples/saved projects disagree on (a 2026-08 audit found
+  // 15 gallery examples and 28 saved projects wired to a spelling their
+  // board element doesn't expose). Only consulted after exact + the two
+  // legacy fallbacks above miss, so no existing resolution changes.
+  if (!pin) {
+    const candidates: string[] = [];
+    const dot = pinName.match(/^(.+)\.\d+$/);
+    if (dot) candidates.push(dot[1]); // GND.1 -> GND (esp32 classic)
+    if (pinName === '3.3V') candidates.push('3V3', '3V3.1', '3V');
+    if (pinName === '3V3') candidates.push('3V3.1', '3.3V', '3V');
+    if (pinName === '5V') candidates.push('5V.1', 'VBUS', 'VIN');
+    if (pinName === 'GND2') candidates.push('GND.2');
+    const dNum = pinName.match(/^D(\d+)$/);
+    if (dNum) candidates.push(dNum[1], `GP${dNum[1]}`); // D13 -> 13 (esp32) / GP13 (pico)
+    if (/^\d+$/.test(pinName)) candidates.push(`D${pinName}`, `GP${pinName}`);
+    if (pinName === '36') candidates.push('VP'); // ESP32 devkit silk for GPIO36
+    if (pinName === '39') candidates.push('VN'); // ESP32 devkit silk for GPIO39
+    for (const c of candidates) {
+      pin = pinInfo.find((p: any) => p.name === c);
+      if (pin) break;
+    }
+  }
   if (!pin) {
     console.warn(`[pinPositionCalculator] Pin ${pinName} not found on component ${componentId}`);
     console.warn(

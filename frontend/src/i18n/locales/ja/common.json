@@ -33,7 +33,7 @@
     "hero": {
       "titleLine1": "Arduino、ESP32、Raspberry Pi。",
       "titleAccent": "ブラウザ上で。",
-      "subtitle": "コードを書き、部品を配線し、実行を押すだけ。19のボード、48以上の部品、リアルなCPUエミュレーション—ハードウェア不要、インストール不要、クラウド不要。",
+      "subtitle": "コードを書き、部品を配線し、実行を押すだけ。35のボード、48以上の部品、リアルなCPUエミュレーション—ハードウェア不要、インストール不要、クラウド不要。",
       "ctaPrimary": "シミュレータをオンラインで無料で試す →",
       "ctaGithub": "GitHubで見る",
       "trustLine": "サインアップ不要 · 100%ブラウザで動作 · 無料＆オープンソース",
@@ -43,7 +43,7 @@
       "label": "対応ハードウェア",
       "titleLine1": "すべてのアーキテクチャ。",
       "titleLine2": "1つのツール。",
-      "subtitle": "5つのCPUアーキテクチャ（AVR8、ARM Cortex-M0+、RISC-V、Xtensa、Linux）にわたる19のボード。すべてローカルで動作し、クラウドは不要。"
+      "subtitle": "6つのCPUアーキテクチャ（AVR8、ARM Cortex-M、ARM Cortex-A、RISC-V、Xtensa、Linux）にわたる35のボード。Pimoroni、M5Stack、Seeed Studio、DFRobot のパートナーボードも含みます。すべてローカルで動作し、クラウドは不要です。"
     },
     "features": {
       "label": "機能",
@@ -433,5 +433,11 @@
         "privateHint": "あなただけがこのプロジェクトを見ることができます。"
       }
     }
+  },
+  "news": {
+    "kicker": "新着情報",
+    "readMore": "詳細を見る",
+    "gotIt": "了解",
+    "close": "閉じる"
   }
 }

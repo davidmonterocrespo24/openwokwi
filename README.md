@@ -2,9 +2,9 @@
 
 **Live at [velxio.dev](https://velxio.dev)**
 
-A fully local, open-source multi-board emulator. Write Arduino C++ or Python, compile it, and simulate it with real CPU emulation and 48+ interactive electronic components — all running in your browser.
+An open-source multi-board emulator and circuit simulator. Write Arduino C++, MicroPython, ESP-IDF or Python, compile it, and run it against real CPU emulation with 150+ interactive electronic components — all in your browser.
 
-**19 boards &middot; 5 CPU architectures**: AVR8 (ATmega / ATtiny), ARM Cortex-M0+ (RP2040), RISC-V RV32IMC/EC (ESP32-C3 / CH32V003), Xtensa LX6/LX7 (ESP32 / ESP32-S3 via QEMU), and ARM Cortex-A53 (Raspberry Pi 3 Linux via QEMU).
+**40 boards &middot; 5 CPU families**: AVR8 (ATmega / ATtiny), ARM Cortex-M (RP2040 / RP2350 / STM32), Xtensa LX6/LX7 (ESP32 / ESP32-S3), RISC-V (ESP32-C3 / ESP32-C6) and ARM Cortex-A Linux (Raspberry Pi Zero to 5).
 
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=davidmonterocrespo24/velxio)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-velxio.dev-007acc?style=for-the-badge)](https://velxio.dev)
@@ -30,6 +30,22 @@ Velxio is free and open-source. Building and maintaining a full multi-board emul
 | **PayPal** | [paypal.me/odoonext](https://paypal.me/odoonext) |
 
 Your support helps cover server costs, library maintenance, and frees up time to add new boards, components, and features. Thank you!
+
+---
+
+## Hardware Partners
+
+These companies have supported Velxio and provided their hardware so their components can be emulated accurately:
+
+<p align="center">
+  <a href="https://www.dfrobot.com/"><img src="docs/partners/dfrobot.png" alt="DFRobot" width="150"></a>&nbsp;
+  <a href="https://www.espressif.com/"><img src="docs/partners/espressif.png" alt="Espressif" width="150"></a>&nbsp;
+  <a href="https://m5stack.com/"><img src="docs/partners/m5stack.png" alt="M5Stack" width="150"></a>&nbsp;
+  <a href="https://www.seeedstudio.com/"><img src="docs/partners/seeed-studio.png" alt="Seeed Studio" width="150"></a>&nbsp;
+  <a href="https://pimoroni.com/"><img src="docs/partners/pimoroni.png" alt="Pimoroni" width="150"></a>
+</p>
+
+Their hardware is in the catalog today: the M5Stack Cardputer and Core, the Pimoroni Badger 2350 and Galactic Unicorn, the Seeed Studio XIAO family and Grove modules, the DFRobot UNIHIKER and Gravity sensors, and the whole Espressif ESP32 line up to the ESP32-C6.
 
 ---
 
@@ -63,29 +79,37 @@ instead of 5-30 seconds.
 
 ## Screenshots
 
-![Raspberry Pi Pico ADC simulation with Serial Monitor](docs/img1.png)
+<p align="center"><img src="docs/img/screens/weather-station.gif" width="520" alt="ESP32 weather station driving an ILI9341 TFT"></p>
 
-Raspberry Pi Pico simulation — ADC read test with two potentiometers, Serial Monitor showing live output, and compilation console at the bottom.
+ESP32 weather station — a BMP280 over I2C, a DHT22 on a GPIO and an ILI9341 TFT over SPI wired on the canvas, three buses working at once while the display updates live.
 
-![ILI9341 TFT display simulation on Arduino Uno](docs/img2.png)
+![ESP32 Blink running with the Serial Monitor open](docs/img/screens/editor-esp32-blink.png)
 
-Arduino Uno driving an ILI9341 240×320 TFT display via SPI — rendering a real-time graphics demo using Adafruit_GFX + Adafruit_ILI9341.
+The editor: Monaco on the left, the circuit canvas on the right, compiler output and Serial Monitor at the bottom. Here an ESP32 DevKit blinks an external LED and prints over UART.
 
-![Library Manager with full library list](docs/img3.png)
+![Component picker with boards and modules](docs/img/screens/component-picker.png)
 
-Library Manager loads the full Arduino library index on open — browse and install libraries without typing first.
+Component picker — every board and module with a live preview, search and category filters. The catalog is over 150 parts: displays, sensors, motors, logic ICs, analog parts, breadboards and branded modules.
 
-![Component Picker with 48 components](docs/img4.png)
+![Examples gallery](docs/img/screens/examples-gallery.png)
 
-Component Picker showing 48 available components with visual previews, search, and category filters.
+Examples gallery — more than 400 ready-to-run projects filtered by board, difficulty and topic, including the [100 Days 100 IoT Projects](https://github.com/velxio/100_Days_100_IoT_Projects) collection.
 
-![Raspberry Pi 3 connected to Arduino on the same canvas](docs/img5.png)
+![MicroPython on ESP32 with the REPL](docs/img/screens/micropython.png)
 
-Multi-board simulation — Raspberry Pi 3 and Arduino running simultaneously on the same canvas, connected via serial. Mix different architectures in a single circuit.
+MicroPython — the same ESP32, now running `main.py`, with the REPL in the terminal panel. ESP32 boards also accept pure ESP-IDF projects.
 
-![ESP32 with HC-SR04 ultrasonic sensor](docs/img6.png)
+![ESP32 WiFi with MQTT publish/subscribe](docs/img/screens/esp32-wifi-mqtt.png)
 
-ESP32 simulation with an HC-SR04 ultrasonic distance sensor — real Xtensa emulation via QEMU with trigger/echo GPIO timing.
+Emulated WiFi — the ESP32 joins the virtual access point, gets an IP and round-trips messages through a public MQTT broker.
+
+![Oscilloscope tracing a GPIO](docs/img/screens/oscilloscope.png)
+
+Instruments — oscilloscope channels on any pin, plus a SPICE-based electrical layer that shows currents, voltages and shorts on the wires you draw.
+
+![Custom chip editor](docs/img/screens/custom-chip.png)
+
+Custom chips — write your own IC in C, compile it to WebAssembly and drop it on the canvas next to the boards.
 
 ---
 
@@ -93,46 +117,53 @@ ESP32 simulation with an HC-SR04 ultrasonic distance sensor — real Xtensa emul
 
 <table>
 <tr>
-  <td align="center"><img src="docs/img/boards/pi-pico.png" width="140" alt="Raspberry Pi Pico"/><br/><b>Raspberry Pi Pico</b></td>
-  <td align="center"><img src="docs/img/boards/pi-pico-w.png" width="140" alt="Raspberry Pi Pico W"/><br/><b>Raspberry Pi Pico W</b></td>
-  <td align="center"><img src="docs/img/boards/esp32-devkit-c-v4.png" width="140" alt="ESP32 DevKit C"/><br/><b>ESP32 DevKit C</b></td>
-  <td align="center"><img src="docs/img/boards/esp32-s3.png" width="140" alt="ESP32-S3"/><br/><b>ESP32-S3</b></td>
+  <td align="center"><img src="docs/img/boards/arduino-uno.png" width="120" alt="Arduino Uno"/><br/><b>Arduino Uno</b></td>
+  <td align="center"><img src="docs/img/boards/arduino-nano.png" width="120" alt="Arduino Nano"/><br/><b>Arduino Nano</b></td>
+  <td align="center"><img src="docs/img/boards/arduino-mega.png" width="120" alt="Arduino Mega 2560"/><br/><b>Arduino Mega 2560</b></td>
+  <td align="center"><img src="docs/img/boards/attiny85.png" width="120" alt="ATtiny85"/><br/><b>ATtiny85</b></td>
+  <td align="center"><img src="docs/img/boards/raspberry-pi-3.png" width="120" alt="Raspberry Pi 3"/><br/><b>Raspberry Pi 3</b></td>
+  <td align="center"><img src="docs/img/boards/raspberry-pi-5.png" width="120" alt="Raspberry Pi 5"/><br/><b>Raspberry Pi 5</b></td>
 </tr>
 <tr>
-  <td align="center"><img src="docs/img/boards/esp32-c3.png" width="140" alt="ESP32-C3"/><br/><b>ESP32-C3</b></td>
-  <td align="center"><img src="docs/img/boards/xiao-esp32-c3.png" width="140" alt="Seeed XIAO ESP32-C3"/><br/><b>Seeed XIAO ESP32-C3</b></td>
-  <td align="center"><img src="docs/img/boards/esp32c3-supermini.png" width="140" alt="ESP32-C3 SuperMini"/><br/><b>ESP32-C3 SuperMini</b></td>
-  <td align="center"><img src="docs/img/boards/esp32-cam.png" width="140" alt="ESP32-CAM"/><br/><b>ESP32-CAM</b></td>
+  <td align="center"><img src="docs/img/boards/raspberry-pi-pico.png" width="70" alt="Raspberry Pi Pico"/><br/><b>Raspberry Pi Pico</b></td>
+  <td align="center"><img src="docs/img/boards/pi-pico-w.png" width="70" alt="Raspberry Pi Pico W"/><br/><b>Raspberry Pi Pico W</b></td>
+  <td align="center"><img src="docs/img/boards/esp32.png" width="80" alt="ESP32 DevKit V1"/><br/><b>ESP32 DevKit V1</b></td>
+  <td align="center"><img src="docs/img/boards/esp32-s3.png" width="70" alt="ESP32-S3"/><br/><b>ESP32-S3</b></td>
+  <td align="center"><img src="docs/img/boards/esp32-c3.png" width="80" alt="ESP32-C3"/><br/><b>ESP32-C3</b></td>
+  <td align="center"><img src="docs/img/boards/esp32-cam.png" width="80" alt="ESP32-CAM"/><br/><b>ESP32-CAM</b></td>
 </tr>
 <tr>
-  <td align="center"><img src="docs/img/boards/xiao-esp32-s3.png" width="140" alt="Seeed XIAO ESP32-S3"/><br/><b>Seeed XIAO ESP32-S3</b></td>
-  <td align="center"><img src="docs/img/boards/arduino-nano-esp32.png" width="140" alt="Arduino Nano ESP32"/><br/><b>Arduino Nano ESP32</b></td>
-  <td align="center"><img src="docs/img/boards/Raspberry_Pi_3.png" width="140" alt="Raspberry Pi 3B"/><br/><b>Raspberry Pi 3B</b></td>
-  <td align="center">Arduino Uno &middot; Nano &middot; Mega 2560<br/>ATtiny85 &middot; Leonardo &middot; Pro Mini<br/>(AVR8 / ATmega)</td>
+  <td align="center"><img src="docs/img/boards/xiao-esp32-s3.png" width="90" alt="XIAO ESP32-S3"/><br/><b>XIAO ESP32-S3</b></td>
+  <td align="center"><img src="docs/img/boards/xiao-esp32-c3.png" width="90" alt="XIAO ESP32-C3"/><br/><b>XIAO ESP32-C3</b></td>
+  <td align="center"><img src="docs/img/boards/arduino-nano-esp32.png" width="120" alt="Arduino Nano ESP32"/><br/><b>Arduino Nano ESP32</b></td>
+  <td align="center"><img src="docs/img/boards/stm32-bluepill.png" width="70" alt="STM32 Blue Pill"/><br/><b>STM32 Blue Pill</b></td>
+  <td align="center"><img src="docs/img/boards/stm32-blackpill.png" width="70" alt="STM32 Black Pill"/><br/><b>STM32 Black Pill</b></td>
+  <td align="center"><img src="docs/img/boards/stm32-f4-discovery.png" width="90" alt="STM32F4 Discovery"/><br/><b>STM32F4 Discovery</b></td>
+</tr>
+<tr>
+  <td align="center"><img src="docs/img/boards/cardputer-adv.png" width="120" alt="M5 Cardputer ADV"/><br/><b>M5 Cardputer ADV</b></td>
+  <td align="center"><img src="docs/img/boards/m5stack-core.png" width="110" alt="M5Stack Core"/><br/><b>M5Stack Core</b></td>
+  <td align="center"><img src="docs/img/boards/badger-2350.png" width="120" alt="Pimoroni Badger 2350"/><br/><b>Pimoroni Badger 2350</b></td>
+  <td align="center"><img src="docs/img/boards/xiao-esp32s3-sense.png" width="90" alt="XIAO ESP32S3 Sense"/><br/><b>XIAO ESP32S3 Sense</b></td>
+  <td align="center"><img src="docs/img/boards/esp32-c6.png" width="70" alt="ESP32-C6 DevKit"/><br/><b>ESP32-C6 DevKit</b></td>
+  <td align="center"><img src="docs/img/boards/unihiker-m10.png" width="90" alt="DFRobot UNIHIKER M10"/><br/><b>DFRobot UNIHIKER M10</b></td>
 </tr>
 </table>
 
-| Board | CPU | Engine | Language |
-| ----- | --- | ------ | -------- |
-| **Arduino Uno** | ATmega328p @ 16 MHz | avr8js (browser) | C++ (Arduino) |
-| **Arduino Nano** | ATmega328p @ 16 MHz | avr8js (browser) | C++ (Arduino) |
-| **Arduino Mega 2560** | ATmega2560 @ 16 MHz | avr8js (browser) | C++ (Arduino) |
-| **ATtiny85** | ATtiny85 @ 8 MHz (int) / 16 MHz (ext) | avr8js (browser) | C++ (Arduino) |
-| **Arduino Leonardo** | ATmega32u4 @ 16 MHz | avr8js (browser) | C++ (Arduino) |
-| **Arduino Pro Mini** | ATmega328p @ 8/16 MHz | avr8js (browser) | C++ (Arduino) |
-| **Raspberry Pi Pico** | RP2040 @ 133 MHz | rp2040js (browser) | C++ (Arduino) |
-| **Raspberry Pi Pico W** | RP2040 @ 133 MHz | rp2040js (browser) | C++ (Arduino) |
-| **ESP32 DevKit V1** | Xtensa LX6 @ 240 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **ESP32 DevKit C V4** | Xtensa LX6 @ 240 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **ESP32-S3** | Xtensa LX7 @ 240 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **ESP32-CAM** | Xtensa LX6 @ 240 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **Seeed XIAO ESP32-S3** | Xtensa LX7 @ 240 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **Arduino Nano ESP32** | Xtensa LX6 @ 240 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **ESP32-C3 DevKit** | RISC-V RV32IMC @ 160 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **Seeed XIAO ESP32-C3** | RISC-V RV32IMC @ 160 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **ESP32-C3 SuperMini** | RISC-V RV32IMC @ 160 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **CH32V003** | RISC-V RV32EC @ 48 MHz | QEMU lcgamboa (backend) | C++ (Arduino) |
-| **Raspberry Pi 3B** | ARM Cortex-A53 @ 1.2 GHz | QEMU raspi3b (backend) | Python |
+Boards run in one of two places. **Browser boards** (AVR, RP2040) are emulated entirely in the page with avr8js and rp2040js — nothing leaves your machine. **Server boards** (ESP32 family, STM32, Raspberry Pi Linux) boot a real QEMU machine on the backend and stream GPIO and serial to the canvas. Both feel the same: press Play.
+
+| Family | Boards | Languages | Where it runs |
+| --- | --- | --- | --- |
+| **Arduino / AVR** | Uno, Nano, Mega 2560, ATtiny85 | Arduino C++ | Browser — self-hosted and velxio.dev |
+| **Raspberry Pi Pico** | Pico, Pico W | Arduino C++, MicroPython | Browser — self-hosted and velxio.dev |
+| **ESP32** | ESP32 DevKit V1, DevKit-C V4, ESP32-CAM, Wemos Lolin32 Lite | Arduino C++, MicroPython, ESP-IDF | Self-hosted (QEMU) and velxio.dev |
+| **ESP32-S3** | ESP32-S3 DevKit, XIAO ESP32-S3, Arduino Nano ESP32 | Arduino C++, MicroPython, ESP-IDF | Self-hosted (QEMU) and velxio.dev |
+| **ESP32-C3** | ESP32-C3 DevKit, XIAO ESP32-C3, ESP32-C3 SuperMini | Arduino C++, MicroPython, ESP-IDF | Self-hosted (QEMU) and velxio.dev |
+| **STM32** | Blue Pill (F103C8 / F103CB), Black Pill (F411CE / F401CE), STM32F4 Discovery, Olimex STM32-H405, Netduino 2 / Plus 2 | Arduino C++ | velxio.dev (paid plan) or Velxio Desktop |
+| **Raspberry Pi (Linux)** | Zero, 1B+, 2B, 3B, 4B, 5 — boot a real Linux and run Python in a full terminal | Python | velxio.dev (paid plan) or Velxio Desktop |
+| **Branded boards** | M5Stack Cardputer ADV and Core, Pimoroni Badger 2350, Galactic Unicorn and Pico Plus 2 W, Seeed XIAO ESP32S3 Sense, XIAO ESP32C6 and XIAO RP2040, Espressif ESP32-C6 DevKit, DFRobot UNIHIKER M10 | Arduino C++, MicroPython, ESP-IDF | velxio.dev only (free plan; UNIHIKER needs a paid plan) |
+
+The self-hosted image runs the first five families out of the box. STM32 and Raspberry Pi Linux are hosted features (their emulators need licensed binaries and multi-GB boot images). The branded boards boot their factory firmware (the M5 launcher, BadgeOS) and live in the hosted catalog only; the OSS picker shows them as links to the online editor. The full list with pinouts, languages and quirks is in the [boards reference](https://velxio.dev/docs/boards/overview/).
 
 ---
 
@@ -148,9 +179,9 @@ ESP32 simulation with an HC-SR04 ultrasonic distance sensor — real Xtensa emul
 
 ### Multi-Board Simulation
 
-#### AVR8 (Arduino Uno / Nano / Mega / ATtiny85 / Leonardo / Pro Mini)
+#### AVR8 (Arduino Uno / Nano / Mega / ATtiny85)
 
-- **Real ATmega328p / ATmega2560 / ATmega32u4 / ATtiny85 emulation** at native clock speed via avr8js
+- **Real ATmega328p / ATmega2560 / ATtiny85 emulation** at native clock speed via avr8js
 - **Full GPIO** — PORTB, PORTC, PORTD (Uno/Nano/Mega); all ATtiny85 ports (PB0–PB5)
 - **Timer0/Timer1/Timer2** — `millis()`, `delay()`, PWM via `analogWrite()`
 - **USART** — full transmit and receive, auto baud-rate detection
@@ -175,88 +206,14 @@ ESP32 simulation with an HC-SR04 ultrasonic distance sensor — real Xtensa emul
 
 See [docs/RP2040_EMULATION.md](docs/RP2040_EMULATION.md) for full technical details.
 
-#### ESP32 / ESP32-S3 (Xtensa QEMU)
+#### ESP32, STM32 and Raspberry Pi Linux
 
-- **Real Xtensa LX6/LX7 dual-core emulation** via [lcgamboa/qemu](https://github.com/lcgamboa/qemu)
-- **Full GPIO** — all 40 GPIO pins, direction tracking, state callbacks, GPIO32–39 fix
-- **UART0/1/2** — multi-UART serial, baud-rate detection
-- **ADC** — 12-bit on all ADC-capable pins (0–3300 mV injection from potentiometers)
-- **I2C** — synchronous bus with virtual device response
-- **SPI** — full-duplex with configurable MISO byte injection
-- **RMT / NeoPixel** — hardware RMT decoder, WS2812 24-bit GRB frame decoding
-- **LEDC/PWM** — 16-channel duty cycle readout, LEDC→GPIO mapping, LED brightness
-- **WiFi** — SLIRP NAT emulation (`WiFi.begin("PICSimLabWifi", "")`)
-- Requires arduino-esp32 **2.0.17** (IDF 4.4.x) — only version compatible with lcgamboa WiFi
-
-See [docs/ESP32_EMULATION.md](docs/ESP32_EMULATION.md) for setup and full technical details.
-
-#### ESP32-C3 / XIAO-C3 / SuperMini / CH32V003 (RISC-V via QEMU)
-
-- **RV32IMC emulation** through QEMU lcgamboa with `libqemu-riscv32` and the `esp32c3-picsimlab` machine — same backend pattern as Xtensa ESP32, different libqemu binary
-- **GPIO 0–21** via W1TS/W1TC MMIO registers (ESP32-C3); PB0–PB5 (CH32V003)
-- **UART0** serial output in Serial Monitor
-- **CH32V003** — RV32EC core at 48 MHz, 16 KB flash, DIP-8 / SOP package — ultra-compact
-- **TypeScript ISA layer** (`RiscVCore.ts`, `Esp32C3Simulator.ts`) is kept as Vitest-only unit-test infrastructure — it cannot handle the 150+ ROM functions ESP-IDF needs and is not the production emulation path
-
-See [docs/RISCV_EMULATION.md](docs/RISCV_EMULATION.md) for full technical details.
-
-#### Raspberry Pi 3B (QEMU raspi3b)
-
-- **Full BCM2837 emulation** via `qemu-system-aarch64 -M raspi3b`
-- **Boots real Raspberry Pi OS** (Trixie) — runs Python scripts directly
-- **RPi.GPIO shim** — drop-in replacement for the GPIO library; sends pin events to the frontend over a text protocol
-- **GPIO 0–27** — output and input, event detection, PWM (binary state)
-- **Dual serial** — ttyAMA0 for user Serial Monitor, ttyAMA1 for GPIO protocol
-- **Virtual File System** — edit Python scripts in the UI, upload to Pi at boot
-- **Multi-board serial bridge** — Pi ↔ Arduino serial communication on the same canvas
-- **qcow2 overlay** — base SD image never modified; session changes are isolated
-
-See [docs/RASPBERRYPI3_EMULATION.md](docs/RASPBERRYPI3_EMULATION.md) for full technical details.
-
-### Serial Monitor
-
-- **Live serial output** — characters as the sketch/script sends them
-- **Auto baud-rate detection** — reads hardware registers, no manual configuration needed
-- **Send data** to the RX pin from the UI
-- **Autoscroll** with toggle
-
-### Component System (48+ Components)
-
-- **48 electronic components** from wokwi-elements
-- **Component picker** with search, category filters, and live previews
-- **Drag-and-drop** repositioning on the simulation canvas
-- **Component rotation** in 90° increments
-- **Property dialog** — pin roles, Arduino pin assignment, rotate & delete
-
-### Wire System
-
-- **Wire creation** — click a pin to start, click another pin to connect
-- **Orthogonal routing** — no diagonal paths
-- **8 signal-type wire colors**: Red (VCC), Black (GND), Blue (Analog), Green (Digital), Purple (PWM), Gold (I2C), Orange (SPI), Cyan (USART)
-- **Segment-based wire editing** — drag segments perpendicular to their orientation
-
-### Library Manager
-
-- Browse and install the full Arduino library index directly from the UI
-- Live search, installed tab, version display
-
-### Portable Project Persistence
-
-- **`.vlx` file format** — single-file JSON snapshot of the whole
-  workspace (boards, file groups, components, wires). Download with the
-  Save button, restore with the Open `.vlx` button. The format is
-  versioned so files round-trip cleanly across versions.
-- **Zero server-side state** — OSS Velxio has no database, no accounts,
-  no login. Your projects live wherever you keep your `.vlx` files
-  (local disk, Dropbox, GitHub, Google Drive — your choice).
-- Need accounts, public profiles at `/:username`, server-side project
-  URLs and admin panels? Those live in the private overlay used to run
-  velxio.dev — see [velxio-prod](https://github.com/velxio/velxio-prod)
-  for the open-core split details.
+The ESP32 family (Xtensa and RISC-V), the STM32 family and the Raspberry Pi Linux boards run on QEMU-based backends with the same canvas, Serial Monitor and instruments as the browser boards. Their setup, peripherals and quirks are covered board by board in the [documentation](https://velxio.dev/docs/boards/overview/); the technical notes for the QEMU bridges live in [docs/ESP32_EMULATION.md](docs/ESP32_EMULATION.md), [docs/RISCV_EMULATION.md](docs/RISCV_EMULATION.md) and [docs/RASPBERRYPI3_EMULATION.md](docs/RASPBERRYPI3_EMULATION.md).
 
 ### Example Projects
 
-- Built-in examples including Blink, Traffic Light, Button Control, Fade LED, Serial Hello World, RGB LED, Simon Says, LCD 20×4, and Pi + Arduino serial control
+- Hundreds of ready-to-run examples in the gallery (400+ on velxio.dev), filtered by board, difficulty and topic — from Blink and Traffic Light to TFT dashboards, e-paper displays, MQTT over emulated WiFi and Pi + Arduino serial links
+- The [100 Days 100 IoT Projects](https://github.com/velxio/100_Days_100_IoT_Projects) collection, imported as runnable projects
 - One-click loading into the editor
 
 ---
@@ -269,15 +226,16 @@ automatically.
 
 | Path | Boards available | Build time | Best for |
 | --- | --- | --- | --- |
-| **A. Docker (prebuilt image)** | All 19 (AVR, RP2040, RISC-V, **ESP32**, Raspberry Pi 3) | ~30 s download | Just want it running |
-| **B. Docker Compose (build from source)** | All 19 | ~10–15 min first build | Want to modify the code |
-| **C. Manual install** | Browser-only boards (AVR, RP2040, RISC-V) | ~5 min | Frontend / backend dev |
+| **A. Docker (prebuilt image)** | AVR, RP2040 and the whole **ESP32** family (Xtensa + RISC-V) | ~30 s download | Just want it running |
+| **B. Docker Compose (build from source)** | Same as A | ~10–15 min first build | Want to modify the code |
+| **C. Manual install** | Browser-only boards (AVR, RP2040) | ~5 min | Frontend / backend dev |
 
-> ESP32 (Xtensa) and Raspberry Pi 3 emulation rely on QEMU `.so` libraries
-> that ship inside the Docker image. Manual installs get the browser-side
-> boards out of the box — **for ESP32 you'll want Docker** (or follow
+> ESP32 emulation relies on QEMU `.so` libraries that ship inside the
+> Docker image. Manual installs get the browser-side boards out of the
+> box — **for ESP32 you'll want Docker** (or follow
 > [docs/ESP32_EMULATION.md](docs/ESP32_EMULATION.md) to wire up the QEMU
-> binaries by hand).
+> binaries by hand). STM32 and Raspberry Pi Linux emulation are hosted
+> features — use them on velxio.dev or in Velxio Desktop.
 
 ---
 
@@ -409,96 +367,15 @@ arduino-cli core install ATTinyCore:avr
 > ESP32 (Xtensa) compilation in manual install requires the ESP-IDF 4.4.7
 > toolchain installed locally. The Docker image bundles this — for manual
 > installs see [docs/ESP32_EMULATION.md](docs/ESP32_EMULATION.md). If you
-> only need AVR / RP2040 / RISC-V boards you can skip ESP-IDF entirely.
-
----
-
-## Project Structure
-
-```text
-velxio/
-├── frontend/                    # React + Vite + TypeScript
-│   └── src/
-│       ├── pages/               # LandingPage, EditorPage, UserProfilePage, ...
-│       ├── components/          # Editor, simulator canvas, modals, layout
-│       ├── simulation/          # AVRSimulator, RP2040Simulator, RiscVCore,
-│       │                        # RaspberryPi3Bridge, Esp32Bridge, PinManager
-│       ├── store/               # Zustand stores (auth, editor, simulator, project, vfs)
-│       └── services/            # API clients
-├── backend/                     # FastAPI + Python
-│   └── app/
-│       ├── api/routes/          # compile, auth, projects, libraries, simulation (ws)
-│       ├── models/              # User, Project (SQLAlchemy)
-│       ├── services/            # arduino_cli, esp32_worker, qemu_manager, gpio_shim
-│       └── core/                # config, security, dependencies
-├── third-party/                  # Reference-only upstream clones (credits)
-│   │                            # — runtime libs come from npm; the only
-│   │                            # one used by the build is qemu-lcgamboa.
-│   ├── wokwi-elements/          # (npm: @wokwi/elements)
-│   ├── avr8js/                  # (npm: avr8js)
-│   ├── rp2040js/                # (npm: rp2040js)
-│   └── qemu-lcgamboa/           # QEMU fork for ESP32 Xtensa (build from source)
-├── img/                         # Raspberry Pi 3 boot images (kernel8.img, dtb, OS)
-├── docker/                      # In-container nginx.conf + entrypoint.sh
-├── docs/                        # Technical documentation
-├── Dockerfile.standalone        # Single-container image used for self-hosting
-└── docker-compose.yml           # Self-hosting compose
-                                 # (production deployment lives in
-                                 # https://github.com/velxio/velxio-prod)
-```
-
----
-
-## Technologies
-
-| Layer | Stack |
-| --- | --- |
-| Frontend | React 19, Vite 7, TypeScript 5.9, Monaco Editor, Zustand, React Router 7 |
-| Backend | FastAPI, uvicorn (stateless: compile, libraries, simulation, MCP) |
-| AVR Simulation | avr8js (ATmega328p / ATmega2560) |
-| RP2040 Simulation | rp2040js (ARM Cortex-M0+) |
-| RISC-V Simulation | RiscVCore.ts (RV32IMC, custom TypeScript) |
-| ESP32 Simulation | QEMU 8.1.3 lcgamboa fork (Xtensa LX6/LX7) |
-| Raspberry Pi 3 Simulation | QEMU 8.1.3 (`qemu-system-aarch64 -M raspi3b`) + Raspberry Pi OS Trixie |
-| UI Components | wokwi-elements (Web Components) |
-| Compiler | arduino-cli (subprocess) + ESP-IDF (subprocess) |
-| Auth | None — anonymous, single-user editor by design |
-| Persistence | `.vlx` file export/import (no server-side database) |
-| Deploy | Docker, nginx, GitHub Actions → GHCR + Docker Hub |
+> only need AVR / RP2040 boards you can skip ESP-IDF entirely.
 
 ---
 
 ## Documentation
 
-| Topic | Document |
-| --- | --- |
-| Getting Started | [docs/getting-started.md](docs/getting-started.md) |
-| Architecture Overview | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Emulator Architecture | [docs/emulator.md](docs/emulator.md) |
-| Wokwi Libraries Integration | [docs/WOKWI_LIBS.md](docs/WOKWI_LIBS.md) |
-| RP2040 Emulation (Pico) | [docs/RP2040_EMULATION.md](docs/RP2040_EMULATION.md) |
-| Raspberry Pi 3 Emulation | [docs/RASPBERRYPI3_EMULATION.md](docs/RASPBERRYPI3_EMULATION.md) |
-| ESP32 Emulation (Xtensa) | [docs/ESP32_EMULATION.md](docs/ESP32_EMULATION.md) |
-| RISC-V Emulation (ESP32-C3) | [docs/RISCV_EMULATION.md](docs/RISCV_EMULATION.md) |
-| Components Reference | [docs/components.md](docs/components.md) |
-| MCP Server | [docs/MCP.md](docs/MCP.md) |
-| Roadmap | [docs/roadmap.md](docs/roadmap.md) |
+The user documentation lives at **[velxio.dev/docs](https://velxio.dev/docs/)** — getting started, every board and part, the circuit editor, programming in Arduino / MicroPython / ESP-IDF, WiFi and IoT, instruments, custom chips and the AI assistant, in 9 languages. Its source is the public [velxio/velxio_docs](https://github.com/velxio/velxio_docs) repository; corrections and new pages are welcome there.
 
----
-
-## Troubleshooting
-
-**`arduino-cli: command not found`** — install arduino-cli and add to PATH.
-
-**LED doesn't blink** — check port listeners in browser console; verify pin mapping in the component property dialog.
-
-**Serial Monitor shows nothing** — ensure `Serial.begin()` is called before `Serial.print()`.
-
-**ESP32 not starting** — verify `libqemu-xtensa.dll` (Windows) or `libqemu-xtensa.so` (Linux) is present in `backend/app/services/`.
-
-**Pi 3 takes too long to boot** — QEMU needs 2–5 seconds to initialize; the "booting" status in the UI is expected.
-
-**Compilation errors** — check the compilation console; verify the correct core is installed for the selected board.
+The `docs/` folder of this repository keeps the technical notes for contributors (emulator internals, QEMU bridges, MCP server, roadmap).
 
 ---
 

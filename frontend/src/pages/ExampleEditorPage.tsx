@@ -29,6 +29,7 @@ import { loadExample, type LibraryInstallProgress } from '../utils/loadExample';
 import { EditorPage } from './EditorPage';
 import { AppHeader } from '../components/layout/AppHeader';
 import { useSEO } from '../utils/useSEO';
+import { starterBoard, starterTitle, starterDescription } from '../data/starters';
 
 const DOMAIN = 'https://velxio.dev';
 
@@ -49,12 +50,18 @@ export const ExampleEditorPage: React.FC = () => {
     ? exampleProjects.find((e) => e.id === exampleId)
     : null;
 
+  // Starter examples are the "New <board> project" entry points: their
+  // head says the action, not the sketch (the gallery keeps the sketch title).
+  const board = starterBoard(example?.id);
   useSEO({
-    title: example
-      ? `${example.title} — Velxio Arduino Simulator`
-      : 'Example — Velxio',
-    description:
-      example?.description ?? 'Arduino example running on Velxio.',
+    title: board
+      ? starterTitle(board)
+      : example
+        ? `${example.title} — Velxio Arduino Simulator`
+        : 'Example — Velxio',
+    description: board
+      ? starterDescription(board)
+      : (example?.description ?? 'Arduino example running on Velxio.'),
     url: example
       ? `${DOMAIN}/example/${example.id}`
       : `${DOMAIN}/examples`,

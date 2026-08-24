@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -7,15 +7,13 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 import { useLocalizedHref, useCurrentLocale } from '../../i18n/useLocalizedNavigate';
 import { blogUrlFor } from '../../i18n/path';
 import { trackVisitGitHub, trackVisitDiscord } from '../../utils/analytics';
-import type { AutoSaveState } from '../../hooks/useAutoSaveProject';
+import { applyStripLayout, STRIP_BELOW_CLASS } from './headerStripFit';
 import './LanguageSwitcher.css';
 
 const GITHUB_URL = 'https://github.com/davidmonterocrespo24/velxio';
 const DISCORD_URL = 'https://discord.gg/3mARjJrh4E';
 
 interface AppHeaderProps {
-  /** Optional auto-save state — when set, renders a save status indicator. */
-  autoSave?: AutoSaveState;
   /** Editor variant: a File/Edit menu bar rendered next to the logo. When
    *  set, the marketing nav links (Home / Docs / Pricing / …) are hidden —
    *  inside the editor they are noise that costs exactly the width the
@@ -29,51 +27,7 @@ interface AppHeaderProps {
   editorToolbar?: React.ReactNode;
 }
 
-const SAVE_STATUS_COPY: Record<AutoSaveState['status'], { label: string; color: string }> = {
-  idle: { label: 'Saved', color: '#7d8590' },
-  dirty: { label: 'Unsaved changes', color: '#f0883e' },
-  saving: { label: 'Saving…', color: '#3fb950' },
-  saved: { label: 'Saved', color: '#3fb950' },
-  error: { label: 'Save failed', color: '#f85149' },
-};
-
-const AutoSaveIndicator: React.FC<{ state: AutoSaveState }> = ({ state }) => {
-  const meta = SAVE_STATUS_COPY[state.status];
-  const tip =
-    state.status === 'error' && state.errorMessage
-      ? `Auto-save failed: ${state.errorMessage}`
-      : state.lastSavedAt
-        ? `Last saved ${new Date(state.lastSavedAt).toLocaleTimeString()}`
-        : 'Auto-save ready';
-  return (
-    <div
-      title={tip}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '4px 10px',
-        fontSize: 12,
-        color: meta.color,
-        userSelect: 'none',
-      }}
-    >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          background: meta.color,
-          opacity: state.status === 'saving' ? 0.7 : 1,
-          animation: state.status === 'saving' ? 'velxio-pulse 1s ease-in-out infinite' : 'none',
-        }}
-      />
-      <span>{meta.label}</span>
-    </div>
-  );
-};
-
-export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, editorToolbar }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ editorMenu, editorToolbar }) => {
   const location = useLocation();
   const currentProject = useProjectStore((s) => s.currentProject);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -87,6 +41,57 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, edit
     setMenuOpen(false);
   }, [location.pathname]);
 
+  // Editor variant: where does the toolbar strip go — on the brand row or
+  // on its own bar below, labelled or icon-only? Measured, not guessed —
+  // see headerStripFit.ts, which sets `app-header--strip-below` on the
+  // header and `unified-toolbar--compact` on the strip. Re-measured
+  // whenever the strip host, the brand block or a strip zone resizes
+  // (window, docked chat, board controls mounting). The first measure runs
+  // before paint; later ones are deferred a frame so toggling the classes
+  // never re-enters ResizeObserver delivery.
+  const headerRef = useRef<HTMLElement>(null);
+  const hasStrip = !!editorToolbar;
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header || !hasStrip) return;
+    const apply = () => {
+      applyStripLayout(header);
+    };
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        apply();
+      });
+    };
+    const ro = new ResizeObserver(schedule);
+    const content = header.querySelector<HTMLElement>(':scope > .header-content');
+    const left = content?.querySelector<HTMLElement>(':scope > .header-left');
+    const host = content?.querySelector<HTMLElement>(':scope > .header-editor-toolbar');
+    const strip = host?.firstElementChild;
+    for (const el of [left, host, ...(strip ? Array.from(strip.children) : [])]) {
+      if (el) ro.observe(el);
+    }
+    // Zones mount their controls later (the canvas side is a portal) —
+    // pick up children that appear after mount.
+    const mo = strip
+      ? new MutationObserver(() => {
+          for (const z of Array.from(strip.children)) ro.observe(z);
+          schedule();
+        })
+      : null;
+    if (strip && mo) mo.observe(strip, { childList: true });
+    return () => {
+      ro.disconnect();
+      mo?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      header.classList.remove(STRIP_BELOW_CLASS);
+    };
+  }, [hasStrip]);
+
   // Tauri desktop: skip the header entirely. The marketing nav was
   // already hidden, but the strip itself was still painting an empty
   // black bar over the editor. Brand/auto-save/share/auth-slot all
@@ -99,11 +104,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, edit
     return null;
   }
 
+  // Compare with the trailing slash ignored: /editor is served (and
+  // canonicalized) as /editor/ since it is prerendered, while client-side
+  // navigation still lands on /editor.
+  const samePath = (a: string, b: string) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
   const isActive = (path: string) =>
-    location.pathname === localize(path) ? ' header-nav-link-active' : '';
+    samePath(location.pathname, localize(path)) ? ' header-nav-link-active' : '';
 
   return (
-    <header className={"app-header" + (editorToolbar ? ' app-header--with-toolbar' : '')}>
+    <header ref={headerRef} className={"app-header" + (editorToolbar ? ' app-header--with-toolbar' : '')}>
       <div className="header-content">
         <div className="header-left">
           {/* Brand */}
@@ -144,15 +153,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, edit
                 <Link to={localize('/')} className={'header-nav-link' + isActive('/')}>
                   {t('header.nav.home')}
                 </Link>
-                <Link to={localize('/docs')} className={'header-nav-link' + isActive('/docs')}>
+                {/* Full-page link: the docs portal is a static Starlight
+                    site served by nginx at /docs/, not a SPA route. */}
+                <a href="/docs/" className="header-nav-link">
                   {t('header.nav.documentation')}
-                </Link>
+                </a>
               </>
             )}
             <Link to={localize('/examples')} className={'header-nav-link' + isActive('/examples')}>
               {t('header.nav.examples')}
             </Link>
-            <Link to={localize('/editor')} className={'header-nav-link' + isActive('/editor')}>
+            <Link to={localize('/editor/')} className={'header-nav-link' + isActive('/editor')}>
               {t('header.nav.editor')}
             </Link>
             {import.meta.env.VITE_PRO_BUILD && (
@@ -222,12 +233,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, edit
         </div>
 
         {/* Editor toolbar strip — fills the middle the nav vacated. */}
-        {editorToolbar && (
-          <>
-            {autoSave && currentProject && <AutoSaveIndicator state={autoSave} />}
-            <div className="header-editor-toolbar">{editorToolbar}</div>
-          </>
-        )}
+        {editorToolbar && <div className="header-editor-toolbar">{editorToolbar}</div>}
 
         {/* Right: language + share + auth + mobile hamburger. In the
             desktop-editor variant this block does not render at all: the
@@ -240,12 +246,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ autoSave, editorMenu, edit
         <div className="header-right">
           <LanguageSwitcher />
 
-          {/* Auto-save status — only when a project is loaded and the editor
-              page mounted the hook */}
-          {autoSave && currentProject && <AutoSaveIndicator state={autoSave} />}
-
           {/* Share button — visible when a project is loaded */}
-          {currentProject && location.pathname === '/editor' && (
+          {currentProject && samePath(location.pathname, localize('/editor')) && (
             <button
               onClick={() => setShowShareModal(true)}
               style={{

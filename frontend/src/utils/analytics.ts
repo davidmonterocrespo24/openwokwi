@@ -130,9 +130,17 @@ export function trackProductPageClick(componentId: string, brand?: string, href?
 
 // ── CTA / Conversion ────────────────────────────────────────────────────────
 
-/** Fired when a user clicks a CTA button on a landing/SEO page. */
+/**
+ * Fired when a user clicks a CTA button on a landing/SEO page.
+ *
+ * The originating page is sent as `cta_source`, NOT `source`: `source`
+ * (like `medium` and `campaign`) is a reserved traffic-source parameter in
+ * GA4, so every CTA click was rewriting the session's acquisition source to
+ * "landing" / "arduino-simulator" / "rpi-simulator" with medium "(not set)"
+ * — 16% of sessions landed in the Unassigned channel with no real origin.
+ */
 export function trackClickCTA(source: string, destination: string): void {
-  fireEvent('click_cta', { event_category: 'conversion', source, destination });
+  fireEvent('click_cta', { event_category: 'conversion', cta_source: source, destination });
 }
 
 // ── Library Manager ─────────────────────────────────────────────────────────

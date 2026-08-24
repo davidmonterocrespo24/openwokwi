@@ -4,7 +4,9 @@
  *
  * Algorithm (see plan phase_8_velxio_implementation §5):
  *   1. Union-Find on wires to identify nets.
- *   2. Canonicalize known-special nets: GND → "0", VCC/VDD/5V/3V3 → "vcc_rail".
+ *   2. Canonicalize known-special nets: GND → "0", VCC/VDD/5V/3V3 → "vcc_rail",
+ *      off-voltage board supply pins (VIN / 5V on a 3.3 V board, 3.3 V on a
+ *      5 V board) → per-voltage "aux_rail_*" nets.
  *   3. Auto-name remaining nets "n0", "n1", ... deterministically.
  *   4. Detect floating nodes (no DC path to 0) → add auto pull-down 100 MΩ.
  *   5. Emit component cards via `componentToSpice`.
@@ -16,8 +18,14 @@
  */
 import { UnionFind } from './unionFind';
 import { componentToSpice } from './componentToSpice';
+import { auxRailNetName, isAuxRailNet } from './boardPinGroups';
 import { isBreadboard, breadboardGroupKey } from '../../utils/breadboardNets';
 import type { BuildNetlistInput, ComponentForSpice, BoardForSpice, WireForSpice } from './types';
+
+/** True for any self-driven supply net: ground, the main rail, or an aux rail. */
+function isRailNet(net: string): boolean {
+  return net === '0' || net === 'vcc_rail' || isAuxRailNet(net);
+}
 
 /**
  * Union the wired pins of every breadboard that share an internal group
@@ -139,23 +147,36 @@ export function buildNetlist(input: BuildNetlistInput): BuildNetlistResult {
   // Breadboards: join wired holes that share an internal strip/rail.
   unionBreadboardGroups(uf, components, wires, pinKey);
 
-  // ── 2. Canonicalize ground / VCC pins ────────────────────────────────────
+  // ── 2. Canonicalize ground / VCC / aux-rail pins ─────────────────────────
+  // Aux rails actually referenced by this circuit: net name → volts. Used to
+  // emit one ideal source per aux rail in step 6.
+  const auxRailVolts = new Map<string, number>();
   for (const board of boards) {
+    const auxNet = board.auxVolts !== undefined ? auxRailNetName(board.auxVolts) : null;
+    const auxPins = new Set(auxNet ? (board.auxPinNames ?? []) : []);
     for (const pinName of board.groundPinNames ?? []) {
       uf.setCanonical(pinKey(board.id, pinName), '0');
     }
     for (const pinName of board.vccPinNames ?? []) {
       uf.setCanonical(pinKey(board.id, pinName), 'vcc_rail');
     }
+    if (auxNet) {
+      auxRailVolts.set(auxNet, board.auxVolts!);
+      for (const pinName of auxPins) {
+        uf.setCanonical(pinKey(board.id, pinName), auxNet);
+      }
+    }
     // Fallback: any board pin a wire references whose name looks like a
     // ground pin (GND, GND.1, GND.9, etc.) is canonicalized to "0" even if
     // it's not in `groundPinNames`. Boards with many GND pins (ESP32-C3
     // dev kits ship up to 10) often miss some in the per-board list, which
     // would leave wires connected to those pins floating instead of grounded.
+    // Aux pins are exempt from the VCC fallback — a "5V" pin on a 3.3 V
+    // board matches VCC_PIN_RE but must stay on its aux rail.
     for (const pinName of pinsReferencedByWires(board.id, wires)) {
       if (GROUND_PIN_RE.test(pinName)) {
         uf.setCanonical(pinKey(board.id, pinName), '0');
-      } else if (VCC_PIN_RE.test(pinName)) {
+      } else if (!auxPins.has(pinName) && VCC_PIN_RE.test(pinName)) {
         uf.setCanonical(pinKey(board.id, pinName), 'vcc_rail');
       }
     }
@@ -189,7 +210,7 @@ export function buildNetlist(input: BuildNetlistInput): BuildNetlistResult {
   // Rails are always sourced; component + GPIO-source + pull nets are added
   // below. Deliberately NOT populated from the step-7 auto-pull-down cards,
   // since those mark FLOATING nets.
-  const sourcedNets = new Set<string>(['0', 'vcc_rail']);
+  const sourcedNets = new Set<string>(['0', 'vcc_rail', ...auxRailVolts.keys()]);
 
   for (const comp of components) {
     const localLookup = (pinName: string) => netLookup(comp.id, pinName);
@@ -225,7 +246,7 @@ export function buildNetlist(input: BuildNetlistInput): BuildNetlistResult {
         // resistor to the rail so the idle level is correct. 45 kΩ matches the
         // ESP32 internal pull and is weak enough that any real external driver
         // or pull (<= 10 kΩ) dominates. An input is never driven otherwise.
-        if (state.pull && net && net !== '0' && net !== 'vcc_rail') {
+        if (state.pull && net && !isRailNet(net)) {
           const rail = state.pull === 1 ? 'vcc_rail' : '0';
           if (state.pull === 1) vccRailNeeded = true;
           cards.push(
@@ -243,7 +264,7 @@ export function buildNetlist(input: BuildNetlistInput): BuildNetlistResult {
         continue;
       }
       if (!net) continue;
-      if (net === '0' || net === 'vcc_rail') continue; // already served
+      if (isRailNet(net)) continue; // already served by a rail source
       const v = state.type === 'digital' ? state.v : state.duty * board.vcc;
       cards.push(`V_${sanitizeSpiceId(board.id)}_${sanitizeSpiceId(pinName)} ${net} 0 DC ${v}`);
       sourcedNets.add(net); // board GPIO V-source drives this net (e.g. cross-board input)
@@ -253,6 +274,14 @@ export function buildNetlist(input: BuildNetlistInput): BuildNetlistResult {
   // ── 6. Vcc rail source (if any pin referenced it, or a pull-up needs it) ──
   if (hasNet(netNames, 'vcc_rail') || vccRailNeeded) {
     cards.unshift(`V_VCC_RAIL vcc_rail 0 DC ${dominantVcc}`);
+  }
+  // One ideal source per referenced aux rail, at ITS voltage — so a VIN/5V
+  // pin on a 3.3 V board solves at 5 V instead of being clamped to the main
+  // rail, and vice versa on 5 V Arduinos' 3.3 V pin.
+  for (const [auxNet, volts] of auxRailVolts) {
+    if (hasNet(netNames, auxNet)) {
+      cards.unshift(`V_${auxNet.toUpperCase()} ${auxNet} 0 DC ${volts}`);
+    }
   }
 
   // ── 6.5. Wire resistance (Phase 4) ───────────────────────────────────────
@@ -367,7 +396,7 @@ function assignDeterministicNetNames(uf: UnionFind): Map<string, string> {
   const out = new Map<string, string>();
   let counter = 0;
   for (const rep of reps) {
-    if (rep === '0' || rep === 'vcc_rail') {
+    if (isRailNet(rep)) {
       out.set(rep, rep);
     } else {
       // Strip characters ngspice doesn't like from auto-names
@@ -452,10 +481,14 @@ function detectFloatingNets(netNames: Map<string, string>, cards: string[]): Set
     }
   }
 
-  // BFS from node "0" (and "vcc_rail", which always has V_VCC_RAIL → 0 edge).
+  // BFS from node "0" plus every present rail ("vcc_rail" / "aux_rail_*" —
+  // each has a V_..._RAIL → 0 source edge whenever it is referenced).
   const reachable = new Set<string>();
   const queue: string[] = ['0'];
   if (adj.has('vcc_rail')) queue.push('vcc_rail');
+  for (const n of adj.keys()) {
+    if (isAuxRailNet(n)) queue.push(n);
+  }
   while (queue.length) {
     const n = queue.shift()!;
     if (reachable.has(n)) continue;
@@ -467,7 +500,7 @@ function detectFloatingNets(netNames: Map<string, string>, cards: string[]): Set
 
   const floating = new Set<string>();
   for (const net of nets) {
-    if (net === '0' || net === 'vcc_rail') continue;
+    if (isRailNet(net)) continue;
     if (!reachable.has(net)) floating.add(net);
   }
   return floating;
@@ -498,6 +531,10 @@ export function buildWireNetMap(
   for (const board of boards) {
     for (const pName of board.groundPinNames ?? []) uf.setCanonical(pin(board.id, pName), '0');
     for (const pName of board.vccPinNames ?? []) uf.setCanonical(pin(board.id, pName), 'vcc_rail');
+    if (board.auxVolts !== undefined) {
+      const auxNet = auxRailNetName(board.auxVolts);
+      for (const pName of board.auxPinNames ?? []) uf.setCanonical(pin(board.id, pName), auxNet);
+    }
   }
   for (const comp of components) {
     if (comp.metadataId.startsWith('instr-')) continue;
@@ -545,7 +582,7 @@ export function buildBoardPinNetMap(
   // Breadboards: join wired holes that share an internal strip/rail.
   unionBreadboardGroups(uf, components, wires, pin);
 
-  // Canonicalize board ground/vcc pins (from boardPinGroups metadata)
+  // Canonicalize board ground/vcc/aux pins (from boardPinGroups metadata)
   for (const board of boards) {
     for (const pName of board.groundPinNames ?? []) {
       const k = pin(board.id, pName);
@@ -556,6 +593,14 @@ export function buildBoardPinNetMap(
       const k = pin(board.id, pName);
       uf.add(k);
       uf.setCanonical(k, 'vcc_rail');
+    }
+    if (board.auxVolts !== undefined) {
+      const auxNet = auxRailNetName(board.auxVolts);
+      for (const pName of board.auxPinNames ?? []) {
+        const k = pin(board.id, pName);
+        uf.add(k);
+        uf.setCanonical(k, auxNet);
+      }
     }
   }
   // Canonicalize non-board component GND/VCC pins referenced by wires
@@ -578,6 +623,7 @@ export function buildBoardPinNetMap(
     const allPins = new Set([
       ...(board.groundPinNames ?? []),
       ...(board.vccPinNames ?? []),
+      ...(board.auxPinNames ?? []),
       ...Object.keys(board.pins ?? {}),
       ...wireReferencedPins, // ← the pins that actually exist in the UF
     ]);

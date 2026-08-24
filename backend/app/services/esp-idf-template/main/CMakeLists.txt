@@ -27,7 +27,15 @@ if(DEFINED ENV{VELXIO_PURE_SKETCH})
         -Wno-error=missing-field-initializers
         -Wno-error=reorder
         -Wno-error=unused-variable
-        -Wno-error=unused-but-set-variable)
+        -Wno-error=unused-but-set-variable
+        -Wno-error=format
+        -Wno-error=maybe-uninitialized
+        # uninitialized (the non-maybe flavour) fires inside the M5Stack
+        # library itself: MahonyAHRS.cpp's fast inverse square root reads the
+        # float through a long* — deliberate, thirty years old, and fatal
+        # under -Werror. Library code the user cannot edit must not stop
+        # their build.
+        -Wno-error=uninitialized)
 # If Arduino component is available, use C++ main and link Arduino.
 # The component name matches the directory basename of ARDUINO_ESP32_PATH
 # (e.g. "arduino-esp32" when cloned from GitHub).
@@ -133,7 +141,21 @@ elseif(DEFINED ENV{ARDUINO_ESP32_PATH})
         -Wno-error=narrowing
         -Wno-error=write-strings
         -Wno-error=missing-field-initializers
-        -Wno-error=reorder)
+        -Wno-error=reorder
+        # format and maybe-uninitialized earn their place the same way: two of
+        # M5Stack's OWN published Cardputer examples fail to build without
+        # them (SSHClient on a %lu given an int, mic_wav_record on a
+        # may-be-uninitialized local). Code that ships as a vendor example
+        # must compile here, or the emulator looks broken for a sketch that
+        # is not.
+        -Wno-error=format
+        -Wno-error=maybe-uninitialized
+        # uninitialized (the non-maybe flavour) fires inside the M5Stack
+        # library itself: MahonyAHRS.cpp's fast inverse square root reads the
+        # float through a long* — deliberate, thirty years old, and fatal
+        # under -Werror. Library code the user cannot edit must not stop
+        # their build.
+        -Wno-error=uninitialized)
 else()
     # Pure ESP-IDF mode: main.c #includes sketch_translated.c
     idf_component_register(

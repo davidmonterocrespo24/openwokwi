@@ -20,7 +20,7 @@ import { Oscilloscope } from '../components/simulator/Oscilloscope';
 import { AppHeader } from '../components/layout/AppHeader';
 import { triggerSaveAction } from '../lib/proSaveAction';
 import { GitHubStarBanner } from '../components/layout/GitHubStarBanner';
-import { NewsModal } from '../components/layout/NewsModal';
+import { NewsAnnouncer } from '../components/layout/NewsAnnouncer';
 import { useSimulatorStore } from '../store/useSimulatorStore';
 import { useEditorStore } from '../store/useEditorStore';
 import { useCompileLogsStore } from '../store/useCompileLogsStore';
@@ -32,6 +32,7 @@ import {
 } from '../components/editor/NewProjectDialog';
 import { useAutoSaveProject } from '../hooks/useAutoSaveProject';
 import { registerEditorCommand } from '../lib/editorCommands';
+import { whenNewsClear } from '../lib/newsGate';
 import { EditorMenuBar } from '../components/editor/EditorMenuBar';
 import type { CompilationLog } from '../utils/compilationLogger';
 import '../App.css';
@@ -42,9 +43,14 @@ const BOTTOM_PANEL_MIN = 80;
 const BOTTOM_PANEL_MAX = 600;
 const BOTTOM_PANEL_DEFAULT = 200;
 
-const EXPLORER_MIN = 110;
+const EXPLORER_MIN = 100;
 const EXPLORER_MAX = 500;
-const EXPLORER_DEFAULT = 165;
+// Narrow by default: the explorer rows are compact and both headers stack
+// their actions ABOVE their label instead of beside it (see
+// FileExplorer.css), so nothing has to share a line — 124px fits a board
+// name and typical file names, and every px saved here goes to the code
+// editor.
+const EXPLORER_DEFAULT = 124;
 
 // Once per full page load: the pristine-visit starter dialog must not pop
 // again when the user closes it and later navigates away from and back to
@@ -78,6 +84,9 @@ export const EditorPage: React.FC = () => {
   // Lets users hide a pane to give the right-docked chat more room.
   const viewMode = useEditorStore((s) => s.viewMode);
   const setViewMode = useEditorStore((s) => s.setViewMode);
+  const explorerOpen = useEditorStore((s) => s.explorerOpen);
+  const setExplorerOpen = useEditorStore((s) => s.setExplorerOpen);
+  const toggleExplorer = useEditorStore((s) => s.toggleExplorer);
   const containerRef = useRef<HTMLDivElement>(null);
   const resizingRef = useRef(false);
   const serialMonitorOpen = useSimulatorStore((s) => s.serialMonitorOpen);
@@ -120,10 +129,18 @@ export const EditorPage: React.FC = () => {
   // (both leave the stores non-pristine), or twice per page load. Declared
   // AFTER the restoreStashedWorkspace effect — mount order is what makes
   // the pristine check see the restored draft.
+  //
+  // Sequenced BEHIND the news announcement: the canvas is cleared right
+  // away, but the dialog itself waits until NewsAnnouncer reports the
+  // announcement flow is done (nothing to show, or its modal was closed).
+  // The 2.5s bound applies only while the news decision is pending, so a
+  // dead feed can't hold the dialog hostage — see lib/newsGate.ts.
   useEffect(() => {
     if (starterDialogShownThisLoad) return;
     const locale = getLocaleFromPath(window.location.pathname);
-    if (window.location.pathname !== localizedPath('/editor', locale)) return;
+    // /editor is prerendered, so a fresh load arrives as /editor/ (nginx
+    // adds the slash); client-side navigation lands on /editor. Both count.
+    if (window.location.pathname.replace(/\/+$/, '') !== localizedPath('/editor', locale)) return;
     if (window.location.search) return;
     if (useProjectStore.getState().currentProject) return;
     const sim = useSimulatorStore.getState();
@@ -135,7 +152,13 @@ export const EditorPage: React.FC = () => {
     if (!pristine) return;
     starterDialogShownThisLoad = true;
     clearWorkspaceForStarter();
-    setShowNewProjectDialog(true);
+    let cancelled = false;
+    void whenNewsClear(2500).then(() => {
+      if (!cancelled) setShowNewProjectDialog(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── GitHub star prompt (show twice at most: 2nd visit OR after 3 min) ──────
@@ -204,7 +227,6 @@ export const EditorPage: React.FC = () => {
     localStorage.setItem('velxio_star_clicked', '1');
     setShowStarBanner(false);
   };
-  const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerWidth, setExplorerWidth] = useState(EXPLORER_DEFAULT);
   const [isMobile, setIsMobile] = useState(
     () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches,
@@ -243,7 +265,7 @@ export const EditorPage: React.FC = () => {
     update(mq);
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
-  }, []);
+  }, [setExplorerOpen]);
 
   // Ctrl+S shortcut
   useEffect(() => {
@@ -264,15 +286,13 @@ export const EditorPage: React.FC = () => {
     const offNew = registerEditorCommand('project.new', () => {
       void handleNewClick();
     });
-    const offExplorer = registerEditorCommand('view.toggleExplorer', () =>
-      setExplorerOpen((v) => !v),
-    );
+    const offExplorer = registerEditorCommand('view.toggleExplorer', () => toggleExplorer());
     return () => {
       offSave();
       offNew();
       offExplorer();
     };
-  }, [handleSaveClick, handleNewClick]);
+  }, [handleSaveClick, handleNewClick, toggleExplorer]);
 
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — canvas undo/redo. Skipped when the
   // user is typing in any input/textarea/contenteditable so the Monaco
@@ -321,8 +341,20 @@ export const EditorPage: React.FC = () => {
 
     const handleMouseMove = (ev: MouseEvent) => {
       if (!resizingRef.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      const el = containerRef.current;
+      const rect = el.getBoundingClientRect();
+      // The panels' percentage widths resolve against the container's CONTENT
+      // box, but getBoundingClientRect() returns the border box — and overlays
+      // may reserve space by padding .app-container (e.g. a docked side panel).
+      // Measuring against the padded box makes the handle jump away from the
+      // cursor, so strip borders and padding first.
+      const cs = getComputedStyle(el);
+      const padLeft = parseFloat(cs.paddingLeft) || 0;
+      const padRight = parseFloat(cs.paddingRight) || 0;
+      const contentLeft = rect.left + el.clientLeft + padLeft;
+      const contentWidth = el.clientWidth - padLeft - padRight;
+      if (contentWidth <= 0) return;
+      const pct = ((ev.clientX - contentLeft) / contentWidth) * 100;
       setEditorWidthPct(Math.max(20, Math.min(80, pct)));
     };
 
@@ -421,7 +453,7 @@ export const EditorPage: React.FC = () => {
             aria-label={t('editor.shell.viewMode')}
             className="view-mode-toggle"
             style={{
-              display: 'flex',
+              // display comes from App.css (flex; none on a narrow bar or mobile).
               // Never squeezed below its buttons: flexbox used to crush
               // this block to a third of its width and clip two of them.
               flexShrink: 0,
@@ -435,7 +467,7 @@ export const EditorPage: React.FC = () => {
             }}
           >
             <button
-              onClick={() => setExplorerOpen((v) => !v)}
+              onClick={() => toggleExplorer()}
               aria-pressed={explorerOpen}
               title={explorerOpen ? t('editor.menu.hideExplorer', 'Hide file explorer') : t('editor.menu.showExplorer', 'Show file explorer')}
               style={{
@@ -519,7 +551,6 @@ export const EditorPage: React.FC = () => {
   return (
     <div className="app">
       <AppHeader
-        autoSave={autoSave}
         editorMenu={!isMobile ? <EditorMenuBar /> : undefined}
         editorToolbar={unifiedToolbar}
       />
@@ -603,7 +634,7 @@ export const EditorPage: React.FC = () => {
                 }}
               >
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-                  <FileExplorer onSaveClick={handleSaveClick} onNewClick={handleNewClick} />
+                  <FileExplorer onSaveClick={handleSaveClick} onNewClick={handleNewClick} autoSave={autoSave} />
                 </div>
                 {accountBlock && (
                   <div className="explorer-account-footer">{accountBlock}</div>
@@ -638,7 +669,7 @@ export const EditorPage: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'stretch', flexShrink: 0 }}>
                 <button
                   className="explorer-toggle-btn"
-                  onClick={() => setExplorerOpen((v) => !v)}
+                  onClick={() => toggleExplorer()}
                   title={explorerOpen ? t('editor.menu.hideExplorer', 'Hide file explorer') : t('editor.menu.showExplorer', 'Show file explorer')}
                 >
                   <svg
@@ -758,7 +789,7 @@ export const EditorPage: React.FC = () => {
           round={starRound}
         />
       )}
-      <NewsModal />
+      <NewsAnnouncer />
       <NewProjectDialog
         isOpen={showNewProjectDialog}
         onClose={() => setShowNewProjectDialog(false)}

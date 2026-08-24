@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { generateUUID } from '../utils/uuid';
 import { isPiBoardKind } from '../types/board';
+import { getProBoard } from '../lib/proBoardRegistry';
 
 export interface WorkspaceFile {
   id: string;
@@ -46,10 +47,10 @@ while True:
     time.sleep(1)
 `;
 
-// NOTE: avoid Pin.toggle() — it was only added to the ESP32 port in
-// MicroPython v1.21 (Oct 2023). The firmware Velxio ships is v1.20.0
-// (April 2023), so Pin.toggle() raises AttributeError there.
-// See https://github.com/davidmonterocrespo24/velxio/issues/122
+// The shipped ESP32-family MicroPython is v1.28.0 (IDF 5.x drivers — the
+// same generation the compile pipeline and the JS engines are validated
+// against), so Pin.toggle() and friends exist now; this seed just stays on
+// the lowest-common API. History: #122 (v1.20 had no Pin.toggle).
 const DEFAULT_ESP32_MICROPYTHON_CONTENT = `# MicroPython Blink for ESP32
 from machine import Pin
 import time
@@ -152,6 +153,12 @@ interface EditorState {
   fontSize: number;
   viewMode: EditorViewMode;
   setViewMode: (mode: EditorViewMode) => void;
+  /** Desktop file-explorer pane. Lives in the store (not EditorPage state) so
+   *  the header's View menu can show its checkmark and toggle it — the
+   *  toolbar's own segmented toggle hides on narrow bars. */
+  explorerOpen: boolean;
+  setExplorerOpen: (open: boolean) => void;
+  toggleExplorer: () => void;
 
   // ── File groups (one per board) ──────────────────────────────────────────
   /** Map of groupId → WorkspaceFile[]. Stored as plain object for Zustand. */
@@ -229,6 +236,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fontSize: 14,
   viewMode: 'both',
   setViewMode: (mode) => set({ viewMode: mode }),
+  explorerOpen: true,
+  setExplorerOpen: (open) => set({ explorerOpen: open }),
+  toggleExplorer: () => set((s) => ({ explorerOpen: !s.explorerOpen })),
 
   // File groups — initial state has one group for the default Arduino Uno board
   fileGroups: {
@@ -482,7 +492,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const mainId = `${groupId}-main`;
         let fileName: string;
         let content: string;
-        const isEsp32 = groupId.includes('esp32');
+        // ESP32 by id ('group-esp32-c3') or by the overlay board's declared
+        // family — an overlay kind can be an ESP32 with no 'esp32' in its name
+        // (m5stack-core, cardputer-adv), and those used to be seeded the Pico's
+        // `Pin(25)` blink, a dead pin on both.
+        const isEsp32 =
+          groupId.includes('esp32') ||
+          getProBoard(boardIdPart)?.esp32Family !== undefined ||
+          getProBoard(boardIdPart.replace(/-\d+$/, ''))?.esp32Family !== undefined;
         if (languageMode === 'espidf') {
           fileName = 'main.c';
           content = DEFAULT_ESPIDF_CONTENT;
@@ -517,11 +534,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const { [groupId]: _a, ...restActive } = s.activeGroupFileId;
       const { [groupId]: _o, ...restOpen } = s.openGroupFileIds;
       const { [groupId]: _f, ...restFolders } = s.folderGroups;
+      // Never leave activeGroupId dangling at the deleted group: Monaco (and
+      // every agent write_file) keeps targeting it, while compile reads the
+      // board's group — two same-named sketch.ino files silently diverge and
+      // the build ships the WRONG one (the "leftover template Blink compiled
+      // instead of my code" class). Re-point at any surviving group.
+      const nextActive =
+        s.activeGroupId === groupId ? Object.keys(rest)[0] ?? '' : s.activeGroupId;
       return {
         fileGroups: rest,
         activeGroupFileId: restActive,
         openGroupFileIds: restOpen,
         folderGroups: restFolders,
+        activeGroupId: nextActive,
       };
     });
   },

@@ -428,6 +428,45 @@ describe('verifyCircuit — wiring ERC (bad connections)', () => {
   );
 
   it(
+    '4-pin I2C SSD1306: warns when its VCC supply pin is not wired (B15b)',
+    { timeout: 30_000 },
+    async () => {
+      const input: BuildNetlistInput = {
+        components: [pwr('src', 5), { id: 'o4', metadataId: 'ssd1306-i2c-4pin', properties: {} }],
+        wires: [
+          w('w1', ['src', 'SIG'], ['o4', 'SCL']), // signal wired, VCC left floating
+          w('w2', ['o4', 'GND'], ['src', 'GND']),
+        ],
+        boards: [],
+        analysis: { kind: 'op' },
+      };
+      const result = await verifyCircuit(input);
+      const mc = result.warnings.find((x) => x.code === 'missing-connection' && x.componentId === 'o4');
+      expect(mc, JSON.stringify(result.warnings)).toBeDefined();
+    },
+  );
+
+  it(
+    '4-pin I2C SSD1306: no missing-connection when VCC and GND are wired',
+    { timeout: 30_000 },
+    async () => {
+      const input: BuildNetlistInput = {
+        components: [pwr('src', 5), { id: 'o4', metadataId: 'ssd1306-i2c-4pin', properties: {} }],
+        wires: [
+          w('w1', ['src', 'SIG'], ['o4', 'VCC']),
+          w('w2', ['o4', 'GND'], ['src', 'GND']),
+        ],
+        boards: [],
+        analysis: { kind: 'op' },
+      };
+      const result = await verifyCircuit(input);
+      expect(result.warnings.map((x) => x.code)).not.toContain('missing-connection');
+      // 5 V on the 6 V-rated VCC pin is fine.
+      expect(result.warnings.map((x) => x.code)).not.toContain('over-voltage');
+    },
+  );
+
+  it(
     'errors when a VCC pin is wired directly to a GND pin',
     { timeout: 30_000 },
     async () => {

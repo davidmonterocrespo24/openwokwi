@@ -72,7 +72,11 @@
       "contextMenu": {
         "rename": "Rinomina",
         "delete": "Elimina"
-      }
+      },
+      "lastSaved": "ultimo salvataggio",
+      "saving": "salvataggio…",
+      "saved": "salvato",
+      "saveFailed": "salvataggio non riuscito"
     },
     "fileTabs": {
       "unsavedChanges": "Modifiche non salvate",
@@ -166,7 +170,13 @@
         "remove": "Rimuovi"
       },
       "boardOptions": "Opzioni scheda...",
-      "flashToBoard": "Flash su scheda reale"
+      "flashToBoard": "Flash su scheda reale",
+      "flashHint": {
+        "mpy": "Installa MicroPython (se serve) e carica questo progetto su una scheda reale collegata via USB",
+        "mpyUnavailable": "I progetti MicroPython non si possono caricare da qui: solo sketch Arduino",
+        "ready": "Carica lo sketch compilato su una scheda reale collegata via USB",
+        "willCompile": "Compila lo sketch e caricalo su una scheda reale collegata via USB"
+      }
     },
     "componentPicker": {
       "title": "Aggiungi componente",
@@ -394,6 +404,49 @@
       "datasheetTab": "Scheda tecnica",
       "examplesTitle": "Progetti di esempio",
       "productPage": "Pagina prodotto"
+    },
+    "flash": {
+      "title": "Flash {{board}}",
+      "close": "Chiudi",
+      "detectingPorts": "Rilevamento delle porte seriali USB...",
+      "needsDesktop": "Il flash su hardware richiede Velxio Desktop. L'app web non può accedere alle porte seriali USB locali.",
+      "noPorts": "Nessuna porta seriale USB rilevata.",
+      "noPortsHint": "Collega la scheda a una porta USB e premi Aggiorna. Su Linux potresti doverti aggiungere al gruppo dialout:",
+      "noPortsHintLogout": "(esci e rientra dopo averlo eseguito.)",
+      "refresh": "Aggiorna",
+      "refreshPorts": "Aggiorna porte",
+      "serialPort": "Porta seriale",
+      "flash": "Flash",
+      "compileFlash": "Compila e flash",
+      "connectFlash": "Connetti e flash",
+      "connectCompileFlash": "Connetti, compila e flash",
+      "noBuild": "Questa scheda non ha ancora un programma compilato: verrà compilato prima e poi caricato. L'output del compilatore compare nella console qui sotto.",
+      "staleBuild": "Il codice è cambiato dall'ultima compilazione. Lo sketch verrà ricompilato prima del flash, così la scheda riceve quello che vedi nell'editor.",
+      "webIntro": "Flash via USB, direttamente dal browser.",
+      "webHint": "Collega la scheda via USB e premi il pulsante: il browser chiederà quale porta seriale usare. Chiudi prima qualsiasi altro programma che usa la porta (monitor seriali, IDE).",
+      "mpyTwoSteps": "Questo progetto MicroPython si carica in due passi: prima viene installato il firmware MicroPython se la scheda non ce l'ha (circa un minuto), poi vengono caricati i tuoi file .py e la scheda si riavvia su main.py.",
+      "mpyUnavailable": "I progetti MicroPython non possono essere caricati su una scheda reale da qui.",
+      "compiling": "Compilazione dello sketch...",
+      "compilingHint": "Il flash parte da solo quando la compilazione va a buon fine.",
+      "flashingOn": "Flash su {{port}}...",
+      "success": "Flash completato in {{seconds}} s",
+      "compileFailed": "Compilazione fallita: correggi gli errori qui sotto e riprova. {{error}}",
+      "noOutput": "(ancora nessun output)",
+      "dontUnplug": "Non scollegare la scheda durante il flash.",
+      "startOver": "Ricomincia",
+      "pickAnotherPort": "Scegli un'altra porta",
+      "retry": "Riprova",
+      "retryCompile": "Ricompila e flash",
+      "cancel": "Annulla",
+      "hide": "Nascondi",
+      "paidOnlyTitle": "Il flash su schede reali fa parte della licenza a pagamento di Velxio Desktop",
+      "paidOnlyBody": "Caricare uno sketch su una scheda reale collegata via USB è disponibile con una licenza Personal, Commercial o Enterprise. Il simulatore resta gratuito.",
+      "seePlans": "Vedi i piani",
+      "log": {
+        "compiling": "Compilazione dello sketch prima del flash...",
+        "recompiling": "Il codice è cambiato dall'ultima build: ricompilazione prima del flash...",
+        "compiled": "Build OK in {{seconds}} s. Avvio del flash..."
+      }
     }
   },
   "about": {

@@ -7,6 +7,7 @@
 // modal isn't exposed there.
 
 import type { BoardKind } from './board';
+import { getProBoard } from '../lib/proBoardRegistry';
 
 export type ESP32PartitionScheme =
   | 'default'           // 1.2MB APP / 1.5MB SPIFFS (OTA)
@@ -85,11 +86,22 @@ const ESP32_XTENSA_KINDS: ReadonlySet<BoardKind> = new Set([
   'wemos-lolin32-lite',
 ]);
 
+// Overlay boards are not in the OSS kind sets, but they declare the chip they
+// carry (`esp32Family`). Without consulting the registry an overlay ESP32
+// board silently lost the whole Tools menu — no partition scheme, no PSRAM,
+// no flash size — on hardware where those knobs matter most.
+function proEsp32Family(kind: BoardKind): ProEsp32Family | null {
+  return (getProBoard(kind)?.esp32Family as ProEsp32Family | undefined) ?? null;
+}
+
+type ProEsp32Family = 'esp32' | 'esp32-s3' | 'esp32-c3' | 'esp32-c6' | 'esp32-p4' | 'esp32-c5';
+
 export function isEsp32Family(kind: BoardKind): boolean {
   return (
     ESP32_XTENSA_KINDS.has(kind) ||
     ESP32_S3_KINDS.has(kind) ||
-    ESP32_C3_KINDS.has(kind)
+    ESP32_C3_KINDS.has(kind) ||
+    proEsp32Family(kind) !== null
   );
 }
 
@@ -98,20 +110,49 @@ export function isEsp32Family(kind: BoardKind): boolean {
 //   - ESP32-S3: optional, "enabled" or "opi" (octal)
 //   - ESP32-C3: no PSRAM support at all — section hidden in UI
 export function boardSupportsPsram(kind: BoardKind): boolean {
+  const pro = proEsp32Family(kind);
+  if (pro) return pro !== 'esp32-c3' && pro !== 'esp32-c6';
   return ESP32_XTENSA_KINDS.has(kind) || ESP32_S3_KINDS.has(kind);
 }
 
 export function boardSupportsOpiPsram(kind: BoardKind): boolean {
-  return ESP32_S3_KINDS.has(kind);
+  return ESP32_S3_KINDS.has(kind) || proEsp32Family(kind) === 'esp32-s3';
 }
 
 export function getDefaultOptionsForKind(kind: BoardKind): ESP32BoardOptions {
   if (!isEsp32Family(kind)) return { ...DEFAULT_ESP32_OPTIONS };
-  const defaults = { ...DEFAULT_ESP32_OPTIONS };
+  const defaults = { ...DEFAULT_ESP32_OPTIONS, ...boardBornOptions(kind) };
   // C3 has no PSRAM controller — clear the field so a stale 'enabled'
   // value from an upgraded project doesn't reach the backend.
-  if (ESP32_C3_KINDS.has(kind)) defaults.psram = 'disabled';
+  if (ESP32_C3_KINDS.has(kind) || !boardSupportsPsram(kind)) defaults.psram = 'disabled';
+  if (defaults.psram === 'opi' && !boardSupportsOpiPsram(kind)) defaults.psram = 'enabled';
   return defaults;
+}
+
+/** What the module physically ships with, as declared by an overlay board
+ *  (`ProBoardDef.defaultBoardOptions`). Empty for every OSS board. */
+function boardBornOptions(kind: BoardKind): Partial<ESP32BoardOptions> {
+  return getProBoard(kind)?.defaultBoardOptions ?? {};
+}
+
+/**
+ * Options to compile with when the project saved none of its own.
+ *
+ * Returns null for every board whose module declares nothing, so their
+ * requests keep sending `board_options: null` and build bit-for-bit as before.
+ * When a board DOES declare something, only the declared keys are sent: the
+ * backend backfills the rest from ITS defaults, which are deliberately not the
+ * same as the modal's (`huge_app` there, `min_spiffs` here). Sending a
+ * "complete" set would quietly repartition every board that gained a single
+ * declared knob.
+ */
+export function implicitBoardOptions(kind: BoardKind): Partial<ESP32BoardOptions> | null {
+  const born = boardBornOptions(kind);
+  if (Object.keys(born).length === 0) return null;
+  const opts: Partial<ESP32BoardOptions> = { ...born };
+  if (opts.psram && !boardSupportsPsram(kind)) opts.psram = 'disabled';
+  if (opts.psram === 'opi' && !boardSupportsOpiPsram(kind)) opts.psram = 'enabled';
+  return opts;
 }
 
 // Human-readable label for a partition scheme. Used in the modal dropdown

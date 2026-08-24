@@ -10,9 +10,22 @@
  * stop — exactly what `AVRTWI` does for the ATmega328P/Uno. I2C devices
  * (SSD1306 OLED, etc.) then receive data normally.
  *
- * TinyWireM does not abort on NACK, so the bridge is a passive sniffer and
- * never drives the ACK bit — which keeps it simple and avoids fighting the
- * open-collector line.
+ * The bridge also plays the slave side of the ACK bit: when a registered
+ * device ACKs the address or a data byte, SDA's external input level is
+ * pulled low (`port.setPin`) for the whole ACK slot, exactly like the real
+ * SSD1306 would. Timing is the subtle part: TinyWireM strobes the USI with
+ * USICS1|USICLK (avr8js `clockSrc === 3`), which samples DI at the top of
+ * the FALLING USITC write — one toggle after the 9th rising edge. So the
+ * drive is asserted the moment the 8th bit completes and only released on
+ * the falling edge that closes the ACK slot; releasing on the rising edge
+ * hands the master a NACK and TinyWireM aborts the whole transmission
+ * (address goes out, zero data bytes follow — the blank-OLED symptom).
+ * Addresses nobody ACKs read back NACK, matching real hardware.
+ *
+ * `port.setPin` only rewrites the PIN register (no `writeGpio`), so neither
+ * this listener nor AVRUSI's START/STOP detector re-fires from the drive
+ * itself, and `pinState()` — what the sniffer reads — never consults the
+ * external input level, so the drive cannot fake bus edges either.
  *
  * Validated against the real ATTinyCore-compiled Tiny4kOLED firmware: the
  * decoded stream is `connectToSlave(0x3C,W)` followed by the SSD1306 init
@@ -55,6 +68,34 @@ export function attachUsiI2c(
   let cur = 0;
   let addressByte = false;
 
+  // Slave-side ACK state. The bus reports each byte's ACK through its master
+  // callbacks (this bridge owns the master slot — on the ATtiny85 nothing
+  // else ever attaches, the AVRTWI takeover only happens on ATmega variants).
+  let lastAck = false;
+  let ackDriven = false;
+  let ackRelease = false;
+  const driveAck = () => {
+    ackDriven = true;
+    port.setPin(sdaPin, false);
+  };
+  const releaseAck = () => {
+    ackRelease = false;
+    if (!ackDriven) return;
+    ackDriven = false;
+    port.setPin(sdaPin, true);
+  };
+  bus.attachMaster({
+    completeStart() {},
+    completeStop() {},
+    completeConnect(ack: boolean) {
+      lastAck = ack;
+    },
+    completeWrite(ack: boolean) {
+      lastAck = ack;
+    },
+    completeRead() {},
+  });
+
   // PinState.Low === 0; everything else (High / pulled-up / floating) reads as 1.
   const lineOf = (pin: number) => (port.pinState(pin) === 0 ? 0 : 1);
 
@@ -70,29 +111,44 @@ export function attachUsiI2c(
         bit = 0;
         cur = 0;
         addressByte = true;
+        releaseAck();
       } else if (sda === 0 && nextSda === 1) {
         if (inFrame) bus.stop();
         inFrame = false;
+        releaseAck();
       }
     }
 
-    // Data bits are sampled on the SCL rising edge (MSB first). After 8 bits the
-    // 9th clock is the ACK slot, which the sniffer ignores.
+    // The falling edge that closes the ACK slot: the master has sampled the
+    // ACK at the top of this very toggle (clockSrc 3 shifts on the falling
+    // strobe), so the line can be handed back to the pull-up now.
+    if (scl === 1 && nextScl === 0 && ackRelease) {
+      releaseAck();
+    }
+
+    // Data bits are decoded on the SCL rising edge (MSB first). After 8 bits
+    // the 9th clock is the ACK slot; the ACK level was asserted when the byte
+    // completed and is scheduled for release on the slot's closing falling
+    // edge (see above).
     if (scl === 0 && nextScl === 1 && inFrame) {
       if (bit < 8) {
         cur = ((cur << 1) | nextSda) & 0xff;
         bit++;
         if (bit === 8) {
+          lastAck = false;
           if (addressByte) {
             bus.connectToSlave(cur >> 1, (cur & 1) === 0);
             addressByte = false;
           } else {
             bus.writeByte(cur);
           }
+          // completeConnect / completeWrite ran synchronously above.
+          if (lastAck) driveAck();
         }
       } else {
         bit = 0;
         cur = 0;
+        if (ackDriven) ackRelease = true;
       }
     }
 

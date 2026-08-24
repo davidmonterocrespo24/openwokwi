@@ -111,11 +111,14 @@ export const CameraToggle: React.FC<CameraToggleProps> = ({ boardId, maxFrameByt
       // starving without frames. Never while the sim is stopped — the
       // button is not asking for anything then. Solid border once
       // streaming or asking.
-      className={
+      // Static layout is in .canvas-cam-mic-btn so the toolbar @container
+      // query can collapse the label to icon-only (an inline font-size would
+      // beat it). Only state-driven styles stay inline below.
+      className={`canvas-cam-mic-btn${
         running && boardId && status !== 'streaming' && status !== 'requesting'
-          ? 'velxio-btn-ants'
-          : undefined
-      }
+          ? ' velxio-btn-ants'
+          : ''
+      }`}
       style={{
         // backgroundColor, NOT the background shorthand: inline shorthand
         // would wipe the class's background-image and kill the ants.
@@ -123,13 +126,7 @@ export const CameraToggle: React.FC<CameraToggleProps> = ({ boardId, maxFrameByt
         border: `1px solid ${
           isOn ? '#3fb950' : status === 'requesting' ? '#555' : 'transparent'
         }`,
-        borderRadius: 4,
-        padding: '4px 10px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
         color,
-        fontSize: 13,
         cursor: boardId ? 'pointer' : 'not-allowed',
         // Inline only while requesting. 'none' here would OVERRIDE the
         // .velxio-btn-ants class animation (inline beats class), which is

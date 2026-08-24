@@ -48,6 +48,14 @@ export interface BoardForSpice {
   groundPinNames?: string[];
   /** Names of pins that should be treated as VCC rail. */
   vccPinNames?: string[];
+  /**
+   * Supply pins at a DIFFERENT voltage than `vcc` (the VIN / 5V pins of a
+   * 3.3 V board, the 3.3 V pin of a 5 V Arduino). Canonicalized to a
+   * per-voltage `aux_rail_*` net driven at `auxVolts` instead of `vcc_rail`.
+   */
+  auxPinNames?: string[];
+  /** Voltage of the aux rail (V). Required for `auxPinNames` to take effect. */
+  auxVolts?: number;
 }
 
 export type PinSourceState =

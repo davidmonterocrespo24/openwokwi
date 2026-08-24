@@ -1,18 +1,18 @@
+# One group, no blank lines inside it: some crawlers treat a blank line as
+# the end of a group, which left the Disallow rules below orphaned.
 User-agent: *
 Allow: /
-
-# Auth pages — no useful content for search engines
-Disallow: /login
-Disallow: /register
-
-# UUID-based duplicate of /:username/:slug — keep crawlers on the canonical
-# user-friendly URL instead of the opaque /project/<uuid> alternate.
+# UUID-based duplicate of /:username/:slug (the canonical URL); crawling it
+# is wasted budget.
 Disallow: /project/
-Disallow: /admin
-
-# Prevent crawling of API endpoints
+# API endpoints are not pages.
 Disallow: /api/
+# Auth and admin pages are deliberately NOT disallowed here: they carry a
+# noindex meta tag, and a page has to be crawlable for that tag to be seen —
+# a disallowed URL can still be indexed from links, title-less.
 
-# Sitemap (static build-time routes + dynamic public projects)
+# Sitemaps (static build-time routes + dynamic public projects + the docs
+# portal, which is a separate Astro build shipping its own sitemap index)
 Sitemap: https://velxio.dev/sitemap.xml
 Sitemap: https://velxio.dev/sitemap-projects.xml
+Sitemap: https://velxio.dev/docs/sitemap-index.xml

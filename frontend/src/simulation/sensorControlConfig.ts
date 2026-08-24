@@ -18,6 +18,11 @@ export interface SliderControl {
   defaultValue: number;
   /** Optional custom formatter — e.g. to show "24.0°C" instead of "24" */
   formatValue?: (v: number) => string;
+  /** 'log': the slider POSITION is logarithmic in the value. For quantities
+   *  perceived and sensed logarithmically (illumination on an LDR), a linear
+   *  slider crams all the behaviour into its first few percent — the
+   *  night-light example toggled at 2% of travel. Requires min >= 0. */
+  scale?: 'log';
 }
 
 export interface ButtonControl {
@@ -38,6 +43,26 @@ export interface SensorControlDef {
 
 const oneDecimal = (v: number) => v.toFixed(1);
 const twoDecimal = (v: number) => v.toFixed(2);
+
+/** Resolution of the position axis for log-scale sliders. */
+export const LOG_SLIDER_STEPS = 1000;
+
+/** Log-scale slider: position 0..LOG_SLIDER_STEPS -> value min..max.
+ *  value = min + 10^(p/STEPS * log10(span+1)) - 1, so position 0 lands
+ *  EXACTLY on min (a log axis has no true zero; the +1 shift gives it one)
+ *  and full travel lands exactly on max. */
+export function logSliderToValue(pos: number, min: number, max: number): number {
+  const p = Math.min(Math.max(pos, 0), LOG_SLIDER_STEPS) / LOG_SLIDER_STEPS;
+  const span = max - min;
+  return Math.round(min + Math.pow(10, p * Math.log10(span + 1)) - 1);
+}
+
+/** Inverse of logSliderToValue — where an existing value sits on the axis. */
+export function logValueToSlider(value: number, min: number, max: number): number {
+  const span = max - min;
+  const v = Math.min(Math.max(value, min), max) - min;
+  return Math.round((Math.log10(v + 1) / Math.log10(span + 1)) * LOG_SLIDER_STEPS);
+}
 
 // ─── Sensor Control Definitions ──────────────────────────────────────────────
 
@@ -291,6 +316,7 @@ export const SENSOR_CONTROLS: Record<string, SensorControlDef> = {
         step: 1,
         unit: 'lux',
         defaultValue: 500,
+        scale: 'log',
       },
     ],
     defaultValues: { lux: 500 },
@@ -309,6 +335,7 @@ export const SENSOR_CONTROLS: Record<string, SensorControlDef> = {
         step: 1,
         unit: 'lux',
         defaultValue: 500,
+        scale: 'log',
       },
     ],
     defaultValues: { lux: 500 },

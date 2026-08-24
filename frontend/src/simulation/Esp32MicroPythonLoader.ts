@@ -17,24 +17,24 @@ interface FirmwareConfig {
 
 const FIRMWARE_MAP: Record<string, FirmwareConfig> = {
   esp32: {
-    remote: 'https://micropython.org/resources/firmware/ESP32_GENERIC-20230426-v1.20.0.bin',
-    cacheKey: 'micropython-esp32-v1.20.0',
+    remote: 'https://micropython.org/resources/firmware/ESP32_GENERIC-20260406-v1.28.0.bin',
+    cacheKey: 'micropython-esp32-v1.28.0',
     fallback: '/firmware/micropython-esp32.bin',
   },
   'esp32-s3': {
-    remote: 'https://micropython.org/resources/firmware/ESP32_GENERIC_S3-20230426-v1.20.0.bin',
-    cacheKey: 'micropython-esp32s3-v1.20.0',
+    remote: 'https://micropython.org/resources/firmware/ESP32_GENERIC_S3-20260406-v1.28.0.bin',
+    cacheKey: 'micropython-esp32s3-v1.28.0',
     fallback: '/firmware/micropython-esp32s3.bin',
   },
   'esp32-c3': {
-    remote: 'https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20230426-v1.20.0.bin',
-    cacheKey: 'micropython-esp32c3-v1.20.0',
+    remote: 'https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin',
+    cacheKey: 'micropython-esp32c3-v1.28.0',
     fallback: '/firmware/micropython-esp32c3.bin',
   },
 };
 
 /** Map any ESP32-family board kind to firmware variant key */
-function toFirmwareVariant(boardKind: BoardKind): 'esp32' | 'esp32-s3' | 'esp32-c3' {
+export function toFirmwareVariant(boardKind: BoardKind): 'esp32' | 'esp32-s3' | 'esp32-c3' {
   if (
     boardKind === 'esp32-s3' ||
     boardKind === 'xiao-esp32-s3' ||

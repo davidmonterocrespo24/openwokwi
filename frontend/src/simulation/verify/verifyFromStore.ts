@@ -10,7 +10,7 @@
 
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { buildInputFromStore } from '../spice/storeAdapter';
-import { BOARD_PIN_GROUPS } from '../spice/boardPinGroups';
+import { boardPinGroupFor } from '../spice/boardPinGroups';
 import type { PinSourceState } from '../spice/types';
 import { verifyCircuit, type VerificationResult } from './circuitVerifier';
 
@@ -47,7 +47,7 @@ export async function verifyCircuitFromStore(): Promise<VerificationResult | nul
         // current and doesn't trip overcurrent / overpower. A circuit
         // that would actually fault under HIGH is flagged correctly.
         const pinStates: Record<string, PinSourceState> = {};
-        const group = BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default;
+        const group = boardPinGroupFor(b.boardKind);
         const wiredPinNames = new Set<string>();
         for (const w of sim.wires) {
           if (w.start.componentId === b.id) wiredPinNames.add(w.start.pinName);
@@ -56,8 +56,11 @@ export async function verifyCircuitFromStore(): Promise<VerificationResult | nul
         for (const pinName of wiredPinNames) {
           // Skip GND / power-rail pin names — they belong to the rail
           // groups and don't need to be re-asserted as digital sources.
+          // Aux pins included: without this, "5V" would parseInt to pin 5
+          // below and get driven as a GPIO.
           if (group.gnd.includes(pinName)) continue;
           if (group.vcc_pins.includes(pinName)) continue;
+          if (group.aux?.pins.includes(pinName)) continue;
           const arduinoPin = Number.parseInt(pinName, 10);
           // Skip pins we can't identify as a digital GPIO (e.g.
           // 'AREF', 'RESET', 'TX', 'RX' on some boards). Those are

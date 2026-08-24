@@ -39,6 +39,30 @@ const DOMAIN = 'https://velxio.dev';
 // entry), or Google sees a canonical that points to a redirecting URL.
 const withSlash = (u) => (u.endsWith('/') ? u : `${u}/`);
 
+/**
+ * Swap the whole static #root-seo block (the hand-written homepage fallback
+ * in index.html) for this page's SSR body. Located by string search, not by
+ * a regex anchored on a following <script>: Vite hoists the module script
+ * into <head>, so in the BUILT index.html the block is followed by </body>
+ * — the old regex never matched and every prerendered page shipped the
+ * homepage's fallback body (same <h1>, same nav) under its own <head>.
+ */
+function replaceRootSeo(html, seoBody) {
+  const start = html.indexOf('<div id="root-seo"');
+  if (start === -1) {
+    // No fallback block in this template: add ours before </body>.
+    return html.replace('</body>', `<div id="root-seo" aria-hidden="true">${seoBody}</div>\n  </body>`);
+  }
+  const bodyEnd = html.indexOf('</body>', start);
+  const end = html.lastIndexOf('</div>', bodyEnd === -1 ? html.length : bodyEnd);
+  if (end === -1 || end < start) return html;
+  return (
+    html.slice(0, start) +
+    `<div id="root-seo" aria-hidden="true">${seoBody}</div>` +
+    html.slice(end + '</div>'.length)
+  );
+}
+
 // ── Mock browser globals for SSR ────────────────────────────────────────────
 // Zustand's persist middleware and some components access these at import time.
 if (typeof globalThis.localStorage === 'undefined') {
@@ -86,6 +110,53 @@ try {
   const routes = getPrerenderedRoutes();
   const exampleRoutes = getPrerenderedExampleRoutes();
 
+  // hreflang for the localized (marketing/static) pages: every locale
+  // variant of the route plus x-default on the locale-less English URL.
+  // The SPA serves the same page translated under /<locale>/..., so each
+  // variant is a real page (see useSEO.ts, which emits the same set on the
+  // client, and the prod app shell, which emits it for the /<locale>/
+  // variants nginx has no static file for).
+  const { LOCALES, LOCALE_META, DEFAULT_LOCALE } = await vite.ssrLoadModule('/src/i18n/config.ts');
+  const localizedPath = (path, locale) =>
+    locale === DEFAULT_LOCALE ? path : `/${locale}${path === '/' ? '' : path}`;
+  const hreflangTags = (routePath) => {
+    const variant = (l) => withSlash(`${DOMAIN}${localizedPath(routePath, l)}`);
+    return [
+      ...LOCALES.map((l) => `<link rel="alternate" hreflang="${LOCALE_META[l].htmlLang}" href="${variant(l)}" />`),
+      `<link rel="alternate" hreflang="x-default" href="${variant(DEFAULT_LOCALE)}" />`,
+    ].join('\n  ');
+  };
+  const withHreflang = (html, routePath) =>
+    html.replace('</head>', `  ${hreflangTags(routePath)}\n  </head>`);
+
+  // Route metadata for the prod app shell (title/description per SEO route),
+  // so /<locale>/<route> paths that fall through to it get the route's own
+  // head instead of the homepage's.
+  // Starter examples ("New <board> project" pages) for the prod app shell.
+  const starters = await vite.ssrLoadModule('/src/data/starters.ts');
+  writeFileSync(
+    join(distDir, 'starters.json'),
+    JSON.stringify(
+      starters.STARTER_EXAMPLES.map((st) => ({
+        id: st.id, board: st.board,
+        title: starters.starterTitle(st.board),
+        description: starters.starterDescription(st.board),
+      })),
+    ),
+    'utf-8',
+  );
+
+  const { SEO_ROUTES } = await vite.ssrLoadModule('/src/seoRoutes.ts');
+  writeFileSync(
+    join(distDir, 'seo-routes.json'),
+    JSON.stringify(
+      SEO_ROUTES.filter((r) => r.seoMeta && !r.noindex).map((r) => ({
+        path: r.path, title: r.seoMeta.title, description: r.seoMeta.description,
+      })),
+    ),
+    'utf-8',
+  );
+
   console.log(`📄 Prerendering ${routes.length} SEO pages + ${exampleRoutes.length} example pages...\n`);
 
   for (const route of routes) {
@@ -113,6 +184,11 @@ try {
       html = html.replace(/<link rel="canonical"[^>]*\/>/, canonicalTag);
     } else {
       html = html.replace('</head>', `  ${canonicalTag}\n  </head>`);
+    }
+    // hreflang only for a page that is its own canonical; a page pointing
+    // its canonical elsewhere (/v2 -> /) must not declare alternates.
+    if (withSlash(seoMeta.url) === withSlash(`${DOMAIN}${route.path}`)) {
+      html = withHreflang(html, route.path);
     }
 
     // Replace OG tags
@@ -144,10 +220,7 @@ try {
       ? bodyHtml
       : `<h1>${seoMeta.title.split(' | ')[0]}</h1><p>${seoMeta.description}</p>`;
 
-    html = html.replace(
-      /<div id="root-seo"[^>]*>[\s\S]*?<\/div>\s*<script/,
-      `<div id="root-seo" aria-hidden="true">${seoBody}</div>\n    <script`
-    );
+    html = replaceRootSeo(html, seoBody);
 
     // Write to dist/{path}/index.html
     const routePath = route.path === '/' ? '' : route.path.slice(1);
@@ -195,10 +268,7 @@ try {
     html = html.replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${exRoute.description}"`);
 
     const seoBody = bodyHtml || `<h1>${exRoute.title.split(' — ')[0]}</h1><p>${exRoute.description}</p>`;
-    html = html.replace(
-      /<div id="root-seo"[^>]*>[\s\S]*?<\/div>\s*<script/,
-      `<div id="root-seo" aria-hidden="true">${seoBody}</div>\n    <script`
-    );
+    html = replaceRootSeo(html, seoBody);
 
     const dir = join(distDir, 'examples', exampleId);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });

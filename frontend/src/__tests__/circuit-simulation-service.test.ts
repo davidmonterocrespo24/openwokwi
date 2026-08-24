@@ -471,6 +471,95 @@ describe('handleMcuEdge (Phase 1c D1)', () => {
     expect(fake.calls.loadCircuit.length).toBe(1);
     expect(fake.calls.alterSource).toEqual([]);
   });
+
+  it('heals a sibling pin that was classified as an output mid-solve', async () => {
+    // Regression (binary-counter-leds, the most-viewed gallery example):
+    // a sketch writing several pins between yields lost every pin but the
+    // first. Sequence: pin 2's edge lands first, self-heals, and rebuilds
+    // the netlist; pins 3-5 arrive while that solve is in flight, so they
+    // queue; the drain then found no V_uno_3 in the loaded context and
+    // DROPPED them. Those pins never got a source and stayed at their
+    // build-time voltage forever — bit 0 blinked, bits 1-3 stayed dark
+    // while the firmware counted correctly on serial.
+    //
+    // The drain must self-heal (re-queue + rebuild) like handleMcuEdge
+    // does, once per pin per netlist.
+    const fake = new FakeSolverAdapter({
+      vectors: { 'v(vcc_rail)': 5 },
+      solveDelayMs: 30,
+    });
+    __setSchedulerSolverFactoryForTests(() => fake);
+    // Pin 3 is NOT an MCU output at build time — it becomes one only once
+    // the firmware first drives it, exactly like PinManager.outputPins.
+    let pin3IsOutput = false;
+    const sim = makeSimStore({
+      components: [
+        { id: 'r2', metadataId: 'resistor', properties: { value: '220' } },
+        { id: 'r3', metadataId: 'resistor', properties: { value: '220' } },
+      ],
+      wires: [
+        { id: 'w2a', start: { componentId: 'uno', pinName: '2' }, end: { componentId: 'r2', pinName: '1' } },
+        { id: 'w2b', start: { componentId: 'r2', pinName: '2' }, end: { componentId: 'uno', pinName: 'GND' } },
+        { id: 'w3a', start: { componentId: 'uno', pinName: '3' }, end: { componentId: 'r3', pinName: '1' } },
+        { id: 'w3b', start: { componentId: 'r3', pinName: '2' }, end: { componentId: 'uno', pinName: 'GND' } },
+      ],
+      boards: [{ id: 'uno', boardKind: 'arduino-uno' }],
+    });
+    const elec = makeElectricalStore();
+    const service = new CircuitSimulationService(
+      sim.port,
+      elec.port,
+      getMixedModeScheduler() as unknown as MixedModeSchedulerPort,
+      {
+        collectBoardPinStates: () =>
+          pin3IsOutput
+            ? { '2': { type: 'digital', v: 0 }, '3': { type: 'digital', v: 0 } }
+            : { '2': { type: 'digital', v: 0 } },
+      },
+    );
+    startTracked(service);
+    // Let the initial netlist get built (without pin 3) while its solve
+    // is still in flight.
+    await new Promise((r) => setTimeout(r, 5));
+    pin3IsOutput = true;
+    void service.handleMcuEdge('uno', '2', true, 5);
+    void service.handleMcuEdge('uno', '3', true, 5);
+    // Drain gap (33 ms) + rebuild + the healed edge's own solve.
+    await new Promise((r) => setTimeout(r, 300));
+
+    const altered = fake.calls.alterSource.map(([name]) => name);
+    expect(altered).toContain('V_uno_3');
+  });
+
+  it('does not loop forever healing a pin that can never be sourced', async () => {
+    // The flip side of the heal above: an unwired GPIO never gets a
+    // V-source no matter how many rebuilds run. The per-pin guard must
+    // let it through at most once, then go back to dropping — otherwise
+    // heal -> tick -> heal spins the solver at 100% duty.
+    const fake = new FakeSolverAdapter({
+      vectors: { 'v(vcc_rail)': 5 },
+      solveDelayMs: 5,
+    });
+    __setSchedulerSolverFactoryForTests(() => fake);
+    const sim = makeSimStore(simpleBoardWithBoard);
+    const elec = makeElectricalStore();
+    const service = new CircuitSimulationService(
+      sim.port,
+      elec.port,
+      getMixedModeScheduler() as unknown as MixedModeSchedulerPort,
+      // Pin 7 is claimed as an output but is wired to nothing, so
+      // buildNetlist never emits V_uno_7.
+      { collectBoardPinStates: () => ({ '7': { type: 'digital', v: 0 } }) },
+    );
+    startTracked(service);
+    await new Promise((r) => setTimeout(r, 20));
+    const before = fake.calls.solve.length;
+    void service.handleMcuEdge('uno', '7', true, 5);
+    await new Promise((r) => setTimeout(r, 400));
+    // A bounded number of extra solves — not one per 33 ms drain gap
+    // (~12 over this window) and nowhere near a runaway.
+    expect(fake.calls.solve.length - before).toBeLessThanOrEqual(4);
+  });
 });
 
 describe('CircuitSimulationService — error handling', () => {

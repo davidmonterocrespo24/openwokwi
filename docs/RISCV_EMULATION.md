@@ -61,7 +61,7 @@ Boards based on **ESP32-C3** use Espressif's **ESP32-C3** processor, implementin
 <tr>
   <td align="center"><img src="img/boards/esp32-c3.png" width="180" alt="ESP32-C3 DevKit"/><br/><b>ESP32-C3 DevKit</b></td>
   <td align="center"><img src="img/boards/xiao-esp32-c3.png" width="180" alt="Seeed XIAO ESP32-C3"/><br/><b>Seeed XIAO ESP32-C3</b></td>
-  <td align="center"><img src="img/boards/esp32c3-supermini.png" width="180" alt="ESP32-C3 SuperMini"/><br/><b>ESP32-C3 SuperMini</b></td>
+  <td align="center"><img src="img/boards/aitewinrobot-esp32c3-supermini.png" width="180" alt="ESP32-C3 SuperMini"/><br/><b>ESP32-C3 SuperMini</b></td>
 </tr>
 </table>
 

@@ -865,23 +865,32 @@ branch: picsimlab-esp32
 
 Every push to `picsimlab-esp32` triggers `.github/workflows/build-libqemu.yml`.
 The workflow compiles both `libqemu-xtensa.so` (ESP32) and `libqemu-riscv32.so` (ESP32-C3)
-and uploads them as assets to the `qemu-prebuilt` release in the velxio repo.
+and leaves them as 3-day build artifacts.
+
+Nothing is published to GitHub. These libraries are GPL-2.0 derivatives of QEMU,
+so binary and corresponding source belong in one place: collect the artifact and
+load it into velxio.dev's asset store with `scripts/upload-binary.sh`, where the
+`qemu-source-<commit>` archive sits beside it.
 
 ### Deploy to container
 
 ```bash
+# $KEY is a Velxio licence key — free personal keys at
+# https://velxio.dev/license/signup
+BASE=https://velxio.dev/api/pro/license/downloads
+
 # Deploy ESP32 library
 docker exec velxio-app bash -c "
-  curl -L -H 'Authorization: token TOKEN' \
-    'https://github.com/davidmonterocrespo24/velxio/releases/download/qemu-prebuilt/libqemu-xtensa.so' \
+  curl -fSL \
+    '$BASE/libqemu-xtensa-amd64?key=$KEY' \
     -o /app/lib/libqemu-xtensa.so.new && \
   mv /app/lib/libqemu-xtensa.so.new /app/lib/libqemu-xtensa.so
 "
 
 # Deploy ESP32-C3 library
 docker exec velxio-app bash -c "
-  curl -L -H 'Authorization: token TOKEN' \
-    'https://github.com/davidmonterocrespo24/velxio/releases/download/qemu-prebuilt/libqemu-riscv32.so' \
+  curl -fSL \
+    '$BASE/libqemu-riscv32-amd64?key=$KEY' \
     -o /app/lib/libqemu-riscv32.so.new && \
   mv /app/lib/libqemu-riscv32.so.new /app/lib/libqemu-riscv32.so
 "

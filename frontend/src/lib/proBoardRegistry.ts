@@ -17,9 +17,12 @@
  * `ad.id in BOARD_KIND_LABELS`, and registration inserts the label.
  */
 import type React from 'react';
+import type { ESP32BoardOptions } from '../types/boardOptions';
 import {
   BOARD_KIND_LABELS,
   BOARD_KIND_FQBN,
+  BOARD_KIND_ESPIDF_FQBN,
+  BOARD_SUPPORTS_ESPIDF,
   BOARD_SUPPORTS_MICROPYTHON,
   registerPiFamilyKind,
   type BoardKind,
@@ -51,10 +54,21 @@ export interface ProBoardDef {
   /** True pixel size of the element (selection ring + pin overlays). */
   size: { w: number; h: number };
   supportsMicroPython?: boolean;
+  /** Board can run pure ESP-IDF projects (app_main entry, no Arduino
+   *  core). Registers the kind into BOARD_SUPPORTS_ESPIDF, which is what
+   *  gates the toolbar's ESP-IDF option AND setBoardLanguageMode — an
+   *  overlay board without it silently ignores every attempt to enter
+   *  ESP-IDF mode, so an `languageMode: 'espidf'` gallery example opens
+   *  in Arduino mode instead. ESP32 family only. */
+  supportsEspIdf?: boolean;
+  /** FQBN the ESP-IDF lane compiles this board with, when the board has
+   *  no Arduino FQBN of its own (`fqbn: null`) or needs a different one.
+   *  Only used to derive the backend's IDF target. */
+  espidfFqbn?: string;
   /** ESP32 run-path routing: the base chip the board carries. Routes the run
    *  through the ESP32 bridge path and picks the machine/engine type. Omit for
    *  boards that provide createSimulator (RP2350 class) or AVR/RP2040. */
-  esp32Family?: 'esp32' | 'esp32-s3' | 'esp32-c3' | 'esp32-c6';
+  esp32Family?: 'esp32' | 'esp32-s3' | 'esp32-c3' | 'esp32-c6' | 'esp32-p4' | 'esp32-c5';
   /** QEMU-Linux run-path routing: route this kind through the Raspberry Pi
    *  bridge (backend qemu WebSocket, VFS panel, boot terminal). The overlay
    *  must also register a matching backend profile for the kind. */
@@ -83,6 +97,40 @@ export interface ProBoardDef {
   /** pinInfo name -> GPIO number (power/ground pins -> -1). Falls back to the
    *  generic numeric parse when omitted. Return null for "not mine". */
   pinToNumber?: (pinName: string) => number | null;
+  /**
+   * Which pads reach the ADC, and on which channel — the overlay's own version
+   * of the OSS ADC_PIN_MAP.
+   *
+   * That map is keyed by the BoardKind union, which no overlay kind can join,
+   * so the SPICE analog path skipped every pro board outright: a divider or an
+   * LDR wired to one of these boards solved correctly and then had nowhere to
+   * go. Parts that inject directly (a potentiometer through partUtils) were
+   * unaffected, which is why this looked like it worked.
+   *
+   * Names are pad names as they appear in pinInfo. A pad that is analog under a
+   * different silk (the Pimoroni Pico Plus 2 W ties GP26/27/28 to the ADC-
+   * capable GP40/41/42 through 1k) is declared under the name a wire uses.
+   */
+  adcPins?: Array<{ pinName: string; channel: number }>;
+  /**
+   * Supply pads and logic voltage, for the SPICE netlist — the overlay's
+   * version of BOARD_PIN_GROUPS, which is keyed by the BoardKind union and so
+   * can never name a pro board.
+   *
+   * Without it a board falls back to that table's `default`: 5 V, ground pads
+   * called GND/GND.1/GND.2, supply pads called 5V/VCC. For a 3.3 V board with a
+   * "3V3" pad that is wrong twice over, and silently — the rail is simply
+   * solved at 5 V, so every divider, pull-up and LED current on the board is
+   * off by 1.5x.
+   *
+   * Shape matches BoardPinGroup: { vcc, gnd[], vcc_pins[], aux? }.
+   */
+  power?: {
+    vcc: number;
+    gnd: string[];
+    vcc_pins: string[];
+    aux?: { volts: number; pins: string[] };
+  };
   /** In-browser simulator factory (e.g. the RP2350/Hazard3 emulator). The pm
    *  argument is the store's PinManager instance. */
   createSimulator?: (pm: unknown) => ProBoardSimulator;
@@ -105,6 +153,19 @@ export interface ProBoardDef {
    *  setMicrophoneSource (I2S RX sample injection): shows the canvas-header
    *  Mic toggle that streams the computer's microphone into it. */
   builtInMicrophone?: boolean;
+  /** The board carries a camera fed from the host webcam (CameraToggle in the
+   *  canvas header; the bridge implements pushCameraFrame). An object form
+   *  caps the injected JPEG size for drivers with tight frame buffers. */
+  builtInCamera?: boolean | { maxFrameBytes?: number };
+  /** Display-controller identity for panel autodetect probes. Vendor
+   *  libraries (M5GFX and friends) identify a board by reading the panel's
+   *  RDDID over SPI with the display's own chip-select — and reject the
+   *  board, or misdetect it as something else entirely, when the answer is
+   *  the bus's idle 0xFF. A bridge that supports this answers `idByte` on
+   *  MISO while `csPin` is low. Board DATA, not bridge code: the M5Stack
+   *  Core is `{ csPin: 14, idByte: 0xE3 }` (ILI9342C), the Cardputer ADV
+   *  `{ csPin: 37, idByte: 0x85 }` (ST7789V2). */
+  spiPanelId?: { csPin: number; idByte: number };
   /** Board carries an IMU whose bridge implements setImuAcceleration /
    *  setImuGyro: shows the canvas-header tilt pad. Without it the emulated
    *  part faithfully reports the board lying flat for the whole run. */
@@ -112,6 +173,12 @@ export interface ProBoardDef {
   /** Board reads a battery through its bridge (setBatteryVoltage): shows the
    *  canvas-header charge slider, so low-battery code paths can be reached. */
   builtInBattery?: boolean;
+  /** Power-management IC on the internal I2C bus, when the board carries one
+   *  the vendor library probes. Board DATA like spiPanelId: the bridge that
+   *  supports the type instantiates the model at the given address, and
+   *  setBatteryVoltage drives it. The M5Stack Core is
+   *  { type: 'ip5306', addr: 0x75 }. */
+  i2cPmic?: { type: 'ip5306'; addr?: number };
   /** Built-in peripheral attachment for a RUNNING board (LCD decoder onto the
    *  element's own canvas, speaker, on-board button/keyboard event forwarding).
    *  Called shortly after run start with the board's DOM element plus its
@@ -122,6 +189,44 @@ export interface ProBoardDef {
     sim: unknown;
     bridge: unknown;
   }) => () => void;
+
+  /**
+   * Seed code a freshly placed board starts with, per language mode.
+   *
+   * Without this the editor falls back to the family default — the Arduino
+   * `LED_BUILTIN` blink, the Pico `Pin(25)` blink, or the Raspberry Pi
+   * `RPi.GPIO` script — and NONE of those run on a board that has no such
+   * LED, no RPi.GPIO and its own vendor library (an M5Stack needs
+   * `M5.begin()`, the UNIHIKER needs pinpong/unihiker). The user's very
+   * first Run then fails on a board they have not touched yet. Keep each
+   * entry as close to the vendor's own first example as the emulator
+   * allows, and self-contained: a freshly placed board has nothing wired
+   * to it, so the code must do something visible on the board itself.
+   *
+   * Keys are the board's language modes plus 'python' for QEMU-Linux
+   * (piFamily) boards, whose seed is the guest script.
+   */
+  defaultFiles?: Partial<
+    Record<'arduino' | 'micropython' | 'espidf' | 'python', Array<{ name: string; content: string }>>
+  >;
+  /** Library manifest seeded together with `defaultFiles.arduino` — the seed
+   *  sketch includes the vendor library, so the board must declare it or the
+   *  first compile resolves against nothing. */
+  defaultLibraries?: string[];
+
+  /**
+   * Build options this board is physically born with, merged over the family
+   * defaults whenever the project has not saved its own.
+   *
+   * A module carries the RAM and flash it carries: the ESP32-S3-EYE always has
+   * 8 MB of octal PSRAM, and its camera driver allocates the frame buffer with
+   * MALLOC_CAP_SPIRAM. Compiled with the conservative family default
+   * (CONFIG_SPIRAM=n) the sketch builds fine and then dies at run time with
+   * `cam_dma_config(509): frame buffer malloc failed` — a hardware fact
+   * reported as a mysterious driver error. Boards that ship the RAM say so
+   * here; everything else keeps sending no options at all.
+   */
+  defaultBoardOptions?: Partial<ESP32BoardOptions>;
 
   /** Sidebar / toolbar accents (fall back to a neutral chip icon). */
   icon?: string;
@@ -154,6 +259,10 @@ export function registerProBoards(defs: ProBoardDef[]): void {
     (BOARD_KIND_LABELS as Record<string, string>)[kind] = def.label;
     (BOARD_KIND_FQBN as Record<string, string | null>)[kind] = def.fqbn;
     if (def.supportsMicroPython) BOARD_SUPPORTS_MICROPYTHON.add(kind);
+    if (def.supportsEspIdf) BOARD_SUPPORTS_ESPIDF.add(kind);
+    if (def.espidfFqbn) {
+      (BOARD_KIND_ESPIDF_FQBN as Record<string, string>)[kind] = def.espidfFqbn;
+    }
     if (def.piFamily) registerPiFamilyKind(def.kind);
   }
   version++;
@@ -209,6 +318,19 @@ export function registerBoardBuiltins(kind: string, attach: BuiltinsAttach): voi
  *  own `attachBuiltins` first, then anything registered for an OSS kind. */
 export function getBoardBuiltins(kind: string): BuiltinsAttach | undefined {
   return registry.get(kind)?.attachBuiltins ?? boardBuiltins.get(kind);
+}
+
+/**
+ * Seed files for a board kind in a given language mode, or undefined when the
+ * board carries no seed of its own (the editor's family default applies).
+ * `mode` is 'python' for QEMU-Linux boards — see ProBoardDef.defaultFiles.
+ */
+export function getBoardSeedFiles(
+  kind: string,
+  mode: 'arduino' | 'micropython' | 'espidf' | 'python',
+): Array<{ name: string; content: string }> | undefined {
+  const files = registry.get(kind)?.defaultFiles?.[mode];
+  return files && files.length ? files : undefined;
 }
 
 export function listProBoards(): ProBoardDef[] {

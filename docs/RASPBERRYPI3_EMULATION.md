@@ -63,7 +63,7 @@ There is **no compilation step** for the Raspberry Pi: you write a Python script
 
 <table>
 <tr>
-  <td align="center"><img src="img/boards/Raspberry_Pi_3.png" width="180" alt="Raspberry Pi 3B"/><br/><b>Raspberry Pi 3B</b></td>
+  <td align="center"><img src="img/boards/raspberry-pi-3.png" width="180" alt="Raspberry Pi 3B"/><br/><b>Raspberry Pi 3B</b></td>
 </tr>
 </table>
 

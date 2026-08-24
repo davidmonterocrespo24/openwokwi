@@ -1,8 +1,11 @@
 import asyncio
 import hashlib
+import json
 import logging
+import os
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -34,24 +37,156 @@ COMPILE_JOBS: dict[str, dict[str, Any]] = {}
 JOB_BY_KEY: dict[str, str] = {}  # content_hash → job_id, for deduplication
 JOB_TTL_S = 1800  # purge results 30 min after completion
 
+# ── Artifact cache ────────────────────────────────────────────────────────
+# The dedup above only collapses builds that are still in flight, so hitting
+# Run twice on the same gallery example rebuilt it from scratch: measured 28 s
+# cold and 27 s warm for an ESP-IDF P4 example, all of it before the emulator
+# even starts. Gallery examples are byte-identical for every visitor, so the
+# first build can serve everyone. Results are stored under the build volume,
+# keyed by the same content hash the dedup uses.
+ARTIFACT_CACHE_DIR = Path(
+    os.environ.get("VELXIO_ARTIFACT_CACHE", "/var/lib/velxio-build/artifacts")
+)
+ARTIFACT_CACHE_MAX_ENTRIES = 400
+ARTIFACT_CACHE_MAX_AGE_S = 14 * 24 * 3600
+
+
+def _toolchain_epoch() -> str:
+    """Fingerprint the code that TURNS a request into build flags.
+
+    A cached binary is only valid while the sdkconfig/CLI generation behind it
+    is unchanged — flipping CONFIG_SPIRAM_MEMTEST off, say, must not keep
+    serving images built with it on. Hashing the two service modules makes the
+    invalidation automatic: edit them, every key changes.
+    """
+    h = hashlib.sha256()
+    here = Path(__file__).resolve().parents[2] / "services"
+    for name in ("espidf_compiler.py", "arduino_cli.py"):
+        try:
+            h.update((here / name).read_bytes())
+        except OSError:
+            h.update(b"?")
+    return h.hexdigest()[:16]
+
+
+_TOOLCHAIN_EPOCH = _toolchain_epoch()
+
+
+def _artifact_path(key: str) -> Path:
+    return ARTIFACT_CACHE_DIR / f"{key}.json"
+
+
+def _artifact_load(key: str) -> dict | None:
+    """Return a cached CompileResponse dict, or None. Never raises."""
+    path = _artifact_path(key)
+    try:
+        if not path.is_file():
+            return None
+        if time.time() - path.stat().st_mtime > ARTIFACT_CACHE_MAX_AGE_S:
+            path.unlink(missing_ok=True)
+            return None
+        data = json.loads(path.read_text())
+        os.utime(path, None)  # LRU: touch on read
+        return data if isinstance(data, dict) else None
+    except Exception:
+        logger.warning("[compile] artifact cache read failed", exc_info=True)
+        return None
+
+
+def _artifact_store(key: str, result: dict) -> None:
+    """Persist a SUCCESSFUL build. Failures are never cached — a compile error
+    is usually the user's half-written code, and they will edit and retry."""
+    if not result.get("success"):
+        return
+    try:
+        ARTIFACT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        # The build log is per-run noise and can be hundreds of KB; a cache hit
+        # says so in its place rather than replaying someone else's ninja run.
+        slim = dict(result)
+        slim["stdout"] = "[served from the build cache - identical sources]"
+        tmp = _artifact_path(key).with_suffix(".tmp")
+        tmp.write_text(json.dumps(slim))
+        tmp.replace(_artifact_path(key))
+        _artifact_prune()
+    except Exception:
+        logger.warning("[compile] artifact cache write failed", exc_info=True)
+
+
+def _artifact_prune() -> None:
+    """Keep the newest ARTIFACT_CACHE_MAX_ENTRIES files (LRU by mtime)."""
+    try:
+        files = sorted(
+            ARTIFACT_CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        )
+        for stale in files[ARTIFACT_CACHE_MAX_ENTRIES:]:
+            stale.unlink(missing_ok=True)
+    except Exception:
+        pass
+
 # ── Concurrency control ──────────────────────────────────────────────────────
-# Cap simultaneous ESP-IDF compiles. The VPS is modest (saw load avg 30 with
-# 6 ninja processes peeling each other apart). Two parallel compiles to
-# different targets are fine; concurrent compiles to the SAME target would
-# corrupt the persistent build dir, so we serialize those with a per-target
-# lock layered on top.
-_COMPILE_SEMAPHORE = asyncio.Semaphore(2)
+# Two lanes. HEAVY = ESP-IDF (cmake + ninja, minutes on a cold cache): capped
+# at 2 — the VPS is modest (saw load avg 30 with 6 ninja processes peeling
+# each other apart). LIGHT = arduino-cli boards (AVR, RP2040, STM32...):
+# seconds each, so they get their own slots and never queue behind an
+# ESP-IDF cold build. Before the split a single Semaphore(2) gated both, and
+# a Uno blink could sit "compiling" for minutes while two ESP32 builds ran.
+# Concurrent compiles to the SAME ESP-IDF target would corrupt the persistent
+# build dir, so those are serialized with a per-target lock layered on top.
+_HEAVY_SEMAPHORE = asyncio.Semaphore(2)
+_LIGHT_SEMAPHORE = asyncio.Semaphore(3)
 _TARGET_LOCKS: dict[str, asyncio.Lock] = {}
 
 
+def _is_heavy_compile(board_fqbn: str) -> bool:
+    """ESP32 boards compile with ESP-IDF when the toolchain is present."""
+    return board_fqbn.startswith("esp32:") and espidf_compiler.available
+
+
+def _build_identity(board_fqbn: str) -> str:
+    """The identity of the persistent BUILD DIRECTORY this FQBN compiles in.
+
+    The lock below has to be keyed on the shared resource, and that resource is
+    the build dir — which `_prepare_persistent_project_dir` keys on
+    (idf_target, variant), NOT on the FQBN. Several FQBNs map to one variant:
+    arduino-esp32's boards.txt gives both `esp32` and `esp32cam`
+    `build.variant=esp32`, so they land in the SAME directory.
+
+    Keying the lock on the FQBN therefore left the two of them free to run at
+    once inside one build dir. Measured: compiling `esp32:esp32:esp32` and
+    `esp32:esp32:esp32cam` concurrently returned BYTE-IDENTICAL firmware (same
+    sha256, 285504 bytes) and the esp32cam request got the other sketch's
+    binary — its serial printed the other example's output. In the app that
+    looked like an example running someone else's program: two gallery tabs
+    open, and the second one shows the first one's log and does nothing.
+
+    Falls back to the raw FQBN if the compiler cannot resolve the pair, which
+    is the previous behaviour and never less strict than it needs to be for a
+    board whose variant we could not read.
+    """
+    # Only the ESP-IDF lane HAS a shared build dir (the predicate is the same
+    # one _run_compile routes on). An AVR / RP2040 / STM32 FQBN has no IDF
+    # target at all, and _idf_target defaults unknown boards to 'esp32' — so
+    # every non-ESP32 board used to collapse onto the `esp32::esp32` key and
+    # queue behind unrelated ESP32 builds for no reason.
+    if not board_fqbn.startswith("esp32:"):
+        return board_fqbn
+    try:
+        target = espidf_compiler._idf_target(board_fqbn)
+        variant = espidf_compiler._arduino_variant(board_fqbn, target)
+        return f"{target}::{variant}"
+    except Exception:  # noqa: BLE001 - identity is best-effort; FQBN is a safe fallback
+        return board_fqbn
+
+
 def _target_lock(board_fqbn: str) -> asyncio.Lock:
-    """Lazy-initialised per-target lock so concurrent compiles to the same
-    board serialise. Different boards still run in parallel up to the
-    semaphore cap."""
-    lock = _TARGET_LOCKS.get(board_fqbn)
+    """Lazy-initialised lock so concurrent compiles that SHARE A BUILD DIR
+    serialise. Boards with genuinely different build dirs still run in
+    parallel up to the semaphore cap."""
+    key = _build_identity(board_fqbn)
+    lock = _TARGET_LOCKS.get(key)
     if lock is None:
         lock = asyncio.Lock()
-        _TARGET_LOCKS[board_fqbn] = lock
+        _TARGET_LOCKS[key] = lock
     return lock
 
 
@@ -81,6 +216,10 @@ def _job_key(
     so the build is owner-independent).
     """
     h = hashlib.sha256()
+    # Bind every key to the code that generates build flags: a binary cached
+    # before a sdkconfig change must not be served after it.
+    h.update(_TOOLCHAIN_EPOCH.encode())
+    h.update(b"\0")
     h.update(board_fqbn.encode())
     h.update(b"\0")
     for f in sorted(files, key=lambda x: x["name"]):
@@ -483,7 +622,16 @@ async def _compile_job(
         current["stdout_buffer"] = new
 
     try:
-        async with _COMPILE_SEMAPHORE:
+        lane = _HEAVY_SEMAPHORE if _is_heavy_compile(request.board_fqbn) else _LIGHT_SEMAPHORE
+        if lane.locked():
+            # Tell the user's console WHY nothing is happening yet: every
+            # slot of this lane is busy. The frontend streams stdout while
+            # the job is still 'pending'.
+            on_progress_line(
+                "[queue] All build slots are busy — waiting for a free one "
+                "(your build starts automatically)...\n"
+            )
+        async with lane:
             async with _target_lock(request.board_fqbn):
                 # Job may have been purged or replaced while we were queued.
                 # Re-fetch and bail out if so.
@@ -506,6 +654,8 @@ async def _compile_job(
             # result.stdout once state=done, but having both costs nothing).
             "stdout_buffer": COMPILE_JOBS.get(job_id, {}).get("stdout_buffer", ""),
         }
+        if job_key:
+            _artifact_store(job_key, response.model_dump())
         error_kind = (
             None if response.success
             else _classify_compile_error(response.stderr, response.error)
@@ -569,7 +719,18 @@ async def compile_sketch(
     files = _resolve_files(request)
     started = time.monotonic()
     try:
-        response = await _run_compile(request, files, requester_id=user_id)
+        # Shielded: when the client (or a proxy timeout - nginx 504s a cold
+        # ESP-IDF build well before it finishes) drops the connection,
+        # Starlette cancels this handler. Without the shield the cancellation
+        # killed the build subprocess MID-WRITE and left truncated .obj files
+        # in the persistent per-target build cache, poisoning every LATER
+        # build of that target ("ranlib: file truncated", seen twice on
+        # staging the day the P4 lane landed). The shield lets the build run
+        # to completion and keep the cache consistent; only the response is
+        # lost.
+        response = await asyncio.shield(
+            asyncio.ensure_future(_run_compile(request, files, requester_id=user_id))
+        )
     except Exception as e:
         await record_compile(
             user_id=user_id,
@@ -667,6 +828,39 @@ async def compile_start(
         if existing is not None and existing.get("state") in ("pending", "running"):
             logger.info(f"[compile] dedup hit — reusing job {existing_id}")
             return CompileStartResponse(job_id=existing_id)
+
+    # Same sources, same flags, already built: hand the stored artifact back as
+    # an already-finished job so the client's normal poll loop just sees `done`.
+    cached = _artifact_load(key)
+    if cached is not None:
+        job_id = uuid.uuid4().hex
+        now = time.time()
+        COMPILE_JOBS[job_id] = {
+            "state": "done",
+            "started_at": now,
+            "finished_at": now,
+            "result": cached,
+            "key": key,
+            "stdout_buffer": cached.get("stdout", ""),
+        }
+        logger.info("[compile] artifact cache hit — skipping the build")
+        await _record_async_metric(
+            user_id=user_id,
+            project_id=request.project_id,
+            board_fqbn=request.board_fqbn,
+            success=True,
+            duration_ms=0,
+            error_kind=None,
+            extra={
+                "file_count": len(files),
+                "async": True,
+                "cached": True,
+                "initiated_by": request.initiated_by,
+                "board_kind": request.board_kind,
+                "example_id": request.example_id,
+            },
+        )
+        return CompileStartResponse(job_id=job_id)
 
     job_id = uuid.uuid4().hex
     COMPILE_JOBS[job_id] = {"state": "pending", "started_at": time.time(), "key": key}

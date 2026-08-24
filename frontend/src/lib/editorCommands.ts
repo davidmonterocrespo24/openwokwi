@@ -25,6 +25,16 @@ export type EditorCommandId =
   | 'project.exportBom'
   | 'project.exportScreenshot'
   | 'file.new'
+  // Account-scoped, registered ONLY by the pro overlay and only in the
+  // matching session state (myProjects when signed in, login when not).
+  // OSS has no auth at all, so both stay unregistered here and the menu
+  // hides them outright — see `optional` in EditorMenuBar.
+  | 'account.myProjects'
+  | 'account.login'
+  // Re-opens the last delivered "What's new" post. Registered by
+  // NewsAnnouncer once a post has actually arrived, so the Help row is
+  // absent while there is nothing to re-read.
+  | 'help.whatsNew'
   | 'project.share'
   | 'project.githubSync'
   | 'firmware.upload'

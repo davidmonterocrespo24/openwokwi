@@ -89,6 +89,10 @@ const MINIMAL_FIXTURES: Record<string, Fixture> = {
     topology: { '+': 'load', '−': 'gnd' },
   },
   pushbutton: { pins: ['A', 'B'] },
+  // Same switch, smaller body: it shares the pushbutton mapper (MAPPER_ALIASES),
+  // so it takes the same fixture. It reached the catalog without one and, with
+  // no model, stood down for a circuit that never modelled it — dead button.
+  'pushbutton-6mm': { pins: ['A', 'B'] },
   // SPDT: pin 2 is the common wiper; at value=1 it shorts to pin 3, so pin 3
   // must be wired or the mapper emits no card.
   'slide-switch': { pins: ['1', '2', '3'], properties: { value: 1 } },
@@ -409,4 +413,37 @@ describe('componentToSpice — ngspice accepts every card', () => {
       expect(Number.isFinite(result.dcValue(result.variableNames[0]))).toBe(true);
     });
   }
+});
+
+describe('photoresistor — dark resistance suffix', () => {
+  const mapOne = (properties: Record<string, unknown>) => {
+    const nets: Record<string, string> = { VCC: 'vcc', GND: '0', AO: 'n_ao' };
+    return componentToSpice(
+      { id: 'ldr1', metadataId: 'photoresistor-sensor', properties },
+      (pin: string) => nets[pin] ?? null,
+      {} as never,
+    );
+  };
+
+  it('reads "1Meg" as one megaohm', () => {
+    const out = mapOne({ lux: 400, dark: '1Meg', k: 20, pullup: '100k' });
+    // R = 1e6 / (1 + 20*400/1000) = 111111.1 ohm
+    expect(out?.cards[0]).toMatch(/R_ldr1_ldr vcc n_ao 111111/);
+  });
+
+  it('does not short AO to VCC when dark is written "1M"', () => {
+    // Regression: 100d-auto-night-light shipped dark: "1M" meaning 1 megaohm.
+    // SPICE reads M as milli, so it parsed to 0.001 ohm — AO sat at VCC, the
+    // ADC read 4095 forever and dragging the lux control changed nothing
+    // (every lux value still divides a short). Clamp instead of emitting it.
+    const out = mapOne({ lux: 400, dark: '1M', k: 20, pullup: '100k' });
+    const ldrCard = out?.cards[0] ?? '';
+    const ohms = Number(ldrCard.split(/\s+/).pop());
+    expect(ohms).toBeGreaterThan(1_000);
+  });
+
+  it('still emits the pull-down leg to GND', () => {
+    const out = mapOne({ lux: 400, dark: '1Meg', k: 20, pullup: '100k' });
+    expect(out?.cards[1]).toBe('R_ldr1_pull n_ao 0 100000');
+  });
 });

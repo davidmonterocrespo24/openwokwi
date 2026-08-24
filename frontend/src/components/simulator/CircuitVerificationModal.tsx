@@ -9,6 +9,7 @@
  * The component is dumb: it just renders the verification result it's
  * given. The caller (EditorToolbar) decides when to show it.
  */
+import { createPortal } from 'react-dom';
 import type { CircuitWarning, VerificationResult } from '../../simulation/verify/circuitVerifier';
 
 interface Props {
@@ -24,7 +25,9 @@ const SEVERITY_COPY: Record<CircuitWarning['severity'], { label: string; color: 
 
 export const CircuitVerificationModal: React.FC<Props> = ({ result, onCancel, onRunAnyway }) => {
   const items: CircuitWarning[] = [...result.errors, ...result.warnings];
-  return (
+  // Portaled to <body>: see LibraryManagerModal - the toolbar's
+  // container-type would otherwise shrink this fixed overlay.
+  return createPortal(
     <div style={styles.overlay} onClick={onCancel}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <h2 style={styles.title}>Circuit verification</h2>
@@ -62,7 +65,8 @@ export const CircuitVerificationModal: React.FC<Props> = ({ result, onCancel, on
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -74,7 +78,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    // Above the agent side panel (z 8000): a modal is always the top task.
+    zIndex: 9000,
   },
   modal: {
     background: '#252526',

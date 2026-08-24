@@ -111,13 +111,21 @@ The Dockerfile uses **4 stages** to minimize final image size while building all
 
 **Base image:** `ubuntu:22.04`
 
-**Purpose:** Downloads pre-built QEMU shared libraries (`.so`) and ESP32 ROM binary files from a GitHub Release. These are the QEMU emulation libraries built from the `qemu-lcgamboa` fork that enable ESP32 and ESP32-C3 simulation.
+**Purpose:** Provides the pre-built QEMU shared libraries (`.so`) and ESP32 ROM binary files. These are the QEMU emulation libraries built from the `qemu-lcgamboa` fork that enable ESP32 and ESP32-C3 simulation.
+
+Three sources, tried in order: local files in `prebuilt/qemu/`, then velxio.dev's
+gated endpoint when `VELXIO_LICENSE_KEY` is set, then a fail-fast error. They are
+no longer published to a GitHub Release — see `docs/BUILD-QEMU.md`.
 
 ```dockerfile
 FROM ubuntu:22.04 AS qemu-provider
 
 ARG TARGETARCH
-ARG QEMU_RELEASE_URL=https://github.com/davidmonterocrespo24/velxio/releases/download/qemu-prebuilt
+ARG VELXIO_LICENSE_KEY=
+ARG VELXIO_BINARY_BASE_URL=https://velxio.dev/api/pro/license/downloads
+# Legacy escape hatch for forks proxying the binaries from their own
+# mirror. Empty by default; when set it takes precedence.
+ARG QEMU_RELEASE_URL=
 ```
 
 **Key details:**
@@ -349,21 +357,26 @@ The workflow has two jobs:
    - ROM files are only collected from the amd64 job (they're architecture-independent)
    - Uploads as GitHub Actions artifacts
 
-2. **`upload-release`** (runs after both build jobs complete):
-   - Downloads both artifact archives
-   - Uploads all files to the `qemu-prebuilt` tag on the `davidmonterocrespo24/velxio` repository
-   - Uses `--clobber` to overwrite existing files if the release already exists
-   - Requires the `VELXIO_RELEASE_TOKEN` secret (a PAT with `contents:write` on the velxio repo)
+2. **Publication is manual, and never to GitHub.**
+   Each platform job uploads its `out/` directory as a build artifact with a
+   3-day retention. Collect the artifact and load each file into velxio.dev's
+   asset store with `scripts/upload-binary.sh`.
 
-**Release structure at `github.com/davidmonterocrespo24/velxio/releases/tag/qemu-prebuilt`:**
+   The libraries are GPL-2.0 derivatives of QEMU. Distributing one obliges us to
+   hand the recipient the corresponding source, so binary and source live in one
+   place — the gated endpoint, where the `qemu-source-<commit>` archive sits
+   beside them. A public release with no source next to it is the shape that does
+   not comply.
+
+**Assets served from `velxio.dev/api/pro/license/downloads`:**
 ```
-libqemu-xtensa-amd64.so
-libqemu-xtensa-arm64.so
-libqemu-riscv32-amd64.so
-libqemu-riscv32-arm64.so
-esp32-v3-rom.bin
-esp32-v3-rom-app.bin
-esp32c3-rom.bin
+libqemu-xtensa-amd64            libqemu-riscv32-amd64
+libqemu-xtensa-arm64            libqemu-riscv32-arm64
+libqemu-xtensa-macos-arm64      libqemu-riscv32-macos-arm64
+libqemu-xtensa-windows-amd64    libqemu-riscv32-windows-amd64
+esp32-v3-rom                    esp32-v3-rom-app
+esp32c3-rom                     esp32s3_rev0_rom
+qemu-source-<commit>            (GPL-2.0 corresponding source)
 ```
 
 ---
@@ -791,7 +804,9 @@ healthcheck:
 | Arg | Default | Description |
 |-----|---------|-------------|
 | `TARGETARCH` | (auto-injected by Buildx) | Target architecture: `amd64` or `arm64` |
-| `QEMU_RELEASE_URL` | `https://github.com/davidmonterocrespo24/velxio/releases/download/qemu-prebuilt` | URL prefix for QEMU binary downloads |
+| `VELXIO_LICENSE_KEY` | (empty) | Licence key for the gated binary download; free personal keys at velxio.dev/license/signup |
+| `VELXIO_BINARY_BASE_URL` | `https://velxio.dev/api/pro/license/downloads` | Gated endpoint serving the QEMU binaries and their GPL source |
+| `QEMU_RELEASE_URL` | (empty) | Legacy escape hatch: URL prefix for a private mirror of the binaries. Takes precedence when set |
 | `ESPIDF_IMAGE` | (unused, legacy) | Was used for external ESP-IDF image reference |
 
 ---
@@ -859,7 +874,7 @@ docker buildx build \
 **Problem:** Running `docker pull` on Apple Silicon Mac fails because the image was built for amd64 only.
 
 **Solution:** The multi-platform build was added in the `docker-publish.yml` workflow with `platforms: linux/amd64,linux/arm64`. Ensure:
-1. The `build-libqemu.yml` workflow has run successfully for both architectures (check that `libqemu-xtensa-arm64.so` exists in the `qemu-prebuilt` release)
+1. The `build-libqemu.yml` workflow has run successfully for both architectures, and its arm64 artifact has been uploaded to velxio.dev (check that `libqemu-xtensa-arm64` appears in `GET /api/pro/license/downloads`)
 2. The `docker-publish.yml` workflow has run after the QEMU ARM64 binaries were uploaded
 3. The `docker/setup-qemu-action@v3` step is present in the workflow
 

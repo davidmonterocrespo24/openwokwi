@@ -72,7 +72,11 @@
       "contextMenu": {
         "rename": "Umbenennen",
         "delete": "Löschen"
-      }
+      },
+      "lastSaved": "zuletzt gespeichert",
+      "saving": "wird gespeichert…",
+      "saved": "gespeichert",
+      "saveFailed": "Speichern fehlgeschlagen"
     },
     "fileTabs": {
       "unsavedChanges": "Ungespeicherte Änderungen",
@@ -166,7 +170,13 @@
         "remove": "Entfernen"
       },
       "boardOptions": "Board-Optionen...",
-      "flashToBoard": "Auf echtes Board flashen"
+      "flashToBoard": "Auf echtes Board flashen",
+      "flashHint": {
+        "mpy": "MicroPython installieren (falls nötig) und dieses Projekt auf ein echtes, per USB angeschlossenes Board laden",
+        "mpyUnavailable": "MicroPython-Projekte können von hier aus nicht geflasht werden: nur Arduino-Sketches",
+        "ready": "Den kompilierten Sketch auf ein echtes, per USB angeschlossenes Board flashen",
+        "willCompile": "Den Sketch kompilieren und auf ein echtes, per USB angeschlossenes Board flashen"
+      }
     },
     "componentPicker": {
       "title": "Komponente hinzufügen",
@@ -394,6 +404,49 @@
       "datasheetTab": "Datenblatt",
       "examplesTitle": "Beispielprojekte",
       "productPage": "Produktseite"
+    },
+    "flash": {
+      "title": "{{board}} flashen",
+      "close": "Schließen",
+      "detectingPorts": "USB-Serialports werden erkannt...",
+      "needsDesktop": "Hardware-Flashen braucht Velxio Desktop. Die Web-App hat keinen Zugriff auf lokale USB-Serialports.",
+      "noPorts": "Keine USB-Serialports erkannt.",
+      "noPortsHint": "Board per USB anschließen und auf Aktualisieren klicken. Unter Linux musst du dich eventuell zur Gruppe dialout hinzufügen:",
+      "noPortsHintLogout": "(danach ab- und wieder anmelden.)",
+      "refresh": "Aktualisieren",
+      "refreshPorts": "Ports aktualisieren",
+      "serialPort": "Serialport",
+      "flash": "Flashen",
+      "compileFlash": "Kompilieren und flashen",
+      "connectFlash": "Verbinden und flashen",
+      "connectCompileFlash": "Verbinden, kompilieren und flashen",
+      "noBuild": "Dieses Board hat noch kein kompiliertes Programm: Es wird zuerst kompiliert und dann geflasht. Die Compiler-Ausgabe erscheint in der Konsole unten.",
+      "staleBuild": "Der Code hat sich seit dem letzten Kompilieren geändert. Der Sketch wird vor dem Flashen neu kompiliert, damit das Board bekommt, was du im Editor siehst.",
+      "webIntro": "Per USB flashen, direkt aus dem Browser.",
+      "webHint": "Board per USB anschließen und auf den Button klicken: Der Browser fragt, welcher Serialport benutzt werden soll. Vorher alle anderen Programme schließen, die den Port nutzen (Serialmonitore, IDEs).",
+      "mpyTwoSteps": "Dieses MicroPython-Projekt wird in zwei Schritten geflasht: Zuerst wird die MicroPython-Firmware installiert, falls das Board sie nicht hat (etwa eine Minute), dann werden deine .py-Dateien hochgeladen und das Board startet in main.py neu.",
+      "mpyUnavailable": "MicroPython-Projekte können von hier aus nicht auf ein echtes Board geflasht werden.",
+      "compiling": "Sketch wird kompiliert...",
+      "compilingHint": "Das Flashen startet automatisch, sobald der Build erfolgreich ist.",
+      "flashingOn": "Flashe auf {{port}}...",
+      "success": "Erfolgreich geflasht in {{seconds}} s",
+      "compileFailed": "Kompilierung fehlgeschlagen: Fehler unten beheben und erneut versuchen. {{error}}",
+      "noOutput": "(noch keine Ausgabe)",
+      "dontUnplug": "Board während des Flashens nicht abziehen.",
+      "startOver": "Neu anfangen",
+      "pickAnotherPort": "Anderen Port wählen",
+      "retry": "Erneut versuchen",
+      "retryCompile": "Neu kompilieren und flashen",
+      "cancel": "Abbrechen",
+      "hide": "Ausblenden",
+      "paidOnlyTitle": "Das Flashen echter Boards gehört zur bezahlten Velxio-Desktop-Lizenz",
+      "paidOnlyBody": "Einen Sketch auf ein echtes, per USB angeschlossenes Board hochzuladen gibt es mit einer Personal-, Commercial- oder Enterprise-Lizenz. Der Simulator selbst bleibt kostenlos.",
+      "seePlans": "Pläne ansehen",
+      "log": {
+        "compiling": "Sketch wird vor dem Flashen kompiliert...",
+        "recompiling": "Code seit dem letzten Build geändert: wird vor dem Flashen neu kompiliert...",
+        "compiled": "Build OK in {{seconds}} s. Flashen startet..."
+      }
     }
   },
   "about": {

@@ -82,8 +82,8 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
   // Overlay boards and their examples register asynchronously — re-derive the
   // filter options when either lands, so a pro board's tab appears without a
   // reload.
-  useSyncExternalStore(subscribeProExamples, getProExamplesVersion);
-  useSyncExternalStore(subscribeProBoards, getProBoardsVersion);
+  useSyncExternalStore(subscribeProExamples, getProExamplesVersion, getProExamplesVersion);
+  useSyncExternalStore(subscribeProBoards, getProBoardsVersion, getProBoardsVersion);
 
   // The static tabs cover the OSS boards; every other board kind that appears
   // in the (possibly overlay-extended) gallery gets a tab of its own, labelled
@@ -133,7 +133,12 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
       example.difficulty,
       getBoardFilter(example),
       ...(example.tags ?? []),
-      ...example.components.map((c) => c.type),
+      // Defensive. `components` is required by ExampleProject, but overlay
+      // example sets are built by factories that cast their result, so the
+      // compiler is not actually guarding this. One entry that omitted it took
+      // the entire gallery down with a TypeError the first time anyone typed in
+      // the search box — a whole page lost to one malformed example.
+      ...(example.components ?? []).map((c) => c.type),
     ]
       .join(' ')
       .toLowerCase();

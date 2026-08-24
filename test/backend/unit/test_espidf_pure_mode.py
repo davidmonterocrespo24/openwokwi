@@ -140,3 +140,48 @@ class TestJobKeyLanguageVariance(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ManagedComponentDetectionTests(unittest.TestCase):
+    """The registry components a sketch's #includes must pull in.
+
+    The template ships no idf_component.yml, so a header that lives in a
+    managed component and is not on this list dies at "No such file or
+    directory" — which is exactly what official Espressif board-demo code
+    did for led_strip / button / knob / GT911 / esp_codec_dev.
+    """
+
+    def setUp(self) -> None:
+        self.comp = make_compiler()
+
+    def test_official_demo_components_are_declared(self) -> None:
+        cases = {
+            '#include "led_strip.h"': 'espressif/led_strip',
+            '#include "iot_button.h"': 'espressif/button',
+            '#include "iot_knob.h"': 'espressif/knob',
+            '#include "esp_lcd_touch_gt911.h"': 'espressif/esp_lcd_touch_gt911',
+            '#include "esp_codec_dev.h"': 'espressif/esp_codec_dev',
+            '#include "esp_camera.h"': 'espressif/esp32-camera',
+            '#include "esp_lcd_gc9a01.h"': 'espressif/esp_lcd_gc9a01',
+            '#include "esp_lcd_st77916.h"': 'espressif/esp_lcd_st77916',
+            '#include "esp_lcd_touch_cst816s.h"': 'espressif/esp_lcd_touch_cst816s',
+            '#include "esp_lcd_ek79007.h"': 'espressif/esp_lcd_ek79007',
+            '#include "lvgl.h"': 'lvgl/lvgl',
+            '#include "esp_lvgl_port.h"': 'espressif/esp_lvgl_port',
+        }
+        for line, component in cases.items():
+            with self.subTest(line=line):
+                self.assertIn(component, self.comp._detect_managed_components(line))
+
+    def test_angle_bracket_form_counts_too(self) -> None:
+        deps = self.comp._detect_managed_components('#include <led_strip.h>')
+        self.assertIn('espressif/led_strip', deps)
+
+    def test_unrelated_source_declares_nothing(self) -> None:
+        src = '#include <stdio.h>\n#include "driver/gpio.h"\nvoid app_main(void) {}'
+        self.assertEqual(self.comp._detect_managed_components(src), {})
+
+    def test_a_similarly_named_header_does_not_match(self) -> None:
+        # "my_led_strip.h" is the user's own file, not the registry component.
+        deps = self.comp._detect_managed_components('#include "my_led_strip.h"')
+        self.assertEqual(deps, {})

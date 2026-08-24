@@ -19,9 +19,9 @@
  * place to extend if a third format ever shows up.
  */
 
-import type { Wire } from '../types/wire';
 import { importVlxFile, VlxParseError } from './vlxFile';
-import { importFromWokwiZip, type VelxioComponent } from './wokwiZip';
+import { importFromWokwiZip } from './wokwiZip';
+import type { ImportResult } from './wokwiZip';
 
 /**
  * Common result shape: `kind` tells callers which path ran, so they can
@@ -30,15 +30,11 @@ import { importFromWokwiZip, type VelxioComponent } from './wokwiZip';
  */
 export type ProjectImportResult =
   | { kind: 'vlx' }
-  | {
-      kind: 'zip';
-      boardType: 'arduino-uno' | 'arduino-nano' | 'arduino-mega' | 'raspberry-pi-pico';
-      boardPosition: { x: number; y: number };
-      components: VelxioComponent[];
-      wires: Wire[];
-      files: Array<{ name: string; content: string }>;
-      libraries: string[];
-    };
+  // Derived from ImportResult rather than restated. The zip branch used to
+  // hand-copy a four-literal board union that the importer also declared, so
+  // the two could disagree — and widening one without the other is a compile
+  // error nobody would connect to a lost board (#268).
+  | ({ kind: 'zip' } & ImportResult);
 
 /**
  * Detect format from the filename + MIME type and dispatch to the right

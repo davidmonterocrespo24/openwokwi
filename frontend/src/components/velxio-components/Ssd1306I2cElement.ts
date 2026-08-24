@@ -23,7 +23,7 @@ const SCREEN_H = 64;
 // (blue PCB, dark screen, corner mounting holes, star) but narrower — a 4-pin
 // header instead of 8. Screen sits at (SCREEN_X, SCREEN_Y).
 const BODY_W = 150;
-const BODY_H = 108;
+const BODY_H = 118;
 const SCREEN_X = 11;
 const SCREEN_Y = 30;
 
@@ -128,8 +128,27 @@ class Ssd1306I2cElement extends HTMLElement {
           ${holes.map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="4.5" />`).join('')}
         </g>
 
-        <!-- 128 x 64 screen (the <canvas> paints on top of this) -->
-        <rect x="${SCREEN_X}" y="${SCREEN_Y}" width="${SCREEN_W}" height="${SCREEN_H}" fill="#1A1A1A" />
+        <!-- The OLED itself: on the real module the glass is a PANEL BONDED
+             ONTO the PCB, not a hole in it - it overhangs the 128x64 active
+             area on every side, sits slightly proud of the board, and carries
+             a flex tail down to the driver. Drawing it as a bare dark rect
+             made the part read as a cut-out rather than one integrated piece. -->
+        <rect x="${SCREEN_X - 5}" y="${SCREEN_Y - 4}"
+              width="${SCREEN_W + 10}" height="${SCREEN_H + 13}"
+              rx="1.5" fill="#0C0E13" stroke="#3A3F4A" stroke-width="0.8" />
+        <!-- glass bevel: the lit edge where the panel stands off the PCB -->
+        <rect x="${SCREEN_X - 5}" y="${SCREEN_Y - 4}"
+              width="${SCREEN_W + 10}" height="${SCREEN_H + 13}"
+              rx="1.5" fill="none" stroke="#565C68" stroke-width="0.5" opacity="0.55" />
+        <!-- flex tail from the glass to the driver, under the panel -->
+        <rect x="${SCREEN_X + SCREEN_W / 2 - 22}" y="${SCREEN_Y + SCREEN_H + 8}"
+              width="44" height="4" rx="1" fill="#8A6A2E" opacity="0.85" />
+        <!-- 128 x 64 active area (the <canvas> paints exactly on top of this) -->
+        <rect x="${SCREEN_X}" y="${SCREEN_Y}" width="${SCREEN_W}" height="${SCREEN_H}" fill="#05070A" />
+        <!-- specular sheen across the glass, so it reads as a screen -->
+        <path d="M${SCREEN_X - 5} ${SCREEN_Y + 6} L${SCREEN_X + SCREEN_W + 5} ${SCREEN_Y - 4}
+                 L${SCREEN_X + SCREEN_W + 5} ${SCREEN_Y + 2} L${SCREEN_X - 5} ${SCREEN_Y + 13} Z"
+              fill="#FFFFFF" opacity="0.045" pointer-events="none" />
 
         <!-- Star decoration, echoing the 8-pin part -->
         <path fill="#FFF" stroke="#FFF"

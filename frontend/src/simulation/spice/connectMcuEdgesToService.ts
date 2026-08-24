@@ -31,7 +31,7 @@ import { stm32LinearToPinName, stm32PinNameToLinear } from '../Stm32Bridge';
 import { isStm32BoardKind, isPiBoardKind } from '../../types/board';
 import type { BoardKind } from '../../types/board';
 import { useElectricalStore } from '../../store/useElectricalStore';
-import { BOARD_PIN_GROUPS } from './boardPinGroups';
+import { boardPinGroupFor } from './boardPinGroups';
 import { pinNameToArduinoPin } from './collectPinStates';
 import type { CircuitSimulationService } from './CircuitSimulationService';
 
@@ -137,7 +137,7 @@ export function connectMcuEdgesToService(service: CircuitSimulationService): () 
   function subscribeBoard(boardId: string, boardKind: string): void {
     const pm = getBoardPinManager(boardId);
     if (!pm) return;
-    const group = BOARD_PIN_GROUPS[boardKind as keyof typeof BOARD_PIN_GROUPS] ?? BOARD_PIN_GROUPS.default;
+    const group = boardPinGroupFor(boardKind);
     const vcc = group.vcc;
 
     const pinSubs = new Map<number, () => void>();

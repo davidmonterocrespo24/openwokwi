@@ -1,97 +1,61 @@
 """
-Tests for WiFi NIC argument injection in ESP32 QEMU launch.
+Tests for the WiFi NIC argument the ESP32 QEMU launch builds.
 
-Verifies that:
-  - `-nic user,model=esp32_wifi,...` is added when wifi_enabled=True
-  - NIC args are absent when wifi_enabled=False
-  - esp32c3_wifi model is used for C3 boards
-  - hostfwd port is included when specified
+These call the SHIPPED `wifi_nic_arg`. The previous version of this file
+re-implemented the logic inline, so it only ever proved that copy
+self-consistent — it would have passed unchanged through issue #260, whose
+whole content is that this decision was wrong.
 """
-import json
 import unittest
 from unittest.mock import patch, MagicMock
 
+from app.services.esp32_worker import wifi_nic_arg
 
-class TestEsp32WorkerWifiArgs(unittest.TestCase):
-    """Test the QEMU arg construction in esp32_worker when WiFi is enabled."""
 
-    def _build_config(self, wifi_enabled=False, wifi_hostfwd_port=0,
-                      machine='esp32-picsimlab'):
-        return json.dumps({
-            'lib_path': '/fake/libqemu-xtensa.so',
-            'firmware_b64': 'AAAA',  # minimal base64
-            'machine': machine,
-            'sensors': [],
-            'wifi_enabled': wifi_enabled,
-            'wifi_hostfwd_port': wifi_hostfwd_port,
-        })
+class TestWifiNicArg(unittest.TestCase):
+    """What the machine gets, and why."""
 
-    def test_wifi_disabled_no_nic_arg(self):
-        """When wifi_enabled=False, -nic should NOT appear in args."""
-        cfg = json.loads(self._build_config(wifi_enabled=False))
-        args = self._simulate_args(cfg)
-        self.assertNotIn(b'-nic', args)
+    def test_radio_attached_even_when_the_sketch_looks_wifi_less(self):
+        """The regression #260 is about.
 
-    def test_wifi_enabled_adds_nic_arg(self):
-        """When wifi_enabled=True, -nic should appear with esp32_wifi model."""
-        cfg = json.loads(self._build_config(wifi_enabled=True))
-        args = self._simulate_args(cfg)
-        self.assertIn(b'-nic', args)
-        nic_idx = args.index(b'-nic')
-        nic_val = args[nic_idx + 1].decode()
-        self.assertIn('model=esp32_wifi', nic_val)
-        self.assertIn('net=192.168.4.0/24', nic_val)
+        A real ESP32 has a radio whether or not the sketch uses it. When the
+        NIC was conditional, a sketch misread as WiFi-less ran on a machine
+        with nothing mapped at the MAC, and the firmware's first register
+        touch panicked with LoadStorePIFAddrError instead of failing to
+        connect.
+        """
+        arg = wifi_nic_arg('esp32-picsimlab', wifi_enabled=False)
+        self.assertIsNotNone(arg)
+        self.assertIn('model=esp32_wifi', arg)
+        self.assertIn('net=192.168.4.0/24', arg)
 
-    def test_wifi_enabled_c3_uses_c3_model(self):
-        """ESP32-C3 machines should use esp32c3_wifi model."""
-        cfg = json.loads(self._build_config(
-            wifi_enabled=True, machine='esp32c3-picsimlab'))
-        args = self._simulate_args(cfg)
-        nic_idx = args.index(b'-nic')
-        nic_val = args[nic_idx + 1].decode()
-        self.assertIn('model=esp32c3_wifi', nic_val)
+    def test_classic_esp32_model(self):
+        arg = wifi_nic_arg('esp32-picsimlab', wifi_enabled=True)
+        self.assertIn('model=esp32_wifi', arg)
+
+    def test_c3_uses_its_own_model(self):
+        arg = wifi_nic_arg('esp32c3-picsimlab', wifi_enabled=True)
+        self.assertIn('model=esp32c3_wifi', arg)
+
+    def test_s3_gets_no_nic_because_it_models_no_radio(self):
+        """hw/xtensa/esp32s3.c never looks for the NIC, so handing it one
+        would leave an unconsumed netdev."""
+        self.assertIsNone(wifi_nic_arg('esp32s3-picsimlab', wifi_enabled=True))
+        self.assertIsNone(wifi_nic_arg('esp32s3-picsimlab', wifi_enabled=False))
 
     def test_hostfwd_included_when_port_set(self):
-        """When wifi_hostfwd_port is set, hostfwd should appear in NIC arg."""
-        cfg = json.loads(self._build_config(
-            wifi_enabled=True, wifi_hostfwd_port=12345))
-        args = self._simulate_args(cfg)
-        nic_idx = args.index(b'-nic')
-        nic_val = args[nic_idx + 1].decode()
-        self.assertIn('hostfwd=tcp::12345-192.168.4.15:80', nic_val)
+        arg = wifi_nic_arg('esp32-picsimlab', wifi_enabled=True, hostfwd_port=12345)
+        self.assertIn('hostfwd=tcp::12345-192.168.4.15:80', arg)
 
     def test_hostfwd_absent_when_port_zero(self):
-        """When wifi_hostfwd_port is 0, hostfwd should NOT appear."""
-        cfg = json.loads(self._build_config(
-            wifi_enabled=True, wifi_hostfwd_port=0))
-        args = self._simulate_args(cfg)
-        nic_idx = args.index(b'-nic')
-        nic_val = args[nic_idx + 1].decode()
-        self.assertNotIn('hostfwd', nic_val)
+        arg = wifi_nic_arg('esp32-picsimlab', wifi_enabled=True, hostfwd_port=0)
+        self.assertNotIn('hostfwd', arg)
 
-    @staticmethod
-    def _simulate_args(cfg: dict) -> list[bytes]:
-        """Simulate the arg-building logic from esp32_worker.main()."""
-        machine = cfg.get('machine', 'esp32-picsimlab')
-        wifi_enabled = cfg.get('wifi_enabled', False)
-        wifi_hostfwd_port = cfg.get('wifi_hostfwd_port', 0)
-
-        args_list = [
-            b'qemu',
-            b'-M', machine.encode(),
-            b'-nographic',
-            b'-L', b'/fake/rom',
-            b'-drive', b'file=/tmp/fw.bin,if=mtd,format=raw',
-        ]
-
-        if wifi_enabled:
-            nic_model = 'esp32c3_wifi' if 'c3' in machine else 'esp32_wifi'
-            nic_arg = f'user,model={nic_model},net=192.168.4.0/24'
-            if wifi_hostfwd_port:
-                nic_arg += f',hostfwd=tcp::{wifi_hostfwd_port}-192.168.4.15:80'
-            args_list.extend([b'-nic', nic_arg.encode()])
-
-        return args_list
+    def test_hostfwd_needs_a_sketch_that_serves(self):
+        """The forward exposes the guest's server to the host. The radio is
+        unconditional; opening a port is not."""
+        arg = wifi_nic_arg('esp32-picsimlab', wifi_enabled=False, hostfwd_port=12345)
+        self.assertNotIn('hostfwd', arg)
 
 
 class TestEspQemuManagerWifiArgs(unittest.TestCase):
@@ -134,3 +98,30 @@ class TestSimulationWifiPort(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestExplainPifFault(unittest.TestCase):
+    """The panic dump says "memory"; the user needs to hear "peripheral"."""
+
+    def test_names_the_wifi_mac_at_the_apb_alias(self):
+        from app.services.esp32_worker import _explain_pif_fault
+        note = _explain_pif_fault(b'EXCVADDR: 0x60033c00\n')
+        self.assertIsNotNone(note)
+        self.assertIn('WiFi MAC', note)
+        self.assertIn('0x60033c00', note)
+
+    def test_names_the_wifi_mac_at_the_dport_address(self):
+        from app.services.esp32_worker import _explain_pif_fault
+        note = _explain_pif_fault(b'EXCVADDR: 0x3ff73c00\n')
+        self.assertIn('WiFi MAC', note)
+
+    def test_other_addresses_are_still_explained_generically(self):
+        from app.services.esp32_worker import _explain_pif_fault
+        note = _explain_pif_fault(b'EXCVADDR: 0x3ff40000\n')
+        self.assertIn('a peripheral', note)
+        self.assertNotIn('WiFi MAC', note)
+
+    def test_waits_for_the_address(self):
+        """The cause and EXCVADDR arrive in different chunks."""
+        from app.services.esp32_worker import _explain_pif_fault
+        self.assertIsNone(_explain_pif_fault(b'Core  0 register dump:\n'))

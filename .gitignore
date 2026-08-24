@@ -50,8 +50,8 @@ backend/dist/
 # committed because they point at out-of-tree code that isn't part of the
 # open-source project. The OSS Vite alias falls back to a no-op stub when
 # these aren't present.
-backend/app/pro/
-frontend/src/pro/
+backend/app/pro
+frontend/src/pro
 
 # Temporary vitest config used to run pro overlay tests locally.
 frontend/pro-vitest.config.ts

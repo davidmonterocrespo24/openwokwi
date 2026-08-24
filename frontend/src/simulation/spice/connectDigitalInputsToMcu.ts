@@ -16,10 +16,26 @@
  * (custom-chip path): it knows ONLY the electrical store shape.
  *
  * Only pins the MCU is NOT actively driving as outputs are injected, so we
- * never fight a `digitalWrite`. Other boards (AVR / RP2040) keep the legacy
- * part-seed path; only the ESP32 QEMU bridge opts in (`spiceDrivenInputs`).
+ * never fight a `digitalWrite`. Every simulator that opts in with
+ * `spiceDrivenInputs` takes this path — AVR, RP2040, STM32 and the ESP32
+ * bridges all do today.
+ *
+ * TWO kinds of pin are left alone, and the reason is the same for both: some
+ * parts have no electrical model at all, so the solved node says nothing about
+ * what they are doing.
+ *  - pins a PART drives itself (simulation/partPinOwnership): an HC-SR04's
+ *    ECHO pulse, a DHT22's frame, a rotary encoder's edges;
+ *  - pins the board's own bridge reports as sensor-owned (`ownsPin`), which is
+ *    what a backend- or engine-emulated sensor registers.
+ * The older `sourcedNets` gate below tried to cover this by skipping nets no
+ * component sits on, and that works right up until the user wires the sensor
+ * the way real hardware needs it — a pull-up, or the level divider a 5 V
+ * HC-SR04 needs to talk to a 3.3 V pad. Then the net IS component-backed, it
+ * solves at whatever the passives say (~0 V, since nothing models the sensor's
+ * output), and this connector pins the very line the sensor is answering on.
  */
 import { useSimulatorStore, getBoardSimulator, getBoardPinManager } from '../../store/useSimulatorStore';
+import { isPartOwnedPin } from '../partPinOwnership';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { isStm32BoardKind } from '../../types/board';
 import type { BoardKind } from '../../types/board';
@@ -56,7 +72,12 @@ export function connectDigitalInputsToMcu(): () => void {
     const { boards } = useSimulatorStore.getState();
     for (const board of boards) {
       const sim = getBoardSimulator(board.id) as
-        | { setPinState?: (pin: number, state: boolean) => void; spiceDrivenInputs?: boolean }
+        | {
+            setPinState?: (pin: number, state: boolean) => void;
+            spiceDrivenInputs?: boolean;
+            /** Optional seam: pins the simulator/bridge drives itself. */
+            ownsPin?: (pin: number) => boolean;
+          }
         | null;
       if (!sim?.spiceDrivenInputs || typeof sim.setPinState !== 'function') continue;
       const pm = getBoardPinManager(board.id);
@@ -71,6 +92,20 @@ export function connectDigitalInputsToMcu(): () => void {
         const gpio = isStm32 ? stm32PinNameToLinear(pinName) : gpioFromPinName(pinName, board.boardKind);
         if (gpio < 0) continue;
         if (driven.has(gpio)) continue; // the MCU drives this pin (digitalWrite)
+        // A part that models this line ITSELF (an HC-SR04's ECHO pulse, a
+        // DHT22's frame, an encoder's edges) owns it — see partPinOwnership.
+        // The `sourcedNets` gate below cannot protect those: the moment the
+        // user adds the pull-up or the level divider real hardware needs, the
+        // net is component-backed and solves at whatever the passives say,
+        // which is not what the part is driving.
+        if (isPartOwnedPin(board.id, gpio) || sim.ownsPin?.(gpio)) {
+          // Forget what we last pushed here. While the part drove the line the
+          // guest's level was whatever the part made it, so the moment the
+          // part lets go (rewire, unmount, detach) the next solve must emit
+          // even if the circuit happens to agree with our stale memory.
+          lastLevel.delete(`${board.id}:${gpio}`);
+          continue;
+        }
         // Only drive pins whose net is backed by a real source/element (rail,
         // pull, button switch, divider, cross-board output, …). A net that is
         // only floating (an event-driven part like a rotary encoder / keypad

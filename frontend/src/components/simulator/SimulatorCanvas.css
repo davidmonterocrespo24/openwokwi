@@ -105,6 +105,24 @@
   cursor: not-allowed;
 }
 
+/* ── Camera / Microphone toggles ─────────────────────
+   Static layout for the CameraToggle / MicrophoneToggle buttons. It lives
+   in a class (not inline) so the same @container query that collapses the
+   Serial/Scope buttons to icon-only can reach these too — an inline
+   font-size would beat the class and the label could never collapse.
+   State-driven styles (background, border, colour, pulse animation) stay
+   inline on the button. */
+.canvas-cam-mic-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 /* ── Serial Monitor button ───────────────────────── */
 .canvas-serial-btn {
   display: flex;
@@ -383,6 +401,12 @@
     height: 18px;
   }
 
+  .canvas-cam-mic-btn {
+    padding: 0 6px;
+    gap: 0;
+    font-size: 0; /* icon-only on narrow viewports too */
+  }
+
   .add-component-btn {
     padding: 0 8px;
     font-size: 0; /* hide text, show icon only */
@@ -422,31 +446,46 @@
    mobile block does — but keyed to the bar's own width via a container query,
    not the viewport, so it triggers on a wide screen with the chat open too.
    Priority: labels -> icons, then drop the non-interactive count, then the
-   zoom buttons (mouse-wheel zoom still works). Mirrors the thresholds the
-   editor toolbar and view-mode toggle collapse at, so the whole bar degrades
-   together and nothing overlaps. */
-@container unified-toolbar (max-width: 1010px) {
-  .canvas-serial-btn {
-    padding: 0 8px;
-    font-size: 0; /* hide "Serial" / "Scope" text, keep the icon */
-  }
-  .canvas-serial-btn svg {
-    width: 18px;
-    height: 18px;
-  }
-  .add-component-btn {
-    padding: 0 9px;
-    font-size: 0; /* hide "Add" text, keep the icon */
-  }
-  .add-component-btn svg {
-    width: 18px;
-    height: 18px;
-  }
-  .board-selector {
-    max-width: 120px;
-    text-overflow: ellipsis;
-    overflow: hidden;
-  }
+   zoom buttons (mouse-wheel zoom still works). The finer tiers below stay
+   keyed to the bar's width; the FIRST tier (labels -> icons) is instead the
+   `unified-toolbar--compact` class, which AppHeader sets when it MEASURES
+   that the labelled strip does not fit the row it is on (headerStripFit.ts)
+   — a fixed 1010px threshold was right for one board's set of controls
+   only: a XIAO with camera + mic + scope kept its labels at 1060px and
+   wrapped the bar into two rows. */
+.unified-toolbar.unified-toolbar--compact .canvas-header-left,
+.unified-toolbar.unified-toolbar--compact .canvas-header-right {
+  /* Pack the toolbar buttons tighter once the AI chat steals horizontal
+     room, so Serial/Camera/Mic/Scope stop overlapping. */
+  gap: 4px;
+}
+.unified-toolbar.unified-toolbar--compact .canvas-serial-btn {
+  padding: 0 8px;
+  font-size: 0; /* hide "Serial" / "Scope" text, keep the icon */
+}
+.unified-toolbar.unified-toolbar--compact .canvas-serial-btn svg {
+  width: 18px;
+  height: 18px;
+}
+/* Same collapse as Serial: hide the "Camera" / "Mic" label, keep the icon.
+   gap: 0 drops the now-empty icon-to-label space. */
+.unified-toolbar.unified-toolbar--compact .canvas-cam-mic-btn {
+  padding: 0 8px;
+  gap: 0;
+  font-size: 0;
+}
+.unified-toolbar.unified-toolbar--compact .add-component-btn {
+  padding: 0 9px;
+  font-size: 0; /* hide "Add" text, keep the icon */
+}
+.unified-toolbar.unified-toolbar--compact .add-component-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.unified-toolbar.unified-toolbar--compact .board-selector {
+  max-width: 120px;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 @container unified-toolbar (max-width: 905px) {
   .component-count {

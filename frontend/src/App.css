@@ -188,8 +188,23 @@ body {
 
 /* Collapse the Code/Both/Circuit labels to icon-only first (biggest fixed
    block in the bar) as the shared bar narrows. */
+.view-mode-toggle {
+  display: flex;
+}
+
 @container unified-toolbar (max-width: 1140px) {
   .view-mode-toggle .vm-label {
+    display: none;
+  }
+}
+
+/* Narrow bar (small window with the AI chat docked): drop the explorer /
+   Code / Both / Circuit toggle altogether. Every one of its switches is a
+   checkmarked row in the header's View menu, so nothing is lost — and the
+   ~140px it frees is what keeps the Run group and the canvas controls on
+   one line instead of overlapping. */
+@container unified-toolbar (max-width: 760px) {
+  .view-mode-toggle {
     display: none;
   }
 }
@@ -210,6 +225,18 @@ body {
 .unified-toolbar-editor .editor-toolbar {
   flex: 1;
   min-width: 0;
+}
+
+/* The wrapper is an inline-size query container for its standalone (mobile)
+   mount. Inside the shared bar that containment is exactly what let the
+   editor zone shrink under its buttons: size containment makes the wrapper
+   contribute ZERO intrinsic width, so the zone's `min-width: max-content`
+   above resolved to nothing, flexbox squeezed it, and Libraries / Output
+   painted over the board selector instead of the bar wrapping. Turn it off
+   here — the label collapses are keyed to the `unified-toolbar` container
+   in EditorToolbar.css for this mount. */
+.unified-toolbar-editor .editor-toolbar-wrapper {
+  container-type: normal;
 }
 
 .unified-toolbar-editor .editor-toolbar {
@@ -539,63 +566,33 @@ body {
   height: 44px;
 }
 
-/* ── Tight fallback for the in-header strip ──────────────────────────────
+/* ── Fallback for the in-header strip: its own full-width bar ───────────
    Between "fits in one row" and "phone" there is an awkward middle (e.g.
    1440px with the chat docked) where flex-wrap produced an orphan group of
    canvas controls floating inside a tall transparent header, next to a
-   dead hole before the right-side controls. Below the width where one row
-   GENUINELY fits — thresholds account for the docked chat's reserved
-   380px / 36px — the strip drops back to being its own full-width second
-   bar with its old skin: exactly the familiar pre-merge layout, which
-   reads as intentional instead of broken. Three blocks because a media
-   query cannot test a body class in its condition. */
+   dead hole before the right edge. When one row GENUINELY cannot hold the
+   strip, it drops back to being its own full-width second bar with its old
+   skin: exactly the familiar pre-merge layout, which reads as intentional
+   instead of broken.
 
-@media (max-width: 1039.9px) {
-  .app-header--with-toolbar .header-content {
-    flex-wrap: wrap;
-  }
-  .app-header--with-toolbar .header-editor-toolbar {
-    flex-basis: 100%;
-    order: 10;
-    margin: 0 -16px;
-  }
-  .app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
-    background: #252526;
-    border-top: 1px solid #333;
-    min-height: 38px;
-  }
+   Whether it fits is MEASURED by AppHeader (headerStripFit.ts), which sets
+   this class — not guessed from media queries. The old thresholds
+   (1040 / 1060 / 1400px by chat state) were right for one board only: a
+   XIAO with display + camera + mic + scope controls needs a wider strip
+   than an Uno, and at 1440px with the chat docked it wrapped inside the
+   header again. */
+.app-header--with-toolbar.app-header--strip-below .header-content {
+  flex-wrap: wrap;
 }
-
-@media (max-width: 1059.9px) {
-  body.velxio-agent-collapsed .app-header--with-toolbar .header-content {
-    flex-wrap: wrap;
-  }
-  body.velxio-agent-collapsed .app-header--with-toolbar .header-editor-toolbar {
-    flex-basis: 100%;
-    order: 10;
-    margin: 0 -16px;
-  }
-  body.velxio-agent-collapsed .app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
-    background: #252526;
-    border-top: 1px solid #333;
-    min-height: 38px;
-  }
+.app-header--with-toolbar.app-header--strip-below .header-editor-toolbar {
+  flex-basis: 100%;
+  order: 10;
+  margin: 0 -16px;
 }
-
-@media (max-width: 1399.9px) {
-  body.velxio-agent-open .app-header--with-toolbar .header-content {
-    flex-wrap: wrap;
-  }
-  body.velxio-agent-open .app-header--with-toolbar .header-editor-toolbar {
-    flex-basis: 100%;
-    order: 10;
-    margin: 0 -16px;
-  }
-  body.velxio-agent-open .app-header--with-toolbar .header-editor-toolbar .unified-toolbar {
-    background: #252526;
-    border-top: 1px solid #333;
-    min-height: 38px;
-  }
+.app-header--with-toolbar.app-header--strip-below .header-editor-toolbar .unified-toolbar {
+  background: #252526;
+  border-top: 1px solid #333;
+  min-height: 38px;
 }
 
 /* ── Editor corner box (bottom-left) ─────────────────────────────────────
@@ -646,8 +643,10 @@ body {
 }
 
 /* Tight footer (narrow explorer): the avatar alone identifies the account;
-   the name is a luxury that costs exactly the width we do not have. */
-@container (max-width: 150px) {
+   the name is a luxury that costs exactly the width we do not have. The
+   threshold sits under the explorer's 150px default so the first name shows
+   out of the box and only goes when the user drags the pane narrower. */
+@container (max-width: 135px) {
   .explorer-account-footer .header-username-text {
     display: none;
   }
@@ -656,4 +655,13 @@ body {
 /* Collapsed explorer: the floating fallback box shows the circle only. */
 .editor-corner-box .header-username-text {
   display: none;
+}
+
+/* Flash dialog: indeterminate bar while the sketch compiles before a flash. */
+@keyframes flash-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.flash-indeterminate {
+  animation: flash-indeterminate 1.4s ease-in-out infinite;
 }
