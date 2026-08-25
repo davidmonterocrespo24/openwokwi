@@ -40,6 +40,14 @@ jobs:
       - name: Announce on Discord, then commit CHANGELOG + version bump on success
         uses: actions/github-script@v7
         env:
+          # Same relay the Velxio agent uses for paid accounts: the operator's
+          # 9router combo, which balances across their provider accounts and
+          # absorbs the upstream cost. Base URL + key are secrets so nothing
+          # about the relay is published in this repo; with either unset the
+          # script falls back to calling DeepSeek directly.
+          NINEROUTER_BASE_URL: ${{ secrets.NINEROUTER_BASE_URL }}
+          NINEROUTER_API_KEY:  ${{ secrets.NINEROUTER_API_KEY }}
+          NINEROUTER_MODEL:    ${{ vars.NINEROUTER_MODEL_PAID || 'velxio-pro' }}
           DAVEAGENT_API_KEY:   ${{ secrets.DAVEAGENT_API_KEY }}
           DISCORD_BOT_TOKEN:   ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CHANNEL_ID:  ${{ secrets.DISCORD_CHANNEL_ID }}
@@ -62,6 +70,62 @@ jobs:
             // Discord message, and once killed the v3.0.2 announce outright).
             // Give it generous budgets, and retry with double when the model
             // spends the whole budget reasoning.
+            // 9router returns an OpenAI-shaped body, except some of the
+            // upstreams its combo rotates to append a literal `data: [DONE]`
+            // to the NON-streaming response. A plain res.json() throws "Extra
+            // data" on those and a perfectly good 200 looks like a broken
+            // relay (that cost the pro agent 378 fallbacks in one day before
+            // it was understood). Parse the same way app/pro's
+            // parse_openai_body does.
+            function parseOpenAiBody(text) {
+              const raw = (text || '').trim();
+              try { return JSON.parse(raw); } catch {}
+              const brace = raw.indexOf('{');
+              if (brace >= 0) {
+                const head = raw.slice(brace, raw.lastIndexOf('}') + 1);
+                try { return JSON.parse(head); } catch {}
+              }
+              let best = null;
+              for (const line of raw.split('\n')) {
+                if (!line.startsWith('data: ')) continue;
+                const chunk = line.slice(6).trim();
+                if (!chunk || chunk === '[DONE]') continue;
+                try { const obj = JSON.parse(chunk); if (obj && typeof obj === 'object') best = obj; } catch {}
+              }
+              if (best) return best;
+              throw new Error('no JSON object in the response body');
+            }
+
+            // Tier 1: the relay the agent gives paid accounts. Skipped when
+            // the operator has not configured it.
+            async function nineRouterRequest(prompt, maxTokens, temperature) {
+              const base = (process.env.NINEROUTER_BASE_URL || '').trim().replace(/\/$/, '');
+              if (!base) return null;
+              const key = (process.env.NINEROUTER_API_KEY || '').trim();
+              const model = (process.env.NINEROUTER_MODEL || 'velxio-pro').trim();
+              const headers = { 'Content-Type': 'application/json' };
+              if (key) headers['Authorization'] = `Bearer ${key}`;
+              const res = await fetch(`${base}/chat/completions`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  model,
+                  max_tokens: maxTokens,
+                  temperature,
+                  messages: [{ role: 'user', content: prompt }],
+                }),
+              });
+              const text = await res.text();
+              if (!res.ok) throw new Error(`9router ${res.status}: ${text.slice(0, 300)}`);
+              const data = parseOpenAiBody(text);
+              const choice = data.choices?.[0] ?? {};
+              console.log(
+                `9router(${model}): upstream=${data.model ?? '?'} finish_reason=${choice.finish_reason} ` +
+                `completion_tokens=${data.usage?.completion_tokens ?? '?'}`
+              );
+              return (choice.message?.content ?? '').trim();
+            }
+
             async function deepSeekRequest(prompt, maxTokens, temperature) {
               const apiKey = process.env.DAVEAGENT_API_KEY;
               if (!apiKey) throw new Error('DAVEAGENT_API_KEY not set');
@@ -91,11 +155,27 @@ jobs:
               return (choice.message?.content ?? '').trim();
             }
 
+            // 9router first (that is where paid agent traffic goes), DeepSeek
+            // direct as the fallback -- the same order routes.agent.py uses.
+            // A dead DeepSeek balance is exactly what killed the v3.0.4
+            // announce (402 Insufficient Balance, 2026-08-25), so a single
+            // provider must not be able to block a release again.
+            async function askModel(prompt, maxTokens, temperature) {
+              try {
+                const viaRelay = await nineRouterRequest(prompt, maxTokens, temperature);
+                if (viaRelay) return viaRelay;
+                if (viaRelay === '') console.log('9router returned empty content — trying DeepSeek');
+              } catch (e) {
+                console.log(`9router failed (${e.message}) — falling back to DeepSeek`);
+              }
+              return deepSeekRequest(prompt, maxTokens, temperature);
+            }
+
             async function callDeepSeek(prompt, maxTokens, temperature = 0.3) {
-              let content = await deepSeekRequest(prompt, maxTokens, temperature);
+              let content = await askModel(prompt, maxTokens, temperature);
               if (!content) {
                 console.log('Empty content — retrying once with double the token budget');
-                content = await deepSeekRequest(prompt, maxTokens * 2, temperature);
+                content = await askModel(prompt, maxTokens * 2, temperature);
               }
               return content;
             }
