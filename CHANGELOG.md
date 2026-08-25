@@ -3,6 +3,52 @@
 All notable changes to Velxio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.4] - 2026-08-25
+
+### Added
+- Added ESP32-P4 and ESP32-C5 targets to the ESP-IDF build lane, with PSRAM enabled by default on ESP32-P4 and the CDCOnBoot menu option honored in four-part FQBNs.
+- Added ESP-IDF component support for the layers Espressif board demos depend on, including LVGL and esp_lvgl_port.
+- Added intellisense class/type lookup endpoints, inheritance-aware type queries, and answers from the local sketchbook.
+- Added board picker cards and online badges for the Pimoroni Stellar Unicorn, ESP32-S3-EYE, ESP-EYE, ESP-SensAirShuttle, ESP-VoCat, ESP32-P4-Function-EV, ESP32-C3-LCDkit, and the remaining closed-catalogue parts.
+- Added board declarations for fitted RAM/flash, built-in cameras, power-management ICs, display autodetect identities, and starter code shipped with a board.
+- Added MicroPython v1.28.0 firmware for the ESP32 family and library installation from the micropython-lib index.
+- Added browser Web Serial flashing and a MicroPython web-flash flow, with compile-before-flash and stale-build warnings.
+- Added compact file explorer, an auto-save indicator in the Save button, and M5Stack/Nano/ESP32-CAM entries to the starter picker.
+- Added What's New announcement modal/toast and interaction tracking, plus session entry points in the File and Account menus.
+- Added server-side matrix keypad support and PIO peripherals that consume words directly from the PIO stream.
+
+### Changed
+- The Save button now doubles as the auto-save indicator, replacing the old header pill.
+- Editor layout switching now lives in the View menu.
+- The starter picker now places the M5Stack section ahead of STM32.
+- The landing page now advertises 35 boards across 6 architectures.
+- Updated shipped BadgeOS 2.0.2 factory images and MicroPython firmware for esp32c6, rp2040w, and rp2350-arm.
+
+### Fixed
+- Fixed ESP-IDF compilation: included IDF-tree headers in Arduino sketches, removed header-shadow conflicts, concatenated all .ino tabs with Arduino semantics, broadened merged-component REQUIRES, generated forward declarations, linked the task-WDT API, enabled BLE 4.2 legacy APIs, and prevented unknown `#if` branches from pruning `#else`.
+- Fixed MicroPython behavior: raw REPL answers are no longer buffered, project libraries upload in bounded steps, unknown SSIDs route to the emulated AP, the real WiFi driver is no longer shadowed, and sleepy `isconnected()`/`status()` no longer busy-wait.
+- Fixed WiFi/radio reliability: CYW43 WiFi works after the first Run, the emulated ESP32 keeps its radio regardless of scan results, and in-browser WiFi boards stay reachable through the IoT gateway.
+- Fixed simulator and SPICE behavior: overlay boards no longer get solved as 5 V Arduinos, VIN/5V rails are no longer clamped to 3.3 V, sensor-line resistor dividers no longer hide board pins, multi-pin writes reach all pins, raw-byte UART data is handled correctly, programmatic property changes reach the running simulation, and illumination sliders are logarithmic.
+- Fixed SSD1306 rendering and picker presentation: the display is drawn as glass bonded to the PCB, the thumbnail matches the redrawn part, and each variant has its own datasheet and pinout.
+- Fixed picker/assets: ad-card art now matches real boards, and Pi 4/5 photos no longer have opaque white backgrounds.
+- Fixed board/pin handling: pads that resolved to nothing, supply pads driving GPIOs, overlay boards entering ESP-IDF mode, board-corner wire anchors, and all compile sites reading the Arduino FQBN.
+- Fixed compile pipeline: build-directory locking prevents concurrent compiles from swapping binaries, scan-all retry errors are reported, the sync endpoint tolerates client disconnects, and vendor example code no longer fails `-Werror`.
+- Fixed editor/canvas UX: toolbar overlap on narrow bars, workspace panel stacking, modal z-order, marker hovers, split-drag desync, quick suggestions in snippet placeholders, boards landing in the visible corner, and persisted ImageData no longer clobbering live display frames.
+- Fixed project handling and messaging: exports use the actual board, imports match the board from file names, uploaded binaries explain when they cannot find a network, Bluetooth errors are explained directly, Arduino library search/install failures become one actionable sentence, and bare emulated-subnet IPs are linkified.
+- Fixed examples: repaired the 100 Days of IoT batch, Bluetooth LED, common-emitter amplifier, night-light LDR, RGB mixer, code-only languageMode handling, and missing components/wires so one malformed example doesn't take the gallery down.
+- Fixed matrix keypad behavior with an active-row model, idempotent install, and gap-free listeners.
+- Fixed intellisense access labels for statements that open nested braces.
+- Fixed M5Stack Core header pins and PWM tones.
+
+### Performance
+- Arduino-cli and ESP-IDF builds now run independently instead of queueing behind one another.
+- Memoized linker-fragment parsing in ESP-IDF builds, cached built artifacts, skipped the PSRAM boot memtest, and rebalanced compile disk from build variants to ccache.
+- Optimized idle-spin handling so the interpreter's dispatch loop answers the common case first instead of busy-waiting.
+
+### Removed
+- Removed the in-app /docs pages from routes and the sitemap.
+- Removed the Nano RP2040 Connect shell from the picker until simulator artwork exists.
+
 ## [Unreleased]
 
 ### Added
@@ -340,3 +386,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 [3.0.1]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.1
 [3.0.2]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.2
 [3.0.3]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.3
+[3.0.4]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.4
