@@ -3,6 +3,43 @@
 All notable changes to Velxio will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.5] - 2026-09-02
+
+### Added
+- Added a light theme for the editor, canvas, and shell, with dark islands and a theme switch in the header.
+- Added wire junction nodes so wires can connect to other wires.
+- Added scope probing on any wire, digital or analog.
+- Added `.vlx` project export from the File menu.
+- Added a plan-priority build queue with a visible progress card.
+- Added an optional File-menu row for connecting an external AI agent (Claude/Codex).
+- Added an ESP32-P4 Preview starter card and picker entry.
+- Added partner board sections to the starter dialog (Seeed, DFRobot, Pimoroni, Espressif).
+- Added ONLINE cards for every closed component in the picker.
+- Expanded custom-chip support with optional face images, `chip.c`/`chip.json` as ordinary editor files, Wokwi zip round-trip, live controls, bit-banged UART TX on GPIO, drop-as-copy, and a CUSTOM badge.
+
+### Changed
+- Reworked the WiFi badge into a split button that appears before a run and opens the WiFi overlay panel.
+- The automatic SSID rewriter now stands down when a project defines its own WiFi airspace.
+- Moved the S3 Sense into the ESP32 starter section instead of a separate Seeed block.
+
+### Fixed
+- Fixed theme and header issues: transistor symbols no longer vanish on the light canvas, exports follow the theme, dark-mode cards and pill labels are readable, the flash dialog uses the correct accent color, and the toolbar stays compact without dropping the theme switch.
+- Fixed wire positions not syncing while dragging components.
+- Fixed board-less project handling: projects stay board-less, a live custom chip click opens its sensor panel, and custom chips re-attach when compiling in board-less mode.
+- Fixed custom-chip stability and compatibility: closed sync data-loss races, made digital outputs visible to the board’s `digitalRead`, titled the sensor panel with the chip’s own name, and stopped the chip body from overlapping itself.
+- Fixed SPICE/scoping probes and overlays so they read the net the solver actually solved.
+- Fixed library builds and uninstall: a library’s `extras/` no longer drags unrelated code into the build, and uninstall can no longer reach into the shared cache.
+- Fixed multiple ESP-IDF build issues: TFT_eSPI builds on the S3, tight-buffer `sprintf` is no longer a hard error, build-config headers such as `lv_conf.h` no longer pull unrelated libraries into the build, custom WiFi SSIDs are threaded through compilation, cloud-built P4 sketches no longer start an interactive REPL, and ESP32-P4 builds include the esp-hosted-mcu sync-RPC race fix.
+- Fixed Run all / Compile all so MicroPython boards are no longer routed through arduino-cli.
+- Fixed an ESP32 worker race in host-thread pin injection.
+- Fixed board identity and artwork issues: Raspberry Pi Zero/1B+/2B are no longer presented as a Pi 3, QEMU-Linux overlay boards are not shown as Raspberry Pis, and ESP32 variants with dedicated art no longer borrow the DevKit V1 drawing.
+- Fixed the WiFi badge so it follows the run state.
+- Fixed gateway and board-linking issues: root-relative board pages work under a proxy prefix, and SoftAP-only sketches no longer offer an unreachable link.
+- Fixed blank-NVS WiFi failures by explaining the cause and detecting WiFi in stripped firmware images.
+
+### Security
+- Hardened CI by pinning third-party actions to commit SHAs, fixing the CodeQL language configuration, and making incoming pull requests safe to process before trusting them.
+
 ## [3.0.4] - 2026-08-25
 
 ### Added
@@ -387,3 +424,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 [3.0.2]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.2
 [3.0.3]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.3
 [3.0.4]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.4
+[3.0.5]: https://github.com/davidmonterocrespo24/velxio/releases/tag/v3.0.5
