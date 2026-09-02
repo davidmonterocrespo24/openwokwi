@@ -28,6 +28,7 @@
 import { PinManager } from '../PinManager';
 import { setBusDrive } from '../customChips/busNets';
 import { Strength, type Drive } from '../customChips/busLogic';
+import { isJunction } from '../../utils/junction';
 
 const STRONG = (v: 0 | 1): Drive => ({ value: v, strength: Strength.STRONG });
 const PULL = (v: 0 | 1): Drive => ({ value: v, strength: Strength.PULL });
@@ -98,9 +99,12 @@ const isLed = (t: string) => t === 'led';
 const isResistor = (t: string) => t === 'resistor';
 const isPower = (t: string) => t === 'signal-generator';
 
-/** Components this engine understands. Anything else => analog => bail. */
+/** Components this engine understands. Anything else => analog => bail.
+ *  A junction is pure connectivity (union-find handles the shared pin), so it
+ *  must not push an otherwise all-digital circuit onto the analog path. */
 function isDigitalPrimitive(t: string): boolean {
-  return isGate(t) || isFlipFlop(t) || isSwitch(t) || isLed(t) || isResistor(t) || isPower(t);
+  return isGate(t) || isFlipFlop(t) || isSwitch(t) || isLed(t) || isResistor(t) || isPower(t)
+    || isJunction(t);
 }
 
 /** Opt-in flag, mirrors chipBusEnabled / mixedmode. Default OFF until verified. */
@@ -402,6 +406,8 @@ export function buildMixedNetwork(
     const c = byId.get(compId);
     if (!c) return;
     const k = kindOf(c);
+    // Pure connectivity — a junction must never tip its net analog/boundary.
+    if (isJunction(k)) return;
     const root = pinNet(compId, pin);
     if (isGate(k) || isSwitch(k) || isLed(k)) hasDigital.add(root);
     else if (!isPower(k) && !isResistor(k)) hasAnalog.add(root); // non-primitive = analog

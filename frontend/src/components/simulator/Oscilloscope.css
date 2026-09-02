@@ -4,11 +4,11 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1e1e1e;
-  border-top: 1px solid #333;
+  background: var(--wb-2);
+  border-top: 1px solid var(--wb-6);
   font-family: 'Consolas', 'Menlo', monospace;
   font-size: 12px;
-  color: #ccc;
+  color: var(--wb-12);
   overflow: hidden;
 }
 
@@ -18,15 +18,15 @@
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  background: #252526;
-  border-bottom: 1px solid #333;
+  background: var(--wb-3);
+  border-bottom: 1px solid var(--wb-6);
   flex-shrink: 0;
   flex-wrap: wrap;
   min-height: 32px;
 }
 
 .osc-title {
-  color: #cccccc;
+  color: var(--wb-12);
   font-weight: 600;
   font-size: 12px;
   white-space: nowrap;
@@ -35,8 +35,8 @@
 
 .osc-btn {
   background: transparent;
-  border: 1px solid #555;
-  color: #ccc;
+  border: 1px solid var(--wb-8);
+  color: var(--wb-12);
   padding: 2px 8px;
   border-radius: 3px;
   cursor: pointer;
@@ -49,35 +49,35 @@
 
 .osc-btn:hover {
   border-color: var(--color-action-primary);
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .osc-btn-active {
-  background: #0e3a5a;
+  background: var(--color-accent-soft);
   border-color: var(--color-action-primary);
   color: var(--color-action-primary);
 }
 
 .osc-btn-danger {
-  border-color: #7a0000;
-  color: #ff6b6b;
+  border-color: var(--color-feedback-error-border);
+  color: var(--color-feedback-error);
 }
 
 .osc-btn-danger:hover {
-  background: #3a0000;
-  border-color: #ff6b6b;
+  background: var(--color-feedback-error-soft);
+  border-color: var(--color-feedback-error);
 }
 
 .osc-label {
-  color: #888;
+  color: var(--wb-10);
   font-size: 11px;
   white-space: nowrap;
 }
 
 .osc-select {
-  background: #1e1e1e;
-  border: 1px solid #444;
-  color: #ccc;
+  background: var(--wb-2);
+  border: 1px solid var(--wb-7);
+  color: var(--wb-12);
   padding: 2px 4px;
   border-radius: 3px;
   font-size: 11px;
@@ -96,15 +96,15 @@
 
 .osc-picker-dropdown {
   /* position/left/bottom/z-index set via inline style (portal) */
-  background: #252526;
-  border: 1px solid #555;
+  background: var(--wb-3);
+  border: 1px solid var(--wb-8);
   border-radius: 4px;
   padding: 4px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 3px;
   min-width: 200px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 -4px 20px var(--color-canvas-shadow);
 }
 
 /* Multi-board picker layout */
@@ -122,14 +122,14 @@
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-  border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid var(--wb-6);
   padding-bottom: 6px;
 }
 
 .osc-picker-board-tab {
-  background: #2d2d2d;
-  border: 1px solid #444;
-  color: #999;
+  background: var(--wb-5);
+  border: 1px solid var(--wb-7);
+  color: var(--wb-10);
   padding: 2px 8px;
   border-radius: 3px;
   cursor: pointer;
@@ -141,19 +141,19 @@
 }
 
 .osc-picker-board-tab:hover {
-  background: #383838;
-  color: #ccc;
+  background: var(--wb-6);
+  color: var(--wb-12);
 }
 
 .osc-picker-board-tab.active {
-  background: #0e3a5a;
+  background: var(--color-accent-soft);
   border-color: var(--color-action-primary);
   color: var(--color-action-primary);
 }
 
 .osc-picker-board-label {
   font-size: 10px;
-  color: #666;
+  color: var(--wb-9);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -167,9 +167,9 @@
 }
 
 .osc-pin-btn {
-  background: #2d2d2d;
-  border: 1px solid #444;
-  color: #ccc;
+  background: var(--wb-5);
+  border: 1px solid var(--wb-7);
+  color: var(--wb-12);
   padding: 3px 6px;
   border-radius: 3px;
   cursor: pointer;
@@ -181,15 +181,15 @@
 }
 
 .osc-pin-btn:hover {
-  background: #0e3a5a;
+  background: var(--color-accent-soft);
   border-color: var(--color-action-primary);
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .osc-pin-btn-active {
-  background: #1a3a1a;
-  border-color: #00ff41;
-  color: #00ff41;
+  background: var(--color-feedback-success-soft);
+  border-color: var(--color-feedback-success-border);
+  color: var(--color-feedback-success);
   cursor: default;
 }
 
@@ -198,7 +198,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #0a0a0a;
+  background: var(--wb-0);
 }
 
 .osc-empty {
@@ -206,7 +206,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #555;
+  color: var(--wb-8);
   font-size: 12px;
   flex-direction: column;
   gap: 8px;
@@ -215,7 +215,7 @@
 .osc-channel-row {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid var(--wb-1);
   height: 60px;
 }
 
@@ -227,14 +227,14 @@
   align-items: center;
   justify-content: center;
   padding: 4px 6px;
-  background: #141414;
-  border-right: 1px solid #222;
+  background: var(--wb-1);
+  border-right: 1px solid var(--wb-3);
   gap: 2px;
 }
 
 .osc-channel-board {
   font-size: 9px;
-  color: #666;
+  color: var(--wb-9);
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
@@ -249,7 +249,7 @@
 .osc-channel-remove {
   background: transparent;
   border: none;
-  color: #555;
+  color: var(--wb-8);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
@@ -258,7 +258,7 @@
 }
 
 .osc-channel-remove:hover {
-  color: #ff6b6b;
+  color: var(--color-feedback-error);
 }
 
 .osc-channel-canvas-wrap {
@@ -279,8 +279,8 @@
 .osc-ruler {
   height: 20px;
   flex-shrink: 0;
-  background: #141414;
-  border-top: 1px solid #222;
+  background: var(--wb-1);
+  border-top: 1px solid var(--wb-3);
   position: relative;
 }
 
@@ -305,24 +305,24 @@
 }
 
 .osc-trigger-status-idle {
-  color: #6b7280;
+  color: var(--wb-9);
 }
 
 .osc-trigger-status-armed {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-feedback-warning);
+  background: var(--color-feedback-warning-soft);
   animation: osc-pulse-armed 1.5s ease-in-out infinite;
 }
 
 .osc-trigger-status-triggered {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
+  color: var(--color-feedback-success);
+  background: var(--color-feedback-success-soft);
 }
 
 .osc-trigger-status-captured {
-  color: #ff9800;
-  background: rgba(255, 152, 0, 0.15);
-  border-color: #ff9800;
+  color: var(--color-feedback-warning);
+  background: var(--color-feedback-warning-soft);
+  border-color: var(--color-feedback-warning);
 }
 
 @keyframes osc-pulse-armed {

@@ -165,7 +165,11 @@ class MetadataGenerator {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    fs.writeFileSync(this.outputPath, JSON.stringify(output, null, 2));
+    // Trailing newline, deliberately: CI regenerates this file and fails the
+    // build when `git diff` is not empty. Without it every run reported the
+    // committed JSON as stale over the last byte alone — a red X on every
+    // commit that no content change could ever clear.
+    fs.writeFileSync(this.outputPath, `${JSON.stringify(output, null, 2)}\n`);
     console.log(`\n✅ Generated metadata for ${components.length} components`);
     console.log(`📄 Output: ${this.outputPath}`);
   }

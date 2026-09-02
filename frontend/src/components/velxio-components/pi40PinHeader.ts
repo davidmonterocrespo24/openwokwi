@@ -4,9 +4,12 @@
  * BCM GPIO assignment, same naming convention — so wires drawn against
  * a Pi 3 example transfer to a Pi 4 or Pi 5 board without re-routing.
  *
- * Coordinates are in CSS pixels relative to the board element's top-left,
- * sized to fit the 250×160 footprint shared by every Velxio Pi element.
- * Pin "1" sits top-left; odd pins on the top row, even on the bottom.
+ * Coordinates are in CSS pixels relative to the board element's top-left.
+ * Every Pi draws its header at a different place on its own artwork, so the
+ * geometry is a parameter: pass the header origin, the column pitch and the
+ * two row offsets AS MEASURED ON THE ART, and get pin tips that land on the
+ * drawn pads. Pin "1" sits top-left; odd pins on the top row, even on the
+ * bottom.
  *
  * Names follow the Pi 3 wrapper convention (BCM GPIO numbers like
  * "GPIO14" plus power/ground labels) so example wires using those names
@@ -20,10 +23,24 @@ export interface PinInfo {
   signals: string[];
 }
 
-const PIN_X_START = 20;
-const PIN_X_STEP = 10;
-const PIN_Y_TOP = 10;
-const PIN_Y_BOT = 20;
+export interface Pi40HeaderGeometry {
+  /** x of pin 1 / pin 2 (column 0), in CSS pixels. */
+  xStart: number;
+  /** Column pitch in CSS pixels — 2.54 mm scaled by the art's own scale. */
+  xStep: number;
+  /** y of the odd (top) row. */
+  yTop: number;
+  /** y of the even (bottom) row. */
+  yBot: number;
+}
+
+/** The 250x160 footprint the first Velxio Pi element was drawn at. */
+const DEFAULT_GEOMETRY: Pi40HeaderGeometry = {
+  xStart: 20,
+  xStep: 10,
+  yTop: 10,
+  yBot: 20,
+};
 
 const PI_PIN_NAMES: Record<number, string> = {
   1: '3V3',     2: '5V',
@@ -48,22 +65,25 @@ const PI_PIN_NAMES: Record<number, string> = {
   39: 'GND',   40: 'GPIO21',
 };
 
-export function buildPi40PinHeader(): PinInfo[] {
+export function buildPi40PinHeader(
+  geometry: Pi40HeaderGeometry = DEFAULT_GEOMETRY,
+): PinInfo[] {
+  const { xStart, xStep, yTop, yBot } = geometry;
   const pins: PinInfo[] = [];
   for (let col = 0; col < 20; col++) {
     const oddPin = col * 2 + 1;   // top row
     const evenPin = col * 2 + 2;  // bottom row
-    const px = PIN_X_START + col * PIN_X_STEP;
+    const px = xStart + col * xStep;
     pins.push({
       name: PI_PIN_NAMES[oddPin] ?? `P${oddPin}`,
       x: px,
-      y: PIN_Y_TOP,
+      y: yTop,
       signals: [],
     });
     pins.push({
       name: PI_PIN_NAMES[evenPin] ?? `P${evenPin}`,
       x: px,
-      y: PIN_Y_BOT,
+      y: yBot,
       signals: [],
     });
   }

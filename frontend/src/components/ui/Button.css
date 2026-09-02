@@ -69,7 +69,7 @@
 
 .ui-btn--white {
   background: #ffffff;
-  color: #1d1d1f;
+  color: var(--color-fg-default);
 }
 .ui-btn--white:hover:not(:disabled) {
   filter: brightness(0.96);

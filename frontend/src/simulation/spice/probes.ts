@@ -15,6 +15,7 @@ import type { ComponentForSpice, ElectricalSolveResult, TimeWaveforms } from './
 import type { Wire } from '../../types/wire';
 import { UnionFind } from './unionFind';
 import { auxRailNetName, isAuxRailNet } from './boardPinGroups';
+import { GROUND_PIN_RE, VCC_PIN_RE } from './NetlistBuilder';
 import { rms, mean, peak, subtract, isAC } from './waveformStats';
 
 export type ProbeKind = 'voltmeter' | 'ammeter' | 'multimeter';
@@ -89,6 +90,21 @@ export function buildPinNetLookup(
     const a = `${w.start.componentId}:${w.start.pinName}`;
     const b = `${w.end.componentId}:${w.end.pinName}`;
     uf.union(a, b);
+  }
+  // Mirror NetlistBuilder step 2: ANY pin named like a ground / supply pin
+  // anchors its net, not just the board's. A board-less circuit (9 V cell ->
+  // 7805 -> divider) has no entry in `groundPins` at all, and its return net
+  // is pinned to "0" solely by the regulator's GND pin. Skipping that here
+  // shifted every auto-generated name by one (n0/n1/n2 vs the solver's
+  // 0/n0/n1) and the probe read two unrelated nodes.
+  // Instrument terminals ("V+", "V-", "A+", "A-") are excluded by the regexes
+  // themselves, matching NetlistBuilder's skipCanonicalization().
+  for (const w of wires) {
+    for (const endpoint of [w.start, w.end]) {
+      const key = `${endpoint.componentId}:${endpoint.pinName}`;
+      if (GROUND_PIN_RE.test(endpoint.pinName)) uf.setCanonical(key, '0');
+      else if (VCC_PIN_RE.test(endpoint.pinName)) uf.setCanonical(key, 'vcc_rail');
+    }
   }
   for (const g of groundPins) uf.setCanonical(`${g.componentId}:${g.pinName}`, '0');
   for (const v of vccPins) uf.setCanonical(`${v.componentId}:${v.pinName}`, 'vcc_rail');
@@ -206,20 +222,20 @@ export function readAmmeter(
   if (i == null) {
     return { kind: 'ammeter', value: 0, unit: '—', display: '— no sense reading', stale: true };
   }
-  // Convention: ngspice reports positive current flowing from + terminal into
-  // the source (which is our "entry" terminal). Ammeters typically want the
-  // current through, with a sign convention of + out of the "+" probe.
-  const signed = -i;
+  // Sign convention: like a bench DMM with the red lead on A+, a positive
+  // reading means current ENTERS the A+ terminal. That is already ngspice's
+  // sign for `V_<id>_sense A+ mid` (current flowing in at the source's +
+  // node and out at its − node is positive), so the raw value passes
+  // through. Negating it here made the ordinary series wiring
+  // (source -> A+ -> load -> A-) display a negative current.
+  const signed = i;
   const fmt = formatI(signed);
 
   let ac: ProbeAcStats | undefined;
   if (timeWaveforms) {
     const raw = timeWaveforms.branches.get(key);
-    if (raw && raw.length > 0) {
-      const signedSamples = raw.map((v) => -v);
-      if (isAC(signedSamples)) {
-        ac = buildAcStatsI(signedSamples);
-      }
+    if (raw && raw.length > 0 && isAC(raw)) {
+      ac = buildAcStatsI(raw);
     }
   }
 

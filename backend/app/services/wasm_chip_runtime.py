@@ -116,7 +116,12 @@ class WasmChipRuntime:
             self._store, wasmtime.MemoryType(wasmtime.Limits(2, 16))
         )
 
-        self._attrs = dict(attrs or {})
+        self._attrs = {k: v for k, v in (attrs or {}).items()
+                       if isinstance(v, (int, float))}
+        # String attribute values (vx_attr_register_string) ride the same
+        # attrs payload; split by type.
+        self._str_attrs = {k: v for k, v in (attrs or {}).items()
+                           if isinstance(v, str)}
         self._emit = emit or (lambda _payload: None)
         self._stdout_buf = ""
 
@@ -528,11 +533,51 @@ class WasmChipRuntime:
                 with self._timer_lock:
                     self._timers[handle]["active"] = False
 
-        # ── Framebuffer (stubs) ──
+        # ── String attributes ──
+        def vx_attr_register_string(name_ptr: int, default_ptr: int) -> int:
+            name = self._read_cstring(name_ptr)
+            default = self._read_cstring(default_ptr)
+            handle = len(self._attr_handles)
+            self._attr_handles.append({"name": name, "default": 0.0,
+                                       "string_default": default})
+            return handle
+
+        def _attr_string_value(handle: int) -> bytes:
+            if 0 <= handle < len(self._attr_handles):
+                a = self._attr_handles[handle]
+                if "string_default" in a:
+                    v = self._str_attrs.get(a["name"], a["string_default"])
+                    return str(v).encode("utf-8")
+            return b""
+
+        def vx_attr_string_len(handle: int) -> int:
+            return len(_attr_string_value(handle))
+
+        def vx_attr_string_read(handle: int, buf_ptr: int, cap: int) -> int:
+            if cap <= 0:
+                return 0
+            data = _attr_string_value(handle)
+            n = min(len(data), cap - 1)
+            self._write_bytes(buf_ptr, data[:n] + b"\x00")
+            return n
+
+        # ── Framebuffer (stubs — no display in the headless worker) ──
         def vx_framebuffer_init(_w_ptr: int, _h_ptr: int) -> int:
             return -1
 
         def vx_buffer_write(_handle: int, _offset: int, _data: int, _len: int) -> None:
+            return
+
+        def vx_buffer_read(_handle: int, _offset: int, _data: int, _len: int) -> None:
+            return
+
+        # ── External ROM (no ROM delivery path on the ESP32 worker yet — a
+        #    chip calling these gets an empty ROM instead of failing to
+        #    instantiate, which is what happened before they were defined) ──
+        def vx_rom_size() -> int:
+            return 0
+
+        def vx_rom_read(_offset: int, _dst_ptr: int, _len: int) -> None:
             return
 
         # ── Logging ──
@@ -553,6 +598,9 @@ class WasmChipRuntime:
 
             "vx_attr_register":    (wasmtime.FuncType([i32, f64], [i32]), vx_attr_register),
             "vx_attr_read":        (wasmtime.FuncType([i32], [f64]),      vx_attr_read),
+            "vx_attr_register_string": (wasmtime.FuncType([i32, i32], [i32]), vx_attr_register_string),
+            "vx_attr_string_len":  (wasmtime.FuncType([i32], [i32]),      vx_attr_string_len),
+            "vx_attr_string_read": (wasmtime.FuncType([i32, i32, i32], [i32]), vx_attr_string_read),
 
             "vx_i2c_attach":       (wasmtime.FuncType([i32], [i32]),      vx_i2c_attach),
             "vx_uart_attach":      (wasmtime.FuncType([i32], [i32]),      vx_uart_attach),
@@ -568,6 +616,10 @@ class WasmChipRuntime:
 
             "vx_framebuffer_init": (wasmtime.FuncType([i32, i32], [i32]), vx_framebuffer_init),
             "vx_buffer_write":     (wasmtime.FuncType([i32, i32, i32, i32], []), vx_buffer_write),
+            "vx_buffer_read":      (wasmtime.FuncType([i32, i32, i32, i32], []), vx_buffer_read),
+
+            "vx_rom_size":         (wasmtime.FuncType([], [i32]),         vx_rom_size),
+            "vx_rom_read":         (wasmtime.FuncType([i32, i32, i32], []), vx_rom_read),
 
             "vx_log":              (wasmtime.FuncType([i32], []),         vx_log),
         }
@@ -601,6 +653,15 @@ class WasmChipRuntime:
         result = self._call_indirect(idx, self.i2c_callbacks["user_data"], *args)
         self._flush_stdout()
         return result
+
+    # ── Live attribute updates (sensor control panel sliders) ───────────────
+    def update_attrs(self, attrs: dict[str, float]) -> None:
+        """Apply live control values. vx_attr_read reads self._attrs on every
+        call, so the running chip sees the new values immediately — no reload.
+        Called from the worker's sensor_update command thread; a plain dict
+        update is atomic enough under the GIL for float slots."""
+        for name, value in attrs.items():
+            self._attrs[str(name)] = float(value)
 
     # ── Pin watch dispatch (worker calls this from _on_pin_change) ──────────
     def has_pin_watches(self) -> bool:

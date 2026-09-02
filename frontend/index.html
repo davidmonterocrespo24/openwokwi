@@ -254,12 +254,57 @@
     }
     </script>
   </head>
+  <script>
+    /* Theme bootstrap — runs before the first paint so a light-mode reader
+       never gets a black flash (and a dark-mode reader never gets a white
+       one). Deliberately duplicated from src/lib/theme.ts rather than
+       imported: by the time a module has loaded, the page has painted.
+
+       Contract (shared with /blog/ and /docs/, same origin, same jar):
+         localStorage['velxio-theme'] = 'dark' | 'light' | 'system'
+         unset  ->  dark, whatever the OS says. See src/lib/theme.ts. */
+    (function () {
+      try {
+        var read = function (k) {
+          try {
+            return localStorage.getItem(k);
+          } catch (e) {
+            return null;
+          }
+        };
+        var mode = read('velxio-theme');
+        if (mode !== 'dark' && mode !== 'light' && mode !== 'system') {
+          /* First visit to the app, but the reader may have already picked a
+             theme on the docs portal or the blog. */
+          var sl = read('starlight-theme');
+          var blog = read('theme');
+          if (sl === 'auto') mode = 'system';
+          else if (sl === 'dark' || sl === 'light') mode = sl;
+          else if (blog === 'dark' || blog === 'light') mode = blog;
+          else mode = 'dark';
+        }
+        var resolved = mode;
+        if (mode === 'system') {
+          resolved =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.style.colorScheme = resolved;
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute('content', resolved === 'light' ? '#f5f5f7' : '#0a0a0c');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <style>
     /* Hide SEO fallback content instantly — React removes it on mount.
        Crawlers ignore visibility:hidden and still index the text. */
     #root-seo { visibility: hidden; position: absolute; pointer-events: none; }
   </style>
-  <body style="margin:0;background:#1e1e1e;">
+  <body style="margin:0;background:var(--color-bg-canvas,#0a0a0c);">
     <!--
       Desktop-only splash. Sidecar boot + Monaco hydration take 3-8s
       on a cold launch; without this the user stares at a black window.

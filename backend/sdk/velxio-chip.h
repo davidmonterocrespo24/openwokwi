@@ -85,6 +85,16 @@ typedef int32_t vx_attr;
 extern vx_attr vx_attr_register(const char* name, double default_val);
 extern double  vx_attr_read(vx_attr a);
 
+/* String attributes — for text parameters (a device id, an SSID, a preset
+ * name). The value comes from chip.json / the diagram editor; the chip only
+ * reads it. Register from chip_setup(). */
+extern vx_attr  vx_attr_register_string(const char* name, const char* default_val);
+/** Byte length of the current value (excluding the NUL terminator). */
+extern uint32_t vx_attr_string_len(vx_attr a);
+/** Copy up to `cap` bytes (including a NUL when it fits) into `buf`.
+ *  Returns the number of bytes written, excluding the NUL. */
+extern uint32_t vx_attr_string_read(vx_attr a, char* buf, uint32_t cap);
+
 /* ─── I2C slave ─────────────────────────────────────────────────────────── */
 
 typedef int32_t vx_i2c;
@@ -189,6 +199,9 @@ extern vx_buffer vx_framebuffer_init(uint32_t* out_width, uint32_t* out_height);
 
 /** Write `data_len` bytes into the framebuffer at the given byte offset. */
 extern void vx_buffer_write(vx_buffer buf, uint32_t offset, const void* data, uint32_t data_len);
+
+/** Read `data_len` bytes from the framebuffer at the given byte offset. */
+extern void vx_buffer_read(vx_buffer buf, uint32_t offset, void* data, uint32_t data_len);
 
 /* ─── Logging ───────────────────────────────────────────────────────────── */
 

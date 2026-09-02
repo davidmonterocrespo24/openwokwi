@@ -10,6 +10,9 @@ import { ArduinoMega } from '../velxio-components/ArduinoMega';
 // boardKind by mistake — kept the import out so future contributors don't
 // re-wire it back in. If someone genuinely needs a Nano RP2040 Connect
 // board (D2..D13 labels), add a new boardKind 'arduino-nano-rp2040'.
+import { RaspberryPiZero } from '../velxio-components/RaspberryPiZero';
+import { RaspberryPi1 } from '../velxio-components/RaspberryPi1';
+import { RaspberryPi2 } from '../velxio-components/RaspberryPi2';
 import { RaspberryPi3 } from '../velxio-components/RaspberryPi3';
 import { RaspberryPi4 } from '../velxio-components/RaspberryPi4';
 import { RaspberryPi5 } from '../velxio-components/RaspberryPi5';
@@ -167,12 +170,18 @@ export const BoardOnCanvas = ({
       case 'raspberry-pi-pico':
       case 'pi-pico-w':
         return <PiPicoW id={id} x={x} y={y} />;
-      // Zero/1/2 share the Pi-3's 40-pin board art (their canvas identity is
-      // the header, and the ComponentRegistry metadata reuses the same tag);
-      // only the backend QEMU profile differs per kind.
+      // Each Pi draws as itself. Zero/1/2 used to borrow the Pi 3's picture
+      // "because the header is the canvas identity" — but the Zero is 65x30 mm
+      // against the Pi 3's 85x56, ships its header unpopulated and has neither
+      // Ethernet nor full-size USB, so that shortcut drew a board the student
+      // was not holding. 1B+ and 2B do share the Pi 3's outline; their silicon
+      // and silkscreen do not.
       case 'raspberry-pi-zero':
+        return <RaspberryPiZero id={id} x={x} y={y} />;
       case 'raspberry-pi-1':
+        return <RaspberryPi1 id={id} x={x} y={y} />;
       case 'raspberry-pi-2':
+        return <RaspberryPi2 id={id} x={x} y={y} />;
       case 'raspberry-pi-3':
         return <RaspberryPi3 id={id} x={x} y={y} />;
       case 'raspberry-pi-4':

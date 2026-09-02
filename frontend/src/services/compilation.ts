@@ -58,6 +58,34 @@ interface CompileStartResponse {
   job_id: string;
 }
 
+/**
+ * What the build is doing right now — finer than `state`, and the difference
+ * the compile overlay is built around: 'queued' means other builds are ahead
+ * of this one and nothing of ours is running yet, which is a completely
+ * different thing to tell a waiting user than "compiling".
+ */
+export type CompileStage =
+  | 'queued'
+  | 'preparing'
+  | 'compiling'
+  | 'linking'
+  | 'packaging'
+  | 'done';
+
+/**
+ * Coarse build-server pressure. Four buckets by design: the backend never
+ * sends a queue depth or a position, because "you are 14th in line" is worse
+ * than saying nothing and it publishes how busy the service is.
+ */
+export type ServerLoad = 'low' | 'moderate' | 'high' | 'peak';
+
+/**
+ * Display label for the requester's plan. 'local' = a self-hosted OSS build
+ * with no plan vocabulary at all (the UI shows neither a badge nor an
+ * upgrade line). Never used as an entitlement — it only picks wording.
+ */
+export type CompileTier = 'local' | 'anonymous' | 'free' | 'maker' | 'pro' | string;
+
 interface CompileStatusResponse {
   state: 'pending' | 'running' | 'done' | 'error';
   started_at: number;
@@ -65,6 +93,31 @@ interface CompileStatusResponse {
   stdout: string;
   result: CompileResult | null;
   error: string | null;
+  stage?: CompileStage;
+  progress?: number | null;
+  estimated_seconds?: number | null;
+  build_seconds?: number;
+  server_load?: ServerLoad;
+  tier?: CompileTier;
+  priority?: boolean;
+}
+
+export interface CompileProgressInfo {
+  state: 'pending' | 'running' | 'done';
+  stdout: string;
+  elapsedSeconds: number;
+  /** Where the job is: queued behind other builds, or actually building. */
+  stage: CompileStage;
+  /** 0..1, or null when there is nothing honest to draw (a queued job). */
+  progress: number | null;
+  /** What the estimate is based on, in seconds. Null while queued. */
+  estimatedSeconds: number | null;
+  /** Seconds spent BUILDING (excludes queue time), so the timer matches the bar. */
+  buildSeconds: number;
+  serverLoad: ServerLoad;
+  tier: CompileTier;
+  /** This build was admitted ahead of standard ones (paid plan). */
+  priority: boolean;
 }
 
 /**
@@ -76,16 +129,44 @@ interface CompileStatusResponse {
  * tail kept). Caller can compute a delta against the previous call if it
  * wants to append-only render.
  */
-export type CompileProgress = (info: {
-  state: 'pending' | 'running' | 'done';
-  stdout: string;
-  elapsedSeconds: number;
-}) => void;
+export type CompileProgress = (info: CompileProgressInfo) => void;
 
+// Queued jobs poll slower: while we're waiting for a slot there is nothing
+// new to show, and a deep queue means many clients polling at once — exactly
+// when the server can least afford the extra requests.
 const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_DURATION_MS = 15 * 60 * 1000; // 15 minutes — covers cold ESP-IDF builds
+const QUEUED_POLL_INTERVAL_MS = 3000;
+
+// Two budgets, and NEITHER of them charges queue time. A build that has STARTED
+// gets 15 minutes (covers a cold ESP-IDF build); the wider cap exists only so a
+// wedged server can't leave a tab polling forever.
+//
+// Time spent queued is subtracted from both. The product promise is that a
+// queued build always eventually runs — a client-side timeout would quietly
+// break it on exactly the busy days it matters, and the card would say "Build
+// failed" for a build the server is still perfectly willing to run, directly
+// contradicting its own "never cancelled" copy.
+const MAX_BUILD_DURATION_MS = 15 * 60 * 1000;
+const MAX_TOTAL_DURATION_MS = 60 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Fill in the queue fields for a backend that predates them (self-hosted OSS
+ *  running an older image behind a newer frontend). */
+function readQueueInfo(status: CompileStatusResponse): Omit<
+  CompileProgressInfo,
+  'state' | 'stdout' | 'elapsedSeconds'
+> {
+  return {
+    stage: status.stage ?? (status.state === 'pending' ? 'queued' : 'compiling'),
+    progress: status.progress ?? null,
+    estimatedSeconds: status.estimated_seconds ?? null,
+    buildSeconds: status.build_seconds ?? 0,
+    serverLoad: status.server_load ?? 'low',
+    tier: status.tier ?? 'local',
+    priority: status.priority ?? false,
+  };
+}
 
 /**
  * Compile a sketch via the async job pipeline.
@@ -131,6 +212,13 @@ export async function compileCode(
     : null;
   // P2.3 — library manifest (resolution scope). null = legacy scan-all.
   const libraries = extras?.libraries && extras.libraries.length ? extras.libraries : null;
+  // Custom WiFi access points (overlay feature): when the project carries its
+  // own AP parts, their SSIDs ride along and the backend's SSID rewriter
+  // stands down — the sketch connects to the network the user actually wrote.
+  // OSS builds have no provider installed → null → legacy rewrite.
+  const customWifiSsids =
+    (window as { __velxio_custom_wifi_ssids__?: () => string[] | null })
+      .__velxio_custom_wifi_ssids__?.() ?? null;
 
   let jobId: string;
   try {
@@ -147,6 +235,7 @@ export async function compileCode(
         libraries,
         language: extras?.language ?? null,
         initiated_by: extras?.initiatedBy ?? null,
+        custom_wifi_ssids: customWifiSsids,
       },
       { withCredentials: true, timeout: 30000 },
     );
@@ -165,14 +254,29 @@ export async function compileCode(
   }
 
   const startedAt = Date.now();
+  // When the build itself started (first poll that is no longer queued). Queue
+  // time is deliberately excluded from the build budget below.
+  let buildStartedAt: number | null = null;
+  // Total milliseconds observed in the `queued` stage, subtracted from both
+  // budgets so waiting for a slot can never time a build out.
+  let queuedMs = 0;
+  let lastPollAt = Date.now();
   // Initial small delay so we don't hit /status before the background task
   // has even moved past 'pending'.
   await sleep(500);
 
   while (true) {
-    if (Date.now() - startedAt > MAX_POLL_DURATION_MS) {
+    if (Date.now() - startedAt - queuedMs > MAX_TOTAL_DURATION_MS) {
       throw new Error(
-        `Compile timed out client-side after ${Math.round(MAX_POLL_DURATION_MS / 1000)}s`,
+        `Compile timed out client-side after ${Math.round(MAX_TOTAL_DURATION_MS / 1000)}s`,
+      );
+    }
+    if (
+      buildStartedAt !== null &&
+      Date.now() - buildStartedAt - queuedMs > MAX_BUILD_DURATION_MS
+    ) {
+      throw new Error(
+        `Build timed out client-side after ${Math.round(MAX_BUILD_DURATION_MS / 1000)}s`,
       );
     }
 
@@ -201,7 +305,14 @@ export async function compileCode(
       // completion (esptool + binary-size lines usually live there).
       if (onProgress) {
         try {
-          onProgress({ state: 'done', stdout: status.stdout || '', elapsedSeconds: elapsed });
+          onProgress({
+            ...readQueueInfo(status),
+            state: 'done',
+            stage: 'done',
+            progress: 1,
+            stdout: status.stdout || '',
+            elapsedSeconds: elapsed,
+          });
         } catch (err) {
           console.warn('[compile] onProgress threw:', err);
         }
@@ -220,9 +331,22 @@ export async function compileCode(
     }
 
     // state ∈ {pending, running} — surface live build output if requested
+    const queueInfo = readQueueInfo(status);
+    const nowMs = Date.now();
+    if (queueInfo.stage === 'queued') {
+      // Credit the interval since the previous poll back: a job can also drop
+      // BACK into the queue (the per-target lock re-gates a build behind
+      // another compile of the same target), so this accumulates rather than
+      // measuring one contiguous stretch.
+      queuedMs += nowMs - lastPollAt;
+    } else if (buildStartedAt === null) {
+      buildStartedAt = nowMs;
+    }
+    lastPollAt = nowMs;
     if (onProgress) {
       try {
         onProgress({
+          ...queueInfo,
           state: status.state,
           stdout: status.stdout || '',
           elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
@@ -233,6 +357,6 @@ export async function compileCode(
       }
     }
 
-    await sleep(POLL_INTERVAL_MS);
+    await sleep(queueInfo.stage === 'queued' ? QUEUED_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
   }
 }

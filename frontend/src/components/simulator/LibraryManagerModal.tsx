@@ -412,8 +412,8 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                 style={{
                   marginLeft: 8,
                   fontSize: 11,
-                  color: '#a5d6a7',
-                  background: '#1b3a1e',
+                  color: 'var(--color-feedback-success)',
+                  background: 'var(--color-feedback-success-soft)',
                   border: '1px solid #2e7d32',
                   borderRadius: 10,
                   padding: '1px 8px',
@@ -487,8 +487,8 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                           <span
                             style={{
                               fontSize: 10,
-                              color: '#8ecae6',
-                              background: '#12303f',
+                              color: 'var(--color-accent-fg)',
+                              background: 'var(--color-accent-soft)',
                               borderRadius: 6,
                               padding: '0 6px',
                             }}
@@ -508,7 +508,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                       ) : row.inProject ? (
                         <span
                           className="lib-uninstall-btn"
-                          style={{ color: '#a5d6a7', borderColor: '#2e7d32', cursor: 'default' }}
+                          style={{ color: 'var(--color-feedback-success)', borderColor: '#2e7d32', cursor: 'default' }}
                           title="Its .py file is in the workspace — edit or delete it from the file explorer"
                         >
                           In project ✓
@@ -566,7 +566,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                           style={{
                             fontSize: 10,
                             color: '#ffd60a',
-                            background: '#3a330f',
+                            background: 'var(--color-feedback-warning-soft)',
                             borderRadius: 6,
                             padding: '0 6px',
                           }}
@@ -600,7 +600,7 @@ export const LibraryManagerModal: React.FC<LibraryManagerModalProps> = ({ isOpen
                     {inProj ? (
                       <button
                         className="lib-uninstall-btn"
-                        style={{ color: '#a5d6a7', borderColor: '#2e7d32' }}
+                        style={{ color: 'var(--color-feedback-success)', borderColor: '#2e7d32' }}
                         onClick={() => removeFromManifest(row.name)}
                         title="Remove from this board (libraries.json)"
                       >

@@ -105,6 +105,8 @@ interface PinEntry {
 interface AttrEntry {
   name: string;
   default: number;
+  /** Present on string attributes (vx_attr_register_string). */
+  stringDefault?: string;
 }
 
 interface TimerEntry {
@@ -132,6 +134,8 @@ export interface ChipInstanceOptions {
   wires?: Map<string, number>;
   /** User-editable attributes — keyed by name. */
   attrs?: Map<string, number>;
+  /** String attribute values (vx_attr_register_string), from chip.json. */
+  strAttrs?: Map<string, string>;
   /** Returns simulation time in nanos (used by vx_sim_now_nanos). */
   simNanos?: SimNanosFn;
   /** Callback for chip log/printf output (defaults to console.log). */
@@ -160,6 +164,7 @@ export class ChipInstance {
   private spiBus: SPIBus | null;
   private wires: Map<string, number>;
   private attrs: Map<string, number>;
+  private strAttrs: Map<string, string>;
   private display: { width: number; height: number } | null;
   private componentId: string;
 
@@ -182,6 +187,17 @@ export class ChipInstance {
   private _framebuffer: { rgba: Uint8Array; width: number; height: number } | null = null;
   private _onFramebufferUpdate: ((rgba: Uint8Array, w: number, h: number) => void) | null = null;
 
+  /** Host hook: the chip drove an analog voltage on a pin (vx_pin_dac_write).
+   *  CustomChipPart forwards it into the wired board's ADC channel. */
+  private _onDacWrite: ((pinName: string, voltage: number) => void) | null = null;
+
+  /** Host hook: the chip drove a DIGITAL level on a pin wired to a real
+   *  board pin. triggerPinChange only notifies canvas parts — the board's
+   *  own digitalRead never saw chip outputs (live NOT-gate audit: OUT wired
+   *  to D3 read 0 forever). CustomChipPart forwards this into the
+   *  simulator's pin-injection API. */
+  private _onDigitalWrite: ((pinName: string, value: boolean) => void) | null = null;
+
   /** I2C device wrapper currently registered on the bus (for disposal). */
   private _i2cDevice: { address: number } | null = null;
 
@@ -201,6 +217,7 @@ export class ChipInstance {
     this.spiBus = opts.spiBus ?? null;
     this.wires = opts.wires ?? new Map();
     this.attrs = opts.attrs ?? new Map();
+    this.strAttrs = opts.strAttrs ?? new Map();
     this.display = opts.display ?? null;
     this._romBytes = opts.romBytes ?? new Uint8Array(0);
     this.componentId = opts.componentId ?? '';
@@ -338,6 +355,11 @@ export class ChipInstance {
 
       vx_attr_register: (namePtr: number, defaultVal: number) => this._attr_register(namePtr, defaultVal),
       vx_attr_read:     (handle: number) => this._attr_read(handle),
+      vx_attr_register_string: (namePtr: number, defaultPtr: number) =>
+        this._attr_register_string(namePtr, defaultPtr),
+      vx_attr_string_len:  (handle: number) => this._attr_string_value(handle).length,
+      vx_attr_string_read: (handle: number, bufPtr: number, cap: number) =>
+        this._attr_string_read(handle, bufPtr, cap),
 
       vx_i2c_attach: (cfgPtr: number) => this._i2c_attach(cfgPtr),
 
@@ -360,6 +382,8 @@ export class ChipInstance {
         this._framebuffer_init(widthPtr, heightPtr),
       vx_buffer_write: (handle: number, offset: number, dataPtr: number, dataLen: number) =>
         this._buffer_write(handle, offset, dataPtr, dataLen),
+      vx_buffer_read: (handle: number, offset: number, dataPtr: number, dataLen: number) =>
+        this._buffer_read(handle, offset, dataPtr, dataLen),
 
       vx_rom_size: () => this._romBytes.length,
       vx_rom_read: (offset: number, dstPtr: number, len: number) =>
@@ -437,8 +461,14 @@ export class ChipInstance {
     if (this._isBusPin(p)) {
       this._busDrive(p);
     } else if (arduinoPin != null) {
-      if (mode === ChipInstance.MODE_OUTPUT_LOW)  this.pinManager.triggerPinChange(arduinoPin, false);
-      if (mode === ChipInstance.MODE_OUTPUT_HIGH) this.pinManager.triggerPinChange(arduinoPin, true);
+      if (mode === ChipInstance.MODE_OUTPUT_LOW) {
+        this.pinManager.triggerPinChange(arduinoPin, false);
+        if (!isSyntheticChipPin(arduinoPin)) this._onDigitalWrite?.(name, false);
+      }
+      if (mode === ChipInstance.MODE_OUTPUT_HIGH) {
+        this.pinManager.triggerPinChange(arduinoPin, true);
+        if (!isSyntheticChipPin(arduinoPin)) this._onDigitalWrite?.(name, true);
+      }
     }
     this._syncSpiceDrive(p);
     return handle;
@@ -458,6 +488,9 @@ export class ChipInstance {
       this._busDrive(p);
     } else {
       this.pinManager.triggerPinChange(p.arduinoPin, value !== 0);
+      // A chip output wired to a REAL board pin must reach the board's own
+      // digitalRead too — the host forwards into the simulator.
+      if (!isSyntheticChipPin(p.arduinoPin)) this._onDigitalWrite?.(p.name, value !== 0);
     }
     this._syncSpiceDrive(p);
   }
@@ -472,6 +505,30 @@ export class ChipInstance {
     const p = this.pins[handle];
     if (!p || p.arduinoPin == null) return;
     this.pinManager.setAnalogVoltage(p.arduinoPin, voltage);
+    // Electrical mode: the DAC level drives the pin's net at its REAL voltage
+    // (the digital _syncSpiceDrive path only knows rail-or-ground).
+    if (this.componentId && p.name && isSyntheticChipPin(p.arduinoPin) && !this._isBusPin(p)) {
+      if (setChipPinDrive(this.componentId, p.name, voltage)) requestElectricalResolve();
+    }
+    // Board ADC path: nothing subscribes to PinManager's analog listeners in
+    // production, so the part host forwards this into setAdcVoltage.
+    this._onDacWrite?.(p.name, voltage);
+  }
+
+  /** Register the host-side DAC forwarding hook. */
+  onDacWrite(cb: (pinName: string, voltage: number) => void): void {
+    this._onDacWrite = cb;
+  }
+
+  /** Register the host-side digital-output forwarding hook. */
+  onDigitalWrite(cb: (pinName: string, value: boolean) => void): void {
+    this._onDigitalWrite = cb;
+  }
+
+  /** Live attribute update (sensor control panel). vx_attr_read re-reads the
+   *  map on every call, so the running WASM sees the new value immediately. */
+  setAttr(name: string, value: number): void {
+    this.attrs.set(name, value);
   }
 
   private _pin_set_mode(handle: number, mode: number): void {
@@ -536,6 +593,33 @@ export class ChipInstance {
     const a = this.attrHandles[handle];
     if (!a) return 0;
     return this.attrs.get(a.name) ?? a.default;
+  }
+
+  /** String attributes: values come from chip.json / the diagram editor
+   *  (strAttrs option); the chip only reads them. Handles share the numeric
+   *  attr handle space (they are distinct vx_attr ints on the chip side). */
+  private _attr_register_string(namePtr: number, defaultPtr: number): number {
+    const name = readCString(this.memory!, namePtr);
+    const dflt = readCString(this.memory!, defaultPtr);
+    const handle = this.attrHandles.length;
+    this.attrHandles.push({ name, default: 0, stringDefault: dflt });
+    return handle;
+  }
+
+  private _attr_string_value(handle: number): string {
+    const a = this.attrHandles[handle];
+    if (!a || a.stringDefault === undefined) return '';
+    return this.strAttrs.get(a.name) ?? a.stringDefault;
+  }
+
+  private _attr_string_read(handle: number, bufPtr: number, cap: number): number {
+    if (!this.memory || cap <= 0) return 0;
+    const bytes = new TextEncoder().encode(this._attr_string_value(handle));
+    const n = Math.min(bytes.length, cap - 1 >= 0 ? cap - 1 : 0);
+    const dst = new Uint8Array(this.memory.buffer, bufPtr, cap);
+    dst.set(bytes.subarray(0, n));
+    if (n < cap) dst[n] = 0;
+    return n;
   }
 
   // ── I2C ──────────────────────────────────────────────────────────────────
@@ -629,6 +713,21 @@ export class ChipInstance {
     this._uartTxListener = cb;
   }
 
+  /**
+   * Where a declared UART's TX physically goes: the board pin its TX chip-pin
+   * is wired to (null when unwired/synthetic) and the configured baud. Lets
+   * the part route TX to the hardware USART vs a bit-banged GPIO.
+   */
+  getUartTxRoute(handle = 0): { txArduinoPin: number | null; baud: number } | null {
+    const u = this.uarts[handle];
+    if (!u) return null;
+    const pin = this.pins[u.tx];
+    return {
+      txArduinoPin: pin?.arduinoPin ?? null,
+      baud: u.baud_rate > 0 ? u.baud_rate : 9600,
+    };
+  }
+
   /** True if the chip declared at least one UART (post-chip_setup). */
   get hasUart(): boolean {
     return this.uarts.length > 0;
@@ -688,6 +787,16 @@ export class ChipInstance {
       dv.setUint32(heightPtr, h, true);
     }
     return 0;
+  }
+
+  private _buffer_read(_handle: number, offset: number, dataPtr: number, dataLen: number): void {
+    if (!this._framebuffer || !this.memory) return;
+    const src = this._framebuffer.rgba;
+    const end = Math.min(offset + dataLen, src.length);
+    const copyLen = Math.max(0, end - offset);
+    if (copyLen <= 0) return;
+    const dst = new Uint8Array(this.memory.buffer, dataPtr, copyLen);
+    dst.set(src.subarray(offset, end));
   }
 
   private _buffer_write(_handle: number, offset: number, dataPtr: number, dataLen: number): void {

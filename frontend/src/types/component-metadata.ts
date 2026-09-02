@@ -13,6 +13,7 @@ export type ComponentCategory =
   | 'output'
   | 'motors'
   | 'communication'
+  | 'connectivity'
   | 'passive'
   | 'logic'
   | 'analog'
@@ -57,6 +58,10 @@ export interface ComponentMetadata {
   // `properties.sdFiles` when it builds the card image. Without this flag a
   // built-in slot exists electrically but there is no way to put files on it.
   sdSlot?: boolean;
+  // A component saved by THIS user (a saved custom chip from their My Chips
+  // library, merged into the registry by the overlay). Renders a CUSTOM pill
+  // on the picker card / hover panel / part inspector. Never set by OSS.
+  custom?: boolean;
 }
 
 export interface ComponentMetadataCollection {

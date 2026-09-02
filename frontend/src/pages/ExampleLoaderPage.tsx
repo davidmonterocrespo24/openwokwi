@@ -51,7 +51,7 @@ export const ExampleLoaderPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
-          background: '#1e1e1e',
+          background: 'var(--wb-2)',
         }}
       >
         <AppHeader />
@@ -65,8 +65,8 @@ export const ExampleLoaderPage: React.FC = () => {
             gap: 16,
           }}
         >
-          <div style={{ fontSize: 48, color: '#555' }}>404</div>
-          <div style={{ fontSize: 16, color: '#999' }}>{t('examples.notFound', { id: exampleId })}</div>
+          <div style={{ fontSize: 48, color: 'var(--wb-8)' }}>404</div>
+          <div style={{ fontSize: 16, color: 'var(--wb-11)' }}>{t('examples.notFound', { id: exampleId })}</div>
           <Link
             to={localize('/examples')}
             style={{
@@ -91,22 +91,22 @@ export const ExampleLoaderPage: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        background: '#1e1e1e',
+        background: 'var(--wb-2)',
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 16, color: '#ccc', marginBottom: 12 }}>{t('examples.loadingExample')}</div>
+        <div style={{ fontSize: 16, color: 'var(--wb-12)', marginBottom: 12 }}>{t('examples.loadingExample')}</div>
         {installing && (
           <div style={{ maxWidth: 300, margin: '0 auto' }}>
-            <div style={{ fontSize: 13, color: '#999', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--wb-11)', marginBottom: 8 }}>
               {t('examples.installing', { done: installing.done + 1, total: installing.total })}
             </div>
             <div style={{ fontSize: 14, color: '#00e5ff', fontWeight: 600, marginBottom: 12 }}>
               {installing.current}
             </div>
-            <div style={{ height: 4, borderRadius: 2, background: '#333', overflow: 'hidden' }}>
+            <div style={{ height: 4, borderRadius: 2, background: 'var(--wb-6)', overflow: 'hidden' }}>
               <div
                 style={{
                   height: '100%',

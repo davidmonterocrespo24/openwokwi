@@ -22,6 +22,7 @@ export type EditorCommandId =
   | 'project.open'
   | 'project.import'
   | 'project.export'
+  | 'project.exportVlx'
   | 'project.exportBom'
   | 'project.exportScreenshot'
   | 'file.new'
@@ -37,6 +38,11 @@ export type EditorCommandId =
   | 'help.whatsNew'
   | 'project.share'
   | 'project.githubSync'
+  // Connect an external AI agent (Claude Code / Codex) to the saved
+  // project over MCP. Registered ONLY by the pro overlay (the OSS build
+  // has no accounts, tokens or MCP endpoint), so the menu row hides
+  // itself here — same pattern as the account.* commands.
+  | 'project.connectAgent'
   | 'firmware.upload'
   | 'sim.record'
   | 'sim.compile'

@@ -101,11 +101,11 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 1280,
     margin: '40px auto 60px',
     padding: '0 24px',
-    color: '#ddd',
+    color: 'var(--wb-12)',
   },
   header: { marginBottom: 24 },
-  title: { fontSize: 24, fontWeight: 600, color: '#fff', margin: 0 },
-  sub: { color: '#aaa', fontSize: 14, margin: '6px 0 0 0', maxWidth: 640 },
+  title: { fontSize: 24, fontWeight: 600, color: 'var(--wb-13)', margin: 0 },
+  sub: { color: 'var(--wb-11)', fontSize: 14, margin: '6px 0 0 0', maxWidth: 640 },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -113,8 +113,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   card: {
     display: 'block',
-    background: '#1e1e1e',
-    border: '1px solid #2a2a2a',
+    background: 'var(--wb-2)',
+    border: '1px solid var(--wb-4)',
     borderRadius: 8,
     padding: '14px 16px',
     textDecoration: 'none',
@@ -124,14 +124,14 @@ const styles: Record<string, React.CSSProperties> = {
   cardName: {
     fontSize: 15,
     fontWeight: 600,
-    color: '#fff',
+    color: 'var(--wb-13)',
     marginBottom: 6,
   },
   cardMeta: {
     display: 'flex',
     gap: 6,
     alignItems: 'center',
-    color: '#888',
+    color: 'var(--wb-10)',
     fontSize: 12,
   },
   cardOwner: {
@@ -140,7 +140,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 6,
   },
   cardDesc: {
-    color: '#aaa',
+    color: 'var(--wb-11)',
     fontSize: 13,
     marginTop: 8,
     lineHeight: 1.45,

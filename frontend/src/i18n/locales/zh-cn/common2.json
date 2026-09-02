@@ -33,13 +33,16 @@
       "exportBom": "导出物料清单 (CSV — Pro)",
       "exportScreenshot": "导出原理图为图片 (PNG — Pro)",
       "importLabel": "导入项目",
+      "exportVlxLabel": "导出项目 (.vlx)",
       "exportLabel": "导出项目 (.zip)",
       "exportBomLabel": "物料清单 (CSV)",
       "exportScreenshotLabel": "原理图图片 (PNG)",
       "shareLabel": "分享 / 嵌入",
       "githubSyncLabel": "同步到 GitHub",
       "uploadFirmwareLabel": "上传固件",
-      "recordLabel": "录制仿真"
+      "recordLabel": "录制仿真",
+      "themeToLight": "Switch to light theme",
+      "themeToDark": "Switch to dark theme"
     },
     "fileExplorer": {
       "workspace": "工作区",
@@ -176,7 +179,8 @@
         "mpyUnavailable": "MicroPython 项目不能从这里烧录：仅支持 Arduino 程序",
         "ready": "把编译好的程序烧录到 USB 连接的实体板",
         "willCompile": "编译程序并烧录到 USB 连接的实体板"
-      }
+      },
+      "wifiPanel": "WiFi 面板"
     },
     "componentPicker": {
       "title": "添加元件",
@@ -397,13 +401,18 @@
       "compile": "编译",
       "run": "运行",
       "hideExplorer": "隐藏文件资源管理器",
-      "showExplorer": "显示文件资源管理器"
+      "showExplorer": "显示文件资源管理器",
+      "appearance": "Appearance",
+      "themeDark": "Dark",
+      "themeLight": "Light",
+      "themeSystem": "Match system"
     },
     "inspector": {
       "propertiesTab": "属性",
       "datasheetTab": "数据手册",
       "examplesTitle": "示例项目",
-      "productPage": "产品页面"
+      "productPage": "产品页面",
+      "datasheetPage": "Specifications"
     },
     "flash": {
       "title": "烧录 {{board}}",

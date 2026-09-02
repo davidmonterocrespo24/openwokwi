@@ -144,5 +144,120 @@ class TestMergedLibraryReport(unittest.TestCase):
         self.assertEqual(hdr2comp.get("A.h"), "user_libs_all")
 
 
+class TestProjectSuppliedHeaders(unittest.TestCase):
+    """A config header the PROJECT owns must never drag in a library.
+
+    The live failure (2026-08-28, an LVGL clock on a XIAO ESP32-S3): the
+    sketch included only <lvgl.h>, but LVGL's sources carry
+    `#include "lv_conf.h"` behind `#if !LV_CONF_SKIP`. The include scan is
+    textual, so lv_conf.h got queued even though the build defined
+    LV_CONF_SKIP=1, resolved to Adafruit LvGL Glue (which vendors its own
+    copy for LVGL v7), and merged that whole library. Its sources then failed
+    against LVGL v8 and the build died naming a library the user never asked
+    for.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.libs = self.tmp / "libraries"
+        self.out = self.tmp / "project" / "user_libs"
+        self.out.mkdir(parents=True)
+        self.c = ESPIDFCompiler()
+        self.c.arduino_path = ""
+        self.c._core_headers_cache = None
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _resolve(self, headers, merged):
+        return self.c._resolve_library_components(
+            headers, arduino_libs=self.libs, esp32_libs=None,
+            arduino_comp_name="arduino-esp32", user_libs_dir=self.out,
+            merged_libs=merged,
+        )
+
+    def _make_lvgl_world(self) -> None:
+        # LVGL itself: lvgl.h pulls lv_conf.h the way the real sources do.
+        _mk(self.libs / "lvgl@8.3.11-0d103ab1" / "src" / "lvgl.h",
+            '#include "lv_conf.h"\n')
+        _mk(self.libs / "lvgl@8.3.11-0d103ab1" / "library.properties",
+            "name=lvgl\narchitectures=*\n")
+        # The unrelated library that happens to vendor an lv_conf.h.
+        _mk(self.libs / "adafruitlittlevglgluelibrary@2.1.7-896f753c" / "src" / "lv_conf.h")
+        _mk(self.libs / "adafruitlittlevglgluelibrary@2.1.7-896f753c" / "src"
+            / "Adafruit_LvGL_Glue.h")
+        _mk(self.libs / "adafruitlittlevglgluelibrary@2.1.7-896f753c" / "library.properties",
+            "name=Adafruit LvGL Glue Library\narchitectures=*\n")
+
+    def test_lv_conf_does_not_drag_in_the_glue_library(self):
+        self._make_lvgl_world()
+        merged: dict[str, str] = {}
+        self._resolve(["lvgl.h"], merged)
+        self.assertEqual(merged.get("lvgl.h"), "lvgl")
+        self.assertNotIn("lv_conf.h", merged)
+        self.assertNotIn(
+            "Adafruit LvGL Glue Library", merged.values(),
+            "a sketch that only includes <lvgl.h> must not merge the glue library",
+        )
+
+    def test_the_guard_is_generic_not_an_lvgl_special_case(self):
+        """Every config-header shape, not a hardcoded list of two names.
+
+        One live compile resolved six of these against the shared library dir
+        in a single build, so the rule has to be about the shape of the name.
+        """
+        for cfg in (
+            "lv_conf.h", "lv_conf_kconfig.h", "lv_rt_thread_conf.h",
+            "User_Config.h", "sdkconfig.h", "zconf.h", "User_Setup.h",
+        ):
+            with self.subTest(header=cfg):
+                shutil.rmtree(self.libs, ignore_errors=True)
+                _mk(self.libs / "toplib" / "src" / "Top.h", f'#include "{cfg}"\n')
+                _mk(self.libs / "toplib" / "library.properties", "name=TopLib\n")
+                # An unrelated library that happens to vendor that config header.
+                _mk(self.libs / "zzz-stray" / "src" / cfg)
+                _mk(self.libs / "zzz-stray" / "library.properties", "name=Stray\n")
+                merged: dict[str, str] = {}
+                self._resolve(["Top.h"], merged)
+                self.assertEqual(merged.get("Top.h"), "TopLib")
+                self.assertNotIn(
+                    "Stray", merged.values(),
+                    f"<{cfg}> must not drag in an unrelated library",
+                )
+
+    def test_a_direct_sketch_include_is_still_resolved(self):
+        """The guard is for transitive pulls only.
+
+        A sketch that includes a config header itself is stating intent, and
+        that path keeps working exactly as before.
+        """
+        _mk(self.libs / "somelib" / "src" / "my_config.h")
+        _mk(self.libs / "somelib" / "library.properties", "name=SomeLib\n")
+        merged: dict[str, str] = {}
+        self._resolve(["my_config.h"], merged)
+        self.assertEqual(merged.get("my_config.h"), "SomeLib")
+
+    def test_ordinary_transitive_dependencies_still_merge(self):
+        """The guard must not touch normal library-to-library deps."""
+        _mk(self.libs / "adafruitgfx" / "src" / "Adafruit_GFX.h",
+            '#include <Adafruit_I2CDevice.h>\n')
+        _mk(self.libs / "adafruitgfx" / "library.properties", "name=Adafruit GFX Library\n")
+        _mk(self.libs / "adafruitbusio" / "src" / "Adafruit_I2CDevice.h")
+        _mk(self.libs / "adafruitbusio" / "library.properties", "name=Adafruit BusIO\n")
+        merged: dict[str, str] = {}
+        self._resolve(["Adafruit_GFX.h"], merged)
+        self.assertEqual(merged.get("Adafruit_I2CDevice.h"), "Adafruit BusIO")
+
+    def test_a_library_that_owns_lv_conf_is_still_reachable_by_its_own_header(self):
+        # The guard is scoped to the config header, not to the library: a
+        # project that really wants the glue can still include its header.
+        self._make_lvgl_world()
+        merged: dict[str, str] = {}
+        self._resolve(["Adafruit_LvGL_Glue.h"], merged)
+        self.assertEqual(
+            merged.get("Adafruit_LvGL_Glue.h"), "Adafruit LvGL Glue Library"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

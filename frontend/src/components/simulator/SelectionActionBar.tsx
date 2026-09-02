@@ -187,14 +187,14 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
         display: 'flex',
         alignItems: 'center',
         gap: 6,
-        background: '#252526',
-        border: '1px solid #3c3c3c',
+        background: 'var(--wb-3)',
+        border: '1px solid var(--wb-7)',
         borderRadius: 8,
         padding: '6px 8px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
         zIndex: 50,
         fontSize: 13,
-        color: '#e0e0e0',
+        color: 'var(--wb-13)',
         pointerEvents: 'auto',
         touchAction: 'none',
       }}
@@ -202,7 +202,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
       <span
         style={{
           padding: '0 8px 0 4px',
-          color: '#bbb',
+          color: 'var(--wb-12)',
           maxWidth: 180,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -245,8 +245,8 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
                 flexWrap: 'wrap',
                 gap: 8,
                 padding: '10px',
-                background: '#252526',
-                border: '1px solid #3c3c3c',
+                background: 'var(--wb-3)',
+                border: '1px solid var(--wb-7)',
                 borderRadius: 8,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
                 justifyContent: 'center',
@@ -290,7 +290,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
         type="button"
         ref={deleteRef}
         onClick={onDelete}
-        style={{ ...buttonStyle, color: '#e06c75' }}
+        style={{ ...buttonStyle, color: 'var(--color-feedback-error)' }}
         title={t(`editor.selectionBar.deleteKind.${kind}`)}
         aria-label={t(`editor.selectionBar.deleteKind.${kind}`)}
       >
@@ -332,7 +332,7 @@ const ColorButton: React.FC<{
         height: 22,
         borderRadius: '50%',
         backgroundColor: color,
-        border: isSelected ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+        border: isSelected ? '2px solid var(--wb-13)' : '1px solid rgba(255,255,255,0.2)',
         cursor: 'pointer',
         padding: 0,
         flexShrink: 0,

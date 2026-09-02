@@ -128,7 +128,7 @@ export const ExampleEditorPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
-          background: '#1e1e1e',
+          background: 'var(--wb-2)',
         }}
       >
         <AppHeader />
@@ -142,8 +142,8 @@ export const ExampleEditorPage: React.FC = () => {
             gap: 16,
           }}
         >
-          <div style={{ fontSize: 48, color: '#555' }}>404</div>
-          <div style={{ fontSize: 16, color: '#999' }}>
+          <div style={{ fontSize: 48, color: 'var(--wb-8)' }}>404</div>
+          <div style={{ fontSize: 16, color: 'var(--wb-11)' }}>
             Example &quot;{exampleId}&quot; not found.
           </div>
           <a
@@ -169,16 +169,16 @@ export const ExampleEditorPage: React.FC = () => {
       <div
         style={{
           minHeight: '100vh',
-          background: '#1e1e1e',
+          background: 'var(--wb-2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <div style={{ textAlign: 'center', color: '#ccc' }}>
+        <div style={{ textAlign: 'center', color: 'var(--wb-12)' }}>
           <div style={{ fontSize: 15 }}>Loading example…</div>
           {installing && (
-            <div style={{ marginTop: 10, fontSize: 13, color: '#9d9d9d' }}>
+            <div style={{ marginTop: 10, fontSize: 13, color: 'var(--wb-11)' }}>
               Installing {installing.current} ({installing.done + 1}/{installing.total})
             </div>
           )}

@@ -9,8 +9,14 @@
  * current has AC content (detected via `.tran` `timeWaveforms`).
  */
 import { useMemo } from 'react';
+import { InstrumentFace, INSTRUMENT_WIDTH } from './InstrumentFace';
+import { InstrumentScreen } from './InstrumentScreen';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { readAmmeter } from '../../simulation/spice/probes';
+
+/** Instrument tint. Amber for volts, cyan for amps: the same pairing the
+ *  canvas legend and the picker thumbnails use. */
+const ACCENT = '#4dd0e1';
 
 interface AmmeterProps {
   id: string;
@@ -40,50 +46,26 @@ export function Ammeter({ id }: AmmeterProps) {
     );
   }, [branchCurrents, converged, error, id, timeWaveforms]);
 
-  const color = reading.stale ? '#666' : '#4dd0e1';
   const height = reading.ac ? 78 : 60;
 
   return (
     <div
       data-component-id={id}
       data-metadata-id="instr-ammeter"
-      style={{
-        width: 110,
-        height,
-        background: '#1f1f1f',
-        border: '2px solid #4dd0e1',
-        borderRadius: 6,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color,
-        fontFamily: 'monospace',
-        fontSize: 13,
-        padding: '2px 4px',
-        boxSizing: 'border-box',
-      }}
+      style={{ width: INSTRUMENT_WIDTH, height, lineHeight: 0 }}
     >
-      <div style={{ fontSize: 9, letterSpacing: 1, opacity: 0.8 }}>
-        A METER {reading.ac ? '~AC' : 'DC'}
-      </div>
-      <div style={{ fontSize: reading.ac ? 13 : 15, fontWeight: 'bold', lineHeight: 1.15 }}>
-        {reading.display}
-      </div>
-      {reading.ac && (
-        <div
-          style={{
-            fontSize: 9,
-            opacity: 0.85,
-            display: 'flex',
-            gap: 6,
-            lineHeight: 1.1,
-          }}
-        >
-          <span>{reading.ac.peakDisplay}</span>
-          <span>{reading.ac.dcDisplay}</span>
-        </div>
-      )}
+      <InstrumentFace
+        height={height}
+        accent={ACCENT}
+        legend={reading.ac ? 'AC A' : 'DC A'}
+        stale={reading.stale}
+        terminals={[
+          { label: '+', y: 30, side: 'left', polarity: 'plus' },
+          { label: '-', y: 30, side: 'right', polarity: 'minus' },
+        ]}
+      >
+        <InstrumentScreen reading={reading} accent={ACCENT} />
+      </InstrumentFace>
     </div>
   );
 }

@@ -22,10 +22,10 @@ body {
 
 /* ── Header ─────────────────────────────────────── */
 .app-header {
-  background-color: rgba(0, 0, 0, 0.88);
+  background-color: var(--color-bg-header);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--color-border-default);
   padding: 0 16px;
   height: 44px;
   flex-shrink: 0;
@@ -56,7 +56,7 @@ body {
 .header-title {
   font-size: 15px;
   font-weight: 600;
-  color: #f5f5f7;
+  color: var(--wb-13);
   letter-spacing: -0.2px;
 }
 
@@ -67,19 +67,19 @@ body {
   gap: 6px;
   padding: 6px 12px;
   background: transparent;
-  color: #9d9d9d;
+  color: var(--wb-11);
   text-decoration: none;
   border-radius: 5px;
   font-size: 13px;
   font-weight: 500;
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--wb-6);
   transition: all 0.15s;
 }
 
 .examples-link:hover {
-  background: #2a2d2e;
-  color: #fff;
-  border-color: #555;
+  background: var(--wb-4);
+  color: var(--wb-13);
+  border-color: var(--wb-8);
 }
 
 /* ── Unified nav links ──────────────────────────── */
@@ -94,7 +94,7 @@ body {
   align-items: center;
   gap: 5px;
   padding: 5px 12px;
-  color: #86868b;
+  color: var(--color-fg-muted);
   text-decoration: none;
   border-radius: 100px;
   font-size: 13px;
@@ -106,13 +106,13 @@ body {
 }
 
 .header-nav-link:hover {
-  color: #f5f5f7;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--wb-13);
+  background: var(--color-wash-hover);
 }
 
 .header-nav-link-active {
-  color: #f5f5f7;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--wb-13);
+  background: var(--color-wash-active);
 }
 
 .header-nav-discord {
@@ -120,7 +120,7 @@ body {
 }
 
 .header-nav-discord:hover {
-  color: #8fa8f5;
+  color: var(--color-accent-fg);
   background: rgba(114, 137, 218, 0.1);
 }
 
@@ -148,13 +148,13 @@ body {
 .header-hamburger span {
   display: block;
   height: 2px;
-  background: #9d9d9d;
+  background: var(--wb-11);
   border-radius: 2px;
   transition: background 0.15s;
 }
 
 .header-hamburger:hover span {
-  background: #e0e0e0;
+  background: var(--wb-13);
 }
 
 /* ── Unified top toolbar (desktop) ───────────────
@@ -172,8 +172,8 @@ body {
      Code/Both/Circuit toggle to a third of its width, clipping two of its
      buttons into unreachable slivers. Two short rows beat hidden buttons. */
   flex-wrap: wrap;
-  background: #252526;
-  border-bottom: 1px solid #333;
+  background: var(--wb-3);
+  border-bottom: 1px solid var(--wb-6);
   min-height: 38px;
   /* Query container so every zone (view-mode toggle, editor toolbar, canvas
      controls) can collapse based on the *shared bar's own width* — which is
@@ -247,7 +247,7 @@ body {
   flex-shrink: 0;
   display: flex;
   align-items: stretch;
-  border-left: 1px solid #333;
+  border-left: 1px solid var(--wb-6);
 }
 
 /* ── Main panels container ──────────────────────── */
@@ -271,11 +271,11 @@ body {
 .explorer-toggle-btn {
   width: 36px;
   flex-shrink: 0;
-  background: #252526;
+  background: var(--wb-3);
   border: none;
-  border-right: 1px solid #333;
-  border-bottom: 1px solid #333;
-  color: #7a7a7a;
+  border-right: 1px solid var(--wb-6);
+  border-bottom: 1px solid var(--wb-6);
+  color: var(--wb-9);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -286,8 +286,8 @@ body {
 }
 
 .explorer-toggle-btn:hover {
-  background: #2a2d2e;
-  color: #ccc;
+  background: var(--wb-4);
+  color: var(--wb-12);
 }
 
 /* Resize handle for the file explorer sidebar */
@@ -295,7 +295,7 @@ body {
   width: 4px;
   flex-shrink: 0;
   cursor: col-resize;
-  background: #2a2a2a;
+  background: var(--wb-4);
   transition: background 0.15s;
   position: relative;
   z-index: 5;
@@ -323,7 +323,7 @@ body {
 .resize-handle {
   width: 5px;
   flex-shrink: 0;
-  background: #2a2a2a;
+  background: var(--wb-4);
   cursor: col-resize;
   display: flex;
   align-items: center;
@@ -341,14 +341,14 @@ body {
 .resize-handle-grip {
   width: 2px;
   height: 32px;
-  background: #444;
+  background: var(--wb-7);
   border-radius: 2px;
   transition: background 0.15s;
 }
 
 .resize-handle:hover .resize-handle-grip,
 .resize-handle:active .resize-handle-grip {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--wb-9);
 }
 
 /* ── Responsive ─────────────────────────────────── */
@@ -380,7 +380,7 @@ body {
     display: flex;
     flex-shrink: 0;
     height: 44px;
-    background: #1e1e1e;
+    background: var(--wb-2);
     border-bottom: 2px solid var(--color-action-primary);
     z-index: 50;
     /* Sits between header and panels */
@@ -396,7 +396,7 @@ body {
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
-    color: #7a7a7a;
+    color: var(--wb-9);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -411,11 +411,11 @@ body {
   .mobile-tab-btn--active {
     color: var(--color-action-primary);
     border-bottom-color: var(--color-action-primary);
-    background: rgba(0, 113, 227, 0.1);
+    background: var(--color-accent-soft);
   }
 
   .mobile-tab-btn:active {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--color-wash-hover);
   }
 }
 
@@ -450,9 +450,9 @@ body {
     top: 44px;
     left: 0;
     right: 0;
-    background: rgba(0, 0, 0, 0.96);
+    background: var(--color-bg-header);
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+    border-bottom: 1px solid var(--color-border-default);
     flex-direction: column;
     align-items: stretch;
     gap: 0;
@@ -590,8 +590,8 @@ body {
   margin: 0 -16px;
 }
 .app-header--with-toolbar.app-header--strip-below .header-editor-toolbar .unified-toolbar {
-  background: #252526;
-  border-top: 1px solid #333;
+  background: var(--wb-3);
+  border-top: 1px solid var(--wb-6);
   min-height: 38px;
 }
 
@@ -608,10 +608,10 @@ body {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  background: rgba(23, 26, 33, 0.95);
-  border: 1px solid #2f3542;
+  background: var(--wb-1);
+  border: 1px solid var(--wb-5);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-2);
 }
 
 /* With the chat rising to the very top (agent CSS sets the header's
@@ -634,8 +634,8 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  border-top: 1px solid #2f3542;
-  background: #171a21;
+  border-top: 1px solid var(--wb-5);
+  background: var(--wb-1);
 }
 
 .explorer-account-footer {
@@ -664,4 +664,35 @@ body {
 }
 .flash-indeterminate {
   animation: flash-indeterminate 1.4s ease-in-out infinite;
+}
+
+/* ── Pinned-dark subtrees (pro DarkSurface) ──────────────
+   The marketing pages render inside a [data-theme=dark] island, so the
+   appearance switch in the header would set a preference the reader cannot
+   see take effect until they navigate away. Hide it there; the editor's own
+   toolbar and the View menu remain the way in. */
+.velxio-dark-surface .header-theme-toggle {
+  display: none;
+}
+
+.header-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
+}
+
+.header-theme-toggle:hover {
+  background: var(--color-wash-hover);
+  color: var(--color-fg-default);
 }

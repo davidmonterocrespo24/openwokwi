@@ -4100,6 +4100,24 @@
       ]
     },
     {
+      "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" fill=\"#1a2332\" rx=\"4\"/><path d=\"M8 32 H56 M32 32 V56\" stroke=\"#4caf50\" stroke-width=\"3\" fill=\"none\"/><circle cx=\"32\" cy=\"32\" r=\"7\" fill=\"#4caf50\" stroke=\"#0b3d2e\" stroke-width=\"1.5\"/></svg>",
+      "tags": [
+        "junction",
+        "node",
+        "wire",
+        "net",
+        "solder"
+      ],
+      "properties": [],
+      "defaultValues": {},
+      "pinCount": 1,
+      "id": "junction",
+      "tagName": "velxio-junction",
+      "name": "Junction",
+      "category": "passive",
+      "description": "Wire junction node - connects a wire to another wire so a shared rail (GND, VCC) can be one wire with taps. Created by dropping a wire end onto an existing wire or with the node tool; hidden from the picker."
+    },
+    {
       "id": "resistor",
       "tagName": "wokwi-resistor",
       "name": "Resistor (custom)",

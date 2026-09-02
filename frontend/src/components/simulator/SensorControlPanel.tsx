@@ -8,7 +8,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getSensorControl, type SensorControl, type SliderControl, LOG_SLIDER_STEPS, logSliderToValue, logValueToSlider } from '../../simulation/sensorControlConfig';
+import { type SensorControl, type SliderControl, LOG_SLIDER_STEPS, logSliderToValue, logValueToSlider, getSensorControlForComponent } from '../../simulation/sensorControlConfig';
+import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { dispatchSensorUpdate, getLastSensorValues } from '../../simulation/SensorUpdateRegistry';
 import './SensorControlPanel.css';
 
@@ -45,7 +46,12 @@ export const SensorControlPanel: React.FC<SensorControlPanelProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
-  const def = getSensorControl(metadataId);
+  // Instance-aware: catalog sensors resolve by metadataId; overlay parts
+  // may derive controls from the component instance (resolver seam).
+  const comp = useSimulatorStore
+    .getState()
+    .components.find((c) => c.id === componentId);
+  const def = comp ? getSensorControlForComponent(comp) : undefined;
 
   // Local slider/button state — hydrated from the registry's last-known
   // values for this componentId (so reopening a sensor or switching between

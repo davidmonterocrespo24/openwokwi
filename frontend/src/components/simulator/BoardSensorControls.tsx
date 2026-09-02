@@ -178,7 +178,7 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          color: open ? '#58a6ff' : '#ccc',
+          color: open ? '#58a6ff' : 'var(--wb-12)',
           fontSize: 13,
           cursor: boardId ? 'pointer' : 'not-allowed',
         }}
@@ -206,13 +206,13 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
             top: 'calc(100% + 6px)',
             right: 0,
             zIndex: 40,
-            background: '#161b22',
-            border: '1px solid #30363d',
+            background: 'var(--wb-5)',
+            border: '1px solid var(--wb-6)',
             borderRadius: 6,
             padding: 12,
             width: 200,
-            boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
-            color: '#c9d1d9',
+            boxShadow: 'var(--shadow-3)',
+            color: 'var(--wb-12)',
             fontSize: 12,
           }}
         >
@@ -232,7 +232,7 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#58a6ff',
+                    color: 'var(--color-action-primary)',
                     cursor: 'pointer',
                     fontSize: 11,
                     padding: 0,
@@ -253,9 +253,9 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
                   height: PAD_PX,
                   margin: '0 auto',
                   borderRadius: '50%',
-                  border: '1px solid #30363d',
+                  border: '1px solid var(--wb-6)',
                   background:
-                    'radial-gradient(circle at 50% 50%, #21262d 0%, #161b22 70%, #0d1117 100%)',
+                    'radial-gradient(circle at 50% 50%, var(--wb-4) 0%, var(--wb-3) 60%, var(--wb-2) 100%)',
                   cursor: 'grab',
                   touchAction: 'none',
                 }}
@@ -280,7 +280,7 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
                   marginTop: 6,
                   fontFamily: 'monospace',
                   fontSize: 11,
-                  color: '#8b949e',
+                  color: 'var(--wb-11)',
                   textAlign: 'center',
                 }}
               >
@@ -293,7 +293,7 @@ export const BoardSensorControls: React.FC<BoardSensorControlsProps> = ({
             <div style={{ marginTop: showImu ? 12 : 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <strong style={{ fontSize: 12 }}>Battery</strong>
-                <span style={{ fontFamily: 'monospace', color: '#8b949e' }}>
+                <span style={{ fontFamily: 'monospace', color: 'var(--wb-11)' }}>
                   {batteryMv} mV - {battPct}%
                 </span>
               </div>

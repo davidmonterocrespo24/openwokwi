@@ -1,7 +1,7 @@
 .ilib-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--color-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,15 +21,15 @@
 }
 
 .ilib-modal {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--wb-1);
+  border: 1px solid var(--wb-6);
   border-radius: 8px;
   width: 480px;
   max-width: 95vw;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-4);
   animation: ilib-slideIn 0.2s ease;
   overflow: hidden;
 }
@@ -51,8 +51,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: #111;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-bottom: 1px solid var(--wb-4);
 }
 
 .ilib-title {
@@ -62,14 +62,14 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #ccc;
+  color: var(--wb-12);
   text-transform: uppercase;
 }
 
 .ilib-close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--wb-10);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -78,8 +78,8 @@
 }
 
 .ilib-close-btn:hover:not(:disabled) {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--wb-4);
+  color: var(--wb-13);
 }
 
 .ilib-close-btn:disabled {
@@ -91,9 +91,9 @@
 .ilib-subtitle {
   padding: 10px 18px;
   font-size: 13px;
-  color: #999;
-  border-bottom: 1px solid #222;
-  background: #161616;
+  color: var(--wb-10);
+  border-bottom: 1px solid var(--wb-3);
+  background: var(--wb-1);
   min-height: 38px;
   display: flex;
   align-items: center;
@@ -108,7 +108,7 @@
 }
 
 .ilib-subtitle-done {
-  color: #4ade80;
+  color: var(--color-feedback-success);
   font-weight: 500;
 }
 
@@ -123,10 +123,10 @@
   width: 6px;
 }
 .ilib-list::-webkit-scrollbar-track {
-  background: #111;
+  background: var(--wb-0);
 }
 .ilib-list::-webkit-scrollbar-thumb {
-  background: #333;
+  background: var(--wb-6);
   border-radius: 3px;
 }
 
@@ -135,18 +135,18 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 18px;
-  border-bottom: 1px solid #1f1f1f;
+  border-bottom: 1px solid var(--wb-2);
   gap: 12px;
   transition: background 0.1s;
 }
 
 .ilib-item:hover {
-  background: #1f1f1f;
+  background: var(--wb-2);
 }
 
 .ilib-item-name {
   font-size: 13px;
-  color: #ddd;
+  color: var(--wb-13);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -155,10 +155,10 @@
 }
 
 .ilib-item--done .ilib-item-name {
-  color: #888;
+  color: var(--wb-10);
 }
 .ilib-item--error .ilib-item-name {
-  color: #888;
+  color: var(--wb-10);
 }
 
 .ilib-item-status {
@@ -179,34 +179,34 @@
 }
 
 .ilib-badge--pending {
-  color: #666;
-  background: #1a1a1a;
-  border: 1px solid #333;
+  color: var(--wb-9);
+  background: var(--wb-1);
+  border: 1px solid var(--wb-6);
 }
 
 .ilib-badge--installing {
   color: var(--color-action-primary);
-  background: #0a1f24;
-  border: 1px solid #005f7a;
+  background: var(--color-accent-soft);
+  border: 1px solid var(--color-accent-border);
 }
 
 .ilib-badge--done {
-  color: #4ade80;
-  background: #0d2b1e;
-  border: 1px solid #1a4731;
+  color: var(--color-feedback-success);
+  background: var(--color-feedback-success-soft);
+  border: 1px solid var(--color-feedback-success-border);
 }
 
 .ilib-badge--error {
-  color: #f87171;
-  background: #2b0d0d;
-  border: 1px solid #4a1a1a;
+  color: var(--color-feedback-error);
+  background: var(--color-feedback-error-soft);
+  border: 1px solid var(--color-feedback-error-border);
   cursor: help;
 }
 
 .ilib-badge--wokwi {
-  color: #7dd3fc;
-  background: #0c2340;
-  border: 1px solid #1e4070;
+  color: var(--color-accent-fg);
+  background: var(--color-accent-soft);
+  border: 1px solid var(--color-accent-border);
   margin-left: 6px;
   font-size: 9px;
   text-transform: uppercase;
@@ -236,8 +236,8 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 14px 18px;
-  background: #111;
-  border-top: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-top: 1px solid var(--wb-4);
 }
 
 .ilib-btn {
@@ -268,18 +268,18 @@
 }
 
 .ilib-btn--primary:hover:not(:disabled) {
-  background: #00d4f0;
-  box-shadow: 0 0 12px rgba(0, 113, 227, 0.4);
+  background: var(--color-accent-fg);
+  box-shadow: 0 0 12px var(--color-accent-border);
   transform: translateY(-1px);
 }
 
 .ilib-btn--ghost {
   background: transparent;
-  color: #888;
-  border: 1px solid #333;
+  color: var(--wb-10);
+  border: 1px solid var(--wb-6);
 }
 
 .ilib-btn--ghost:hover:not(:disabled) {
-  background: #2a2a2a;
-  color: #ccc;
+  background: var(--wb-4);
+  color: var(--wb-12);
 }

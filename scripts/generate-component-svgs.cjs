@@ -466,6 +466,16 @@ const BOARD_COPIES = [
   ['wokwi-arduino-mega-board','arduino-mega.svg'],
   ['wokwi-esp32-board', 'esp32-devkit-c-v4.svg'],
   ['velxio-raspberry-pi-3', 'Raspberry_Pi_3.svg'],
+  // ESP32 variants with dedicated art (CircuitPreview BOARD_DEFS references
+  // these basenames; before this they all borrowed the DevKit V1 drawing).
+  ['wokwi-arduino-nano-esp32', 'arduino-nano-esp32.svg'],
+  ['wokwi-esp32-devkit-c-v4', 'esp32-devkit-c-v4.svg'],
+  ['wokwi-esp32-cam', 'esp32-cam.svg'],
+  ['wokwi-esp32-s3', 'esp32-s3.svg'],
+  ['wokwi-esp32-c3', 'esp32-c3.svg'],
+  ['wokwi-xiao-esp32-s3', 'xiao-esp32-s3.svg'],
+  ['wokwi-xiao-esp32-c3', 'xiao-esp32-c3.svg'],
+  ['wokwi-esp32c3-supermini', 'esp32c3-supermini.svg'],
 ];
 
 console.log('\n📋 Copying board SVGs from public/boards/...');

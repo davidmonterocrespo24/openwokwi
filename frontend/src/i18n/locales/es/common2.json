@@ -35,13 +35,16 @@
       "exportBom": "Exportar lista de materiales (CSV — Pro)",
       "exportScreenshot": "Exportar esquemático como imagen (PNG — Pro)",
       "importLabel": "Importar proyecto",
+      "exportVlxLabel": "Exportar proyecto (.vlx)",
       "exportLabel": "Exportar proyecto (.zip)",
       "exportBomLabel": "Lista de materiales (CSV)",
       "exportScreenshotLabel": "Imagen del esquema (PNG)",
       "shareLabel": "Compartir / Insertar",
       "githubSyncLabel": "Sincronizar con GitHub",
       "uploadFirmwareLabel": "Subir firmware",
-      "recordLabel": "Grabar simulación"
+      "recordLabel": "Grabar simulación",
+      "themeToLight": "Switch to light theme",
+      "themeToDark": "Switch to dark theme"
     },
     "fileExplorer": {
       "workspace": "ESPACIO DE TRABAJO",
@@ -178,7 +181,8 @@
         "mpyUnavailable": "Los proyectos MicroPython no se pueden grabar desde aquí: solo sketches de Arduino",
         "ready": "Grabar el sketch compilado en una placa real conectada por USB",
         "willCompile": "Compilar el sketch y grabarlo en una placa real conectada por USB"
-      }
+      },
+      "wifiPanel": "Panel de WiFi"
     },
     "componentPicker": {
       "title": "Añadir componente",
@@ -407,13 +411,18 @@
       "compile": "Compilar",
       "run": "Ejecutar",
       "hideExplorer": "Ocultar explorador de archivos",
-      "showExplorer": "Mostrar explorador de archivos"
+      "showExplorer": "Mostrar explorador de archivos",
+      "appearance": "Appearance",
+      "themeDark": "Dark",
+      "themeLight": "Light",
+      "themeSystem": "Match system"
     },
     "inspector": {
       "propertiesTab": "Propiedades",
       "datasheetTab": "Ficha técnica",
       "examplesTitle": "Proyectos de ejemplo",
-      "productPage": "Ver producto"
+      "productPage": "Ver producto",
+      "datasheetPage": "Especificaciones"
     },
     "flash": {
       "title": "Grabar {{board}}",

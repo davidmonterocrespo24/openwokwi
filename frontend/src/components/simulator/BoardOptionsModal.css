@@ -1,7 +1,7 @@
 .bom-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--color-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20,15 +20,15 @@
 }
 
 .bom-modal {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--wb-1);
+  border: 1px solid var(--wb-6);
   border-radius: 8px;
   width: 620px;
   max-width: 95vw;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-4);
   animation: bom-slideIn 0.2s ease;
   overflow: hidden;
 }
@@ -49,8 +49,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 18px;
-  background: #111;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-bottom: 1px solid var(--wb-4);
 }
 
 .bom-title {
@@ -63,19 +63,19 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #ccc;
+  color: var(--wb-12);
   text-transform: uppercase;
 }
 
 .bom-title-sub {
   font-size: 11px;
-  color: #888;
+  color: var(--wb-10);
 }
 
 .bom-close {
   background: none;
   border: none;
-  color: #888;
+  color: var(--wb-10);
   font-size: 18px;
   cursor: pointer;
   padding: 4px 8px;
@@ -84,14 +84,14 @@
 }
 
 .bom-close:hover {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--wb-4);
+  color: var(--wb-13);
 }
 
 .bom-tabs {
   display: flex;
-  background: #111;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-bottom: 1px solid var(--wb-4);
 }
 
 .bom-tab {
@@ -99,7 +99,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #888;
+  color: var(--wb-10);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -107,7 +107,7 @@
 }
 
 .bom-tab:hover {
-  color: #ccc;
+  color: var(--wb-12);
 }
 
 .bom-tab.active {
@@ -129,11 +129,11 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: #888;
+  color: var(--wb-10);
   text-transform: uppercase;
   margin: 0 0 8px 0;
   padding-bottom: 4px;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--wb-4);
 }
 
 .bom-row {
@@ -146,7 +146,7 @@
 
 .bom-label {
   font-size: 12px;
-  color: #bbb;
+  color: var(--wb-12);
 }
 
 .bom-control {
@@ -156,9 +156,9 @@
 }
 
 .bom-select {
-  background: #2a2a2a;
-  color: #ddd;
-  border: 1px solid #444;
+  background: var(--wb-4);
+  color: var(--wb-13);
+  border: 1px solid var(--wb-7);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
@@ -184,22 +184,22 @@
 }
 
 .bom-badge-warn {
-  background: #4a2a00;
-  color: #ffb74d;
+  background: var(--color-feedback-warning-soft);
+  color: var(--color-feedback-warning);
 }
 
 .bom-badge-error {
-  background: #5a1a1a;
-  color: #ff8080;
+  background: var(--color-feedback-error-soft);
+  color: var(--color-feedback-error);
 }
 
 .bom-warning {
   margin: 8px 0 12px 0;
   padding: 8px 10px;
-  background: #3a2a00;
-  border: 1px solid #6a4a00;
+  background: var(--color-feedback-warning-soft);
+  border: 1px solid var(--color-feedback-warning-border);
   border-radius: 4px;
-  color: #ffd07a;
+  color: var(--color-feedback-warning);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -209,8 +209,8 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
-  background: #111;
-  border-top: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-top: 1px solid var(--wb-4);
 }
 
 .bom-btn {
@@ -223,32 +223,32 @@
 
 .bom-btn-secondary {
   background: transparent;
-  border-color: #555;
-  color: #aaa;
+  border-color: var(--wb-8);
+  color: var(--wb-11);
 }
 
 .bom-btn-secondary:hover {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--wb-4);
+  color: var(--wb-13);
 }
 
 .bom-btn-primary {
   background: var(--color-action-primary);
   border-color: var(--color-action-primary);
-  color: #fff;
+  color: var(--color-fg-on-action);
 }
 
 .bom-btn-primary:hover {
-  background: #1177bd;
+  background: var(--color-action-primary);
 }
 
 /* ── SPIFFS panel ───────────────────────────────────────────────────────── */
 .bom-spiffs-empty {
   padding: 24px;
   text-align: center;
-  color: #888;
+  color: var(--wb-10);
   font-size: 12px;
-  border: 1px dashed #333;
+  border: 1px dashed var(--wb-6);
   border-radius: 4px;
   margin-bottom: 12px;
 }
@@ -265,16 +265,16 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: #888;
+  color: var(--wb-10);
   text-transform: uppercase;
   padding: 6px 8px;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--wb-4);
 }
 
 .bom-spiffs-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid #222;
-  color: #ddd;
+  border-bottom: 1px solid var(--wb-3);
+  color: var(--wb-13);
 }
 
 .bom-spiffs-name {
@@ -285,7 +285,7 @@
 .bom-spiffs-size {
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 11px;
-  color: #aaa;
+  color: var(--wb-11);
   text-align: right;
 }
 
@@ -295,8 +295,8 @@
 
 .bom-spiffs-delete {
   background: none;
-  border: 1px solid #555;
-  color: #aaa;
+  border: 1px solid var(--wb-8);
+  color: var(--wb-11);
   padding: 2px 8px;
   border-radius: 3px;
   font-size: 11px;
@@ -304,9 +304,9 @@
 }
 
 .bom-spiffs-delete:hover {
-  background: #5a1a1a;
-  border-color: #a33;
-  color: #fff;
+  background: var(--color-feedback-error-soft);
+  border-color: var(--color-feedback-error-border);
+  color: var(--wb-13);
 }
 
 .bom-spiffs-toolbar {
@@ -319,7 +319,7 @@
 .bom-spiffs-add {
   background: var(--color-action-primary);
   border: none;
-  color: #fff;
+  color: var(--color-fg-on-action);
   padding: 6px 12px;
   border-radius: 4px;
   font-size: 12px;
@@ -327,15 +327,15 @@
 }
 
 .bom-spiffs-add:hover {
-  background: #1177bd;
+  background: var(--color-action-primary);
 }
 
 .bom-spiffs-tally {
   font-size: 11px;
-  color: #888;
+  color: var(--wb-10);
   font-family: 'Consolas', 'Monaco', monospace;
 }
 
 .bom-spiffs-tally.over {
-  color: #ff8080;
+  color: var(--color-feedback-error);
 }

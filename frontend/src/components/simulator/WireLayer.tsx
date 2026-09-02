@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { WireRenderer } from './WireRenderer';
+import { useResolvedTheme } from '../../hooks/useTheme';
 import { WireInProgressRenderer } from './WireInProgressRenderer';
 import { useIsCoarsePointer } from '../../utils/useTouchDevice';
 
@@ -59,6 +60,11 @@ export const WireLayer: React.FC<WireLayerProps> = ({
   const wireInProgress = useSimulatorStore((s) => s.wireInProgress);
   const selectedWireId = useSimulatorStore((s) => s.selectedWireId);
   const isTouchDevice = useIsCoarsePointer();
+  // One subscription for the whole layer: WireRenderer reads its outline and
+  // selection colours from the token layer at render time, and every wire is
+  // a child of this component, so re-rendering here repaints all of them when
+  // the theme flips. Subscribing per wire would add a listener per wire.
+  useResolvedTheme();
 
   return (
     <svg

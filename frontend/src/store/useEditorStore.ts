@@ -149,7 +149,6 @@ interface EditorState {
    *  libraries.json entry; the Library Manager modal is what edits the manifest. */
   manifestViewBoardId: string | null;
   setManifestView: (boardId: string | null) => void;
-  theme: 'vs-dark' | 'light';
   fontSize: number;
   viewMode: EditorViewMode;
   setViewMode: (mode: EditorViewMode) => void;
@@ -206,6 +205,19 @@ interface EditorState {
   setActiveGroup: (groupId: string) => void;
   getGroupFiles: (groupId: string) => WorkspaceFile[];
   updateGroupFile: (groupId: string, fileId: string, content: string) => void;
+  /** Append a file to an existing group (no-op if the group doesn't exist
+   *  or already has a file with that name). Mirrors into `files` when the
+   *  group is active. */
+  addFileToGroup: (groupId: string, file: { name: string; content: string }) => void;
+  /** Set a group file's content WITHOUT marking it modified (programmatic
+   *  sync, e.g. chip properties -> chip.c), mirroring into `files`/Monaco
+   *  when the group is active — unlike updateGroupFile, which is a user
+   *  edit that only touches the group copy. */
+  setGroupFileContent: (groupId: string, fileId: string, content: string) => void;
+  /** Remove one file from a specific group (any group, not just the active
+   *  one — deleteFile above is active-group-scoped). Used by the chip image
+   *  sync when the image is cleared. */
+  removeFileFromGroup: (groupId: string, fileId: string) => void;
   /** Replace ALL file groups atomically (used when loading a saved project).
    *  `folders` restores the tracked EMPTY folders per group (optional —
    *  folders holding files rebuild themselves from the file name prefixes). */
@@ -214,8 +226,9 @@ interface EditorState {
     folders?: Record<string, string[]>,
   ) => void;
 
-  // Settings
-  setTheme: (theme: 'vs-dark' | 'light') => void;
+  // Settings.
+  // Light/dark is NOT here: it is a whole-app preference shared with the
+  // blog and the docs portal, so it lives in src/lib/theme.ts.
   setFontSize: (size: number) => void;
 
   // Dirty flag — tracks whether code changed since last compilation
@@ -232,7 +245,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   openFileIds: [MAIN_ID],
   manifestViewBoardId: null,
   setManifestView: (boardId: string | null) => set({ manifestViewBoardId: boardId }),
-  theme: 'vs-dark',
   fontSize: 14,
   viewMode: 'both',
   setViewMode: (mode) => set({ viewMode: mode }),
@@ -578,6 +590,49 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
+  addFileToGroup: (groupId: string, file: { name: string; content: string }) => {
+    set((s) => {
+      const group = s.fileGroups[groupId];
+      if (!group || group.some((f) => f.name === file.name)) return s;
+      const wsFile: WorkspaceFile = {
+        id: generateUUID(),
+        name: file.name,
+        content: file.content,
+        modified: false,
+      };
+      const groupFiles = [...group, wsFile];
+      return {
+        fileGroups: { ...s.fileGroups, [groupId]: groupFiles },
+        ...(s.activeGroupId === groupId ? { files: groupFiles } : {}),
+      };
+    });
+  },
+
+  removeFileFromGroup: (groupId: string, fileId: string) => {
+    set((s) => ({
+      fileGroups: {
+        ...s.fileGroups,
+        [groupId]: (s.fileGroups[groupId] ?? []).filter((f) => f.id !== fileId),
+      },
+      openGroupFileIds: {
+        ...s.openGroupFileIds,
+        [groupId]: (s.openGroupFileIds[groupId] ?? []).filter((fid) => fid !== fileId),
+      },
+    }));
+  },
+
+  setGroupFileContent: (groupId: string, fileId: string, content: string) => {
+    set((s) => {
+      const groupFiles = (s.fileGroups[groupId] ?? []).map((f) =>
+        f.id === fileId ? { ...f, content, modified: false } : f,
+      );
+      return {
+        fileGroups: { ...s.fileGroups, [groupId]: groupFiles },
+        ...(s.activeGroupId === groupId ? { files: groupFiles } : {}),
+      };
+    });
+  },
+
   replaceFileGroups: (groups, folders) => {
     const fileGroups: Record<string, WorkspaceFile[]> = {};
     const activeGroupFileId: Record<string, string> = {};
@@ -615,7 +670,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ── Settings ──────────────────────────────────────────────────────────────
 
-  setTheme: (theme) => set({ theme }),
   setFontSize: (fontSize) => set({ fontSize }),
 
   // Legacy: sets content of active file

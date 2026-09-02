@@ -3,6 +3,9 @@ import { useEditorStore } from '../../store/useEditorStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { registerRetroAsm, LANGUAGE_ID as RETRO_ASM_ID } from './retroAsmLanguage';
 import { attachIntellisenseMonaco } from '../../lib/intellisenseRegistry';
+import { CHIP_JSON_SCHEMA, CHIP_JSON_SCHEMA_URI } from './chipJsonSchema';
+import { defineVelxioThemes, monacoThemeFor } from './monacoThemes';
+import { useResolvedTheme } from '../../hooks/useTheme';
 
 function getLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
@@ -16,9 +19,12 @@ function getLanguage(filename: string): string {
 }
 
 export const CodeEditor = () => {
-  const { files, activeFileId, setFileContent, theme, fontSize, manifestViewBoardId } =
+  const { files, activeFileId, setFileContent, fontSize, manifestViewBoardId } =
     useEditorStore();
   const boards = useSimulatorStore((s) => s.boards);
+  // App-wide light/dark, not an editor-only setting: the editor sits flush
+  // against the canvas and the panels, so it follows the same switch.
+  const theme = monacoThemeFor(useResolvedTheme());
   const activeFile = files.find((f) => f.id === activeFileId);
 
   // READ-ONLY libraries.json view (the file explorer's libraries.json entry).
@@ -35,6 +41,7 @@ export const CodeEditor = () => {
           height="100%"
           language="json"
           theme={theme}
+          beforeMount={defineVelxioThemes}
           value={content}
           options={{
             readOnly: true,
@@ -59,7 +66,17 @@ export const CodeEditor = () => {
         language={activeFile ? getLanguage(activeFile.name) : 'cpp'}
         theme={theme}
         value={activeFile?.content ?? ''}
+        // A model path (unique per group+file) lets Monaco's JSON language
+        // service match chip.json against the schema registered below. Only
+        // set for chip manifests — other files keep the default in-memory
+        // model so nothing else changes behaviour.
+        {...(activeFile && activeFile.name.endsWith('chip.json')
+          ? { path: `velxio-ws/${useEditorStore.getState().activeGroupId}/${activeFile.name}` }
+          : {})}
         beforeMount={(monaco) => {
+          // Both velxio themes have to exist before Monaco is asked to use
+          // one, or it silently falls back to stock vs-dark.
+          defineVelxioThemes(monaco);
           // Register the 8080/Z80 assembly language once so Monaco knows how
           // to tokenize .s / .asm files when they're opened.
           registerRetroAsm(monaco);
@@ -67,6 +84,22 @@ export const CodeEditor = () => {
           // with the pro overlay loaded it registers the completion engine
           // (idempotent per monaco instance, so per-file remounts are fine).
           attachIntellisenseMonaco(monaco);
+          // Validate chip.json manifests against the schema (idempotent per
+          // monaco instance).
+          const g = monaco as unknown as { __velxioChipJsonSchema?: boolean };
+          if (!g.__velxioChipJsonSchema && monaco.languages.json?.jsonDefaults) {
+            g.__velxioChipJsonSchema = true;
+            monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+              validate: true,
+              schemas: [
+                {
+                  uri: CHIP_JSON_SCHEMA_URI,
+                  fileMatch: ['*chip.json'],
+                  schema: CHIP_JSON_SCHEMA,
+                },
+              ],
+            });
+          }
         }}
         onChange={(value) => {
           if (activeFileId) setFileContent(activeFileId, value || '');

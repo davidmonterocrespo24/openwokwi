@@ -88,7 +88,7 @@ export const ExampleDetailPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
-          background: '#1e1e1e',
+          background: 'var(--wb-2)',
         }}
       >
         <AppHeader />
@@ -102,8 +102,8 @@ export const ExampleDetailPage: React.FC = () => {
             gap: 16,
           }}
         >
-          <div style={{ fontSize: 48, color: '#555' }}>404</div>
-          <div style={{ fontSize: 16, color: '#999' }}>Example "{exampleId}" not found.</div>
+          <div style={{ fontSize: 48, color: 'var(--wb-8)' }}>404</div>
+          <div style={{ fontSize: 16, color: 'var(--wb-11)' }}>Example "{exampleId}" not found.</div>
           <Link
             to="/examples"
             style={{
@@ -122,7 +122,7 @@ export const ExampleDetailPage: React.FC = () => {
     );
   }
 
-  const diffColor = DIFFICULTY_COLOR[example.difficulty] ?? '#999';
+  const diffColor = DIFFICULTY_COLOR[example.difficulty] ?? 'var(--wb-11)';
   const categoryLabel = CATEGORY_LABELS[example.category] ?? example.category;
 
   return (
@@ -131,7 +131,7 @@ export const ExampleDetailPage: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        background: '#1e1e1e',
+        background: 'var(--wb-2)',
       }}
     >
       <AppHeader />
@@ -147,17 +147,17 @@ export const ExampleDetailPage: React.FC = () => {
       >
         {/* Breadcrumb */}
         <nav
-          style={{ width: '100%', maxWidth: 760, marginBottom: 32, fontSize: 13, color: '#666' }}
+          style={{ width: '100%', maxWidth: 760, marginBottom: 32, fontSize: 13, color: 'var(--wb-9)' }}
         >
-          <Link to="/" style={{ color: '#666', textDecoration: 'none' }}>
+          <Link to="/" style={{ color: 'var(--wb-9)', textDecoration: 'none' }}>
             Velxio
           </Link>
           {' / '}
-          <Link to="/examples" style={{ color: '#666', textDecoration: 'none' }}>
+          <Link to="/examples" style={{ color: 'var(--wb-9)', textDecoration: 'none' }}>
             Examples
           </Link>
           {' / '}
-          <span style={{ color: '#aaa' }}>{example.title}</span>
+          <span style={{ color: 'var(--wb-11)' }}>{example.title}</span>
         </nav>
 
         {/* Card */}
@@ -165,8 +165,8 @@ export const ExampleDetailPage: React.FC = () => {
           style={{
             width: '100%',
             maxWidth: 760,
-            background: '#252526',
-            border: '1px solid #333',
+            background: 'var(--wb-3)',
+            border: '1px solid var(--wb-6)',
             borderRadius: 12,
             padding: '40px 48px',
           }}
@@ -178,14 +178,14 @@ export const ExampleDetailPage: React.FC = () => {
               borderRadius: 8,
               overflow: 'hidden',
               marginBottom: 28,
-              border: '1px solid #333',
+              border: '1px solid var(--wb-6)',
             }}
           >
             <ExampleThumbnail
               example={example}
               width={760}
               height={240}
-              background="#111"
+              background="var(--wb-0)"
               style={{ width: '100%', height: 240, borderRadius: 7 }}
             />
           </div>
@@ -200,7 +200,7 @@ export const ExampleDetailPage: React.FC = () => {
                 letterSpacing: '0.06em',
                 padding: '3px 10px',
                 borderRadius: 4,
-                background: '#1a3a4a',
+                background: 'var(--color-accent-soft)',
                 color: '#4fc3f7',
               }}
             >
@@ -228,8 +228,8 @@ export const ExampleDetailPage: React.FC = () => {
                 letterSpacing: '0.06em',
                 padding: '3px 10px',
                 borderRadius: 4,
-                background: '#2a2a2a',
-                color: '#aaa',
+                background: 'var(--wb-4)',
+                color: 'var(--wb-11)',
               }}
             >
               {boardLabel}
@@ -241,7 +241,7 @@ export const ExampleDetailPage: React.FC = () => {
             style={{
               fontSize: 28,
               fontWeight: 700,
-              color: '#d4d4d4',
+              color: 'var(--wb-12)',
               margin: '0 0 16px',
               lineHeight: 1.3,
             }}
@@ -250,7 +250,7 @@ export const ExampleDetailPage: React.FC = () => {
           </h1>
 
           {/* Description */}
-          <p style={{ fontSize: 16, color: '#9d9d9d', lineHeight: 1.7, margin: '0 0 32px' }}>
+          <p style={{ fontSize: 16, color: 'var(--wb-11)', lineHeight: 1.7, margin: '0 0 32px' }}>
             {example.description}
           </p>
 
@@ -260,7 +260,7 @@ export const ExampleDetailPage: React.FC = () => {
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: '#858585',
+                color: 'var(--wb-10)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
                 margin: '0 0 12px',
@@ -283,7 +283,7 @@ export const ExampleDetailPage: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
-                  color: '#c8c8c8',
+                  color: 'var(--wb-12)',
                   fontSize: 14,
                 }}
               >
@@ -295,7 +295,7 @@ export const ExampleDetailPage: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
-                  color: '#c8c8c8',
+                  color: 'var(--wb-12)',
                   fontSize: 14,
                 }}
               >
@@ -310,7 +310,7 @@ export const ExampleDetailPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    color: '#c8c8c8',
+                    color: 'var(--wb-12)',
                     fontSize: 14,
                   }}
                 >
@@ -323,7 +323,7 @@ export const ExampleDetailPage: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
-                  color: '#c8c8c8',
+                  color: 'var(--wb-12)',
                   fontSize: 14,
                 }}
               >
@@ -341,7 +341,7 @@ export const ExampleDetailPage: React.FC = () => {
                 background: '#0e639c',
                 border: 'none',
                 borderRadius: 6,
-                color: '#fff',
+                color: 'var(--color-fg-on-action)',
                 fontSize: 15,
                 fontWeight: 600,
                 padding: '12px 28px',
@@ -351,7 +351,7 @@ export const ExampleDetailPage: React.FC = () => {
             >
               Open in Simulator
             </button>
-            <Link to="/examples" style={{ color: '#666', textDecoration: 'none', fontSize: 14 }}>
+            <Link to="/examples" style={{ color: 'var(--wb-9)', textDecoration: 'none', fontSize: 14 }}>
               ← Back to examples
             </Link>
           </div>

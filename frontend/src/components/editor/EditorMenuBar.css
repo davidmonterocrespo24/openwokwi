@@ -16,7 +16,7 @@
 .emb-trigger {
   background: transparent;
   border: none;
-  color: #c5cad3;
+  color: var(--wb-12);
   font: 400 13px system-ui, sans-serif;
   padding: 4px 10px;
   border-radius: 4px;
@@ -25,8 +25,8 @@
 
 .emb-trigger:hover,
 .emb-trigger-open {
-  background: #2f3542;
-  color: #fff;
+  background: var(--wb-5);
+  color: var(--wb-13);
 }
 
 .emb-menu {
@@ -34,12 +34,12 @@
   top: calc(100% + 4px);
   left: 0;
   min-width: 230px;
-  background: #252526;
-  border: 1px solid #3c3c3c;
+  background: var(--wb-3);
+  border: 1px solid var(--wb-7);
   border-radius: 6px;
   padding: 4px;
   z-index: 9500; /* above the toolbar and the canvas, below modals (10000) */
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-3);
 }
 
 .emb-item {
@@ -50,7 +50,7 @@
   width: 100%;
   background: transparent;
   border: none;
-  color: #d6dae2;
+  color: var(--wb-13);
   font: 400 13px system-ui, sans-serif;
   padding: 6px 10px;
   border-radius: 4px;
@@ -60,8 +60,8 @@
 }
 
 .emb-item:hover:not(:disabled) {
-  background: #0e639c;
-  color: #fff;
+  background: var(--color-action-primary);
+  color: var(--color-fg-on-action);
 }
 
 .emb-item:disabled {
@@ -70,17 +70,17 @@
 }
 
 .emb-shortcut {
-  color: #8b93a1;
+  color: var(--wb-10);
   font-size: 11px;
 }
 
 .emb-item:hover:not(:disabled) .emb-shortcut {
-  color: #cfe3f5;
+  color: var(--color-accent-fg);
 }
 
 .emb-separator {
   height: 1px;
-  background: #3c3c3c;
+  background: var(--wb-7);
   margin: 4px 6px;
 }
 
@@ -92,7 +92,7 @@
   font-weight: 700;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: #8a8f98;
+  color: var(--wb-10);
   user-select: none;
 }
 
@@ -106,7 +106,7 @@
   padding: 2px 6px;
   border-radius: 3px;
   background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
-  color: #1a1a1a;
+  color: var(--wb-1);
   flex-shrink: 0;
   margin-left: 8px;
 }

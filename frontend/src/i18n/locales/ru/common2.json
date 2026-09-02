@@ -33,13 +33,16 @@
       "exportBom": "Экспорт спецификации (CSV — Pro)",
       "exportScreenshot": "Экспорт схемы как изображение (PNG — Pro)",
       "importLabel": "Импортировать проект",
+      "exportVlxLabel": "Экспортировать проект (.vlx)",
       "exportLabel": "Экспортировать проект (.zip)",
       "exportBomLabel": "Спецификация (CSV)",
       "exportScreenshotLabel": "Изображение схемы (PNG)",
       "shareLabel": "Поделиться / Встроить",
       "githubSyncLabel": "Синхронизировать с GitHub",
       "uploadFirmwareLabel": "Загрузить прошивку",
-      "recordLabel": "Записать симуляцию"
+      "recordLabel": "Записать симуляцию",
+      "themeToLight": "Switch to light theme",
+      "themeToDark": "Switch to dark theme"
     },
     "fileExplorer": {
       "workspace": "РАБОЧАЯ ОБЛАСТЬ",
@@ -176,7 +179,8 @@
         "mpyUnavailable": "Проекты MicroPython отсюда не прошиваются: только скетчи Arduino",
         "ready": "Прошить скомпилированный скетч на реальную плату по USB",
         "willCompile": "Скомпилировать скетч и прошить его на реальную плату по USB"
-      }
+      },
+      "wifiPanel": "Панель WiFi"
     },
     "componentPicker": {
       "title": "Добавить компонент",
@@ -397,13 +401,18 @@
       "compile": "Компилировать",
       "run": "Запустить",
       "hideExplorer": "Скрыть проводник файлов",
-      "showExplorer": "Показать проводник файлов"
+      "showExplorer": "Показать проводник файлов",
+      "appearance": "Appearance",
+      "themeDark": "Dark",
+      "themeLight": "Light",
+      "themeSystem": "Match system"
     },
     "inspector": {
       "propertiesTab": "Свойства",
       "datasheetTab": "Спецификация",
       "examplesTitle": "Примеры проектов",
-      "productPage": "Страница товара"
+      "productPage": "Страница товара",
+      "datasheetPage": "Specifications"
     },
     "flash": {
       "title": "Прошить {{board}}",

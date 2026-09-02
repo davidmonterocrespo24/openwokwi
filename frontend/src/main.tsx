@@ -5,6 +5,9 @@ import './index.css';
 // useTranslation() always resolves against a live instance. Must come
 // before App.
 import './i18n';
+// Side-effect-free on the DOM (index.html already painted the theme) —
+// this only subscribes to the OS preference and to sibling velxio.dev tabs.
+import { initTheme } from './lib/theme';
 import { markProExamplesSettled } from './data/examples';
 import { markProRoutesSettled } from './lib/proRoutes';
 
@@ -33,6 +36,11 @@ import App from './App.tsx';
 // Configure monaco-editor for offline use via local static assets
 const monacoVsPath = `${import.meta.env.BASE_URL}monaco/vs`;
 loader.config({ paths: { vs: monacoVsPath } });
+
+// Adopt the stored light/dark preference and start listening for it changing
+// elsewhere (the OS, another tab, the docs portal). index.html already put the
+// right theme on <html> before the first paint; this keeps it there.
+initTheme();
 
 createRoot(document.getElementById('root')!).render(<App />);
 

@@ -15,6 +15,7 @@ import type {
   AnalysisMode,
 } from './types';
 import type { Wire } from '../../types/wire';
+import { analogScopeWantsTransient } from './analogScopeFeed';
 import type { BoardKind } from '../../types/board';
 import { boardPinGroupFor } from './boardPinGroups';
 import { parseValueWithUnits } from './valueParser';
@@ -29,6 +30,14 @@ const MIN_TRAN_STOP_S = 5e-3;
 const MAX_TRAN_STOP_S = 0.4;
 const SAMPLES_PER_PERIOD = 20;
 const PERIODS_TO_SETTLE = 4;
+
+// Transient forced by an analog scope channel on an otherwise-DC circuit.
+// Short and coarse on purpose: it exists to give the trace a live window, and
+// every solve reloads and re-runs the whole circuit on the single-threaded
+// WASM engine, so a long capture would starve the MCU-edge solves that make
+// LEDs respond.
+const SCOPE_TRAN_STOP_S = 20e-3;
+const SCOPE_TRAN_STEP_S = 50e-6;
 
 // When a capacitor/inductor is driven by an MCU pin (step response), use this
 // step. 1e-4 s = 100 µs, fine enough to resolve 10 kΩ · 1 µF = 10 ms τ with
@@ -195,9 +204,21 @@ export function buildInputFromStore(snap: StoreSnapshot): BuildNetlistInput {
     };
   });
 
-  const analysis: AnalysisMode = pickDynamicAnalysis(snap.components, snap.boards) ?? {
-    kind: 'op',
-  };
+  // A probed wire needs a waveform even when the circuit itself is DC: a
+  // resistor divider has no signal generator and no reactive part, so
+  // pickDynamicAnalysis says `.op` and there is nothing for an analog scope
+  // channel to plot. While the scope is watching a net, ask for a transient
+  // anyway — a short one, since the point is a live window rather than a
+  // settling study.
+  const analysis: AnalysisMode =
+    pickDynamicAnalysis(snap.components, snap.boards) ??
+    (analogScopeWantsTransient()
+      ? {
+          kind: 'tran',
+          step: SCOPE_TRAN_STEP_S.toExponential(3),
+          stop: SCOPE_TRAN_STOP_S.toExponential(3),
+        }
+      : { kind: 'op' });
 
   return {
     components,

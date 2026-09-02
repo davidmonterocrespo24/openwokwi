@@ -106,9 +106,9 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
     >
       <div
         style={{
-          background: '#2d2d2d',
-          color: '#fff',
-          border: '1px solid #555',
+          background: 'var(--wb-5)',
+          color: 'var(--wb-13)',
+          border: '1px solid var(--wb-8)',
           borderRadius: 12,
           width: '100%',
           maxWidth: 420,
@@ -128,14 +128,14 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
             alignItems: 'center',
             gap: 8,
             padding: '12px 14px',
-            borderBottom: '1px solid #444',
+            borderBottom: '1px solid var(--wb-7)',
             flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
             {subtitle && (
-              <span style={{ fontSize: 12, color: '#9aa', marginTop: 2 }}>{subtitle}</span>
+              <span style={{ fontSize: 12, color: 'var(--wb-11)', marginTop: 2 }}>{subtitle}</span>
             )}
           </div>
           <button
@@ -145,7 +145,7 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#ccc',
+              color: 'var(--wb-12)',
               cursor: 'pointer',
               fontSize: 22,
               width: 36,
@@ -173,9 +173,9 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                 width: '100%',
                 boxSizing: 'border-box',
                 padding: '8px 10px',
-                background: '#1f1f1f',
-                color: '#fff',
-                border: '1px solid #555',
+                background: 'var(--wb-2)',
+                color: 'var(--wb-13)',
+                border: '1px solid var(--wb-8)',
                 borderRadius: 6,
                 fontSize: 14,
               }}
@@ -194,7 +194,7 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
           }}
         >
           {filteredPins.length === 0 ? (
-            <div style={{ padding: 16, color: '#999', fontSize: 13 }}>{t('editor.pinPicker.noMatch')}</div>
+            <div style={{ padding: 16, color: 'var(--wb-11)', fontSize: 13 }}>{t('editor.pinPicker.noMatch')}</div>
           ) : (
             filteredPins.map((pin) => (
               <button
@@ -208,8 +208,8 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                   textAlign: 'left',
                   padding: '12px 12px',
                   margin: '2px 0',
-                  background: '#3d3d3d',
-                  color: '#fff',
+                  background: 'var(--wb-7)',
+                  color: 'var(--wb-13)',
                   border: '1px solid transparent',
                   borderRadius: 6,
                   cursor: 'pointer',
@@ -217,11 +217,11 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                   minHeight: 44,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#4a4a4a';
+                  e.currentTarget.style.background = 'var(--wb-8)';
                   e.currentTarget.style.borderColor = '#007acc';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#3d3d3d';
+                  e.currentTarget.style.background = 'var(--wb-7)';
                   e.currentTarget.style.borderColor = 'transparent';
                 }}
               >
@@ -229,7 +229,7 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                   {pin.name}
                 </span>
                 {pin.description && (
-                  <span style={{ color: '#aaa', fontSize: 12, flex: 1, minWidth: 0 }}>
+                  <span style={{ color: 'var(--wb-11)', fontSize: 12, flex: 1, minWidth: 0 }}>
                     {pin.description}
                   </span>
                 )}
@@ -253,8 +253,8 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
               display: 'flex',
               gap: 8,
               padding: '10px 12px',
-              borderTop: '1px solid #444',
-              background: '#252525',
+              borderTop: '1px solid var(--wb-7)',
+              background: 'var(--wb-3)',
               flexShrink: 0,
             }}
           >
@@ -275,9 +275,9 @@ export const PinPickerDialog: React.FC<PinPickerDialogProps> = ({
                 style={{
                   ...footerButtonStyle,
                   marginLeft: onRotate ? 0 : 'auto',
-                  background: '#3a2424',
-                  borderColor: '#5a2c2c',
-                  color: '#e06c75',
+                  background: 'var(--color-feedback-error-soft)',
+                  borderColor: 'var(--color-feedback-error-soft)',
+                  color: 'var(--color-feedback-error)',
                 }}
                 aria-label={t('editor.pinPicker.delete')}
               >
@@ -298,9 +298,9 @@ const footerButtonStyle: React.CSSProperties = {
   justifyContent: 'center',
   gap: 8,
   padding: '10px 12px',
-  background: '#3d3d3d',
-  color: '#fff',
-  border: '1px solid #555',
+  background: 'var(--wb-7)',
+  color: 'var(--wb-13)',
+  border: '1px solid var(--wb-8)',
   borderRadius: 6,
   cursor: 'pointer',
   fontSize: 14,

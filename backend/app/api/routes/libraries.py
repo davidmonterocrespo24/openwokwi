@@ -69,6 +69,20 @@ async def install_library(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def _uninstall_allowed(requester_id: str | None) -> bool:
+    """Anonymous uninstall is refused wherever accounts exist.
+
+    The hook returns None both for "OSS self-host, no accounts" and for
+    "velxio.dev, not signed in". They are told apart by whether the overlay
+    installed a hook at all: with one present, None means anonymous.
+    """
+    from app.core import hooks
+
+    if getattr(hooks, "_get_current_user_id_hook", None) is None:
+        return True  # OSS single-user
+    return requester_id is not None
+
+
 class UninstallLibraryRequest(BaseModel):
     name: str
 
@@ -78,11 +92,26 @@ class UninstallResponse(BaseModel):
     error: str | None = None
 
 @router.delete("/uninstall", response_model=UninstallResponse)
-async def uninstall_library(request: UninstallLibraryRequest):
+async def uninstall_library(
+    request: UninstallLibraryRequest,
+    requester_id: str | None = Depends(get_current_user_id),
+):
     """
     Uninstall a specific Arduino library by name.
+
+    Gated like /install: a mutating endpoint that took no identity at all was
+    reachable unauthenticated from the public internet. It was harmless only
+    because it aimed at a sketchbook that does not exist on the deployment,
+    which is not a security property anyone should rely on. OSS self-hosters
+    are single-user and the hook returns None for them, so `require_identity`
+    stays a deployment decision made by the overlay, not a hard 401 here.
     """
     try:
+        if not _uninstall_allowed(requester_id):
+            return UninstallResponse(
+                success=False,
+                error="Sign in to manage this project's libraries.",
+            )
         result = await arduino_cli.uninstall_library(request.name)
         if not result["success"]:
             return UninstallResponse(success=False, error=result.get("error"), stdout=result.get("stdout"))

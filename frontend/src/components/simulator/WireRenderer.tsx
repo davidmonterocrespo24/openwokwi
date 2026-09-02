@@ -6,6 +6,7 @@
 import React from 'react';
 import type { Wire } from '../../types/wire';
 import { generateOrthogonalPath } from '../../utils/wireUtils';
+import { cssVar } from '../../lib/theme';
 
 interface WireRendererProps {
   wire: Wire;
@@ -34,18 +35,24 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   if (!path) return null;
 
   const color = wire.color;
+  // Wire COLOUR is the user's; the outline, the hover wash and the selection
+  // dashes are canvas chrome and follow the theme. On a light canvas the old
+  // near-black outline read as a heavy shadow around every run, and the white
+  // hover/selection strokes were invisible outright.
+  const outline = cssVar('--color-wire-outline');
+  const marker = cssVar('--color-wire-marker');
   const strokeW = isSelected ? 3 : 2;
   const outlineW = isSelected ? 6 : 5;
   const opacity = isSelected || isHovered ? 1 : 0.85;
 
   return (
     <g style={{ pointerEvents: 'none' }} strokeLinecap="round" strokeLinejoin="round">
-      {/* Dark outline for wire crossing effect */}
-      <path d={path} stroke="#1a1a1a" strokeWidth={outlineW} fill="none" />
+      {/* Contrast outline, so wires stay readable where they cross */}
+      <path d={path} stroke={outline} strokeWidth={outlineW} fill="none" />
 
       {/* Hover highlight (below wire) */}
       {isHovered && !isSelected && (
-        <path d={path} stroke="#ffffff" strokeWidth="6" fill="none" opacity="0.2" />
+        <path d={path} stroke={marker} strokeWidth="6" fill="none" opacity="0.2" />
       )}
 
       {/* Visible wire */}
@@ -55,7 +62,7 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
       {isSelected && (
         <path
           d={path}
-          stroke="#ffffff"
+          stroke={marker}
           strokeWidth="1.5"
           fill="none"
           strokeDasharray="6,4"

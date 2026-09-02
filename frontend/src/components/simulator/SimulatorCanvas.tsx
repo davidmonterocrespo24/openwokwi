@@ -14,8 +14,10 @@ import { adcPinMapFor } from '../velxio-components/Esp32Element';
 import { ComponentPickerModal } from '../ComponentPickerModal';
 import { PartInspectorDialog, type InspectorAction } from './PartInspectorDialog';
 import { CustomChipDialog } from '../customChips/CustomChipDialog';
+import { seedChipFileGroups, isChipSourceFile } from '../../services/chipFiles';
+import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
 import { SensorControlPanel } from './SensorControlPanel';
-import { SENSOR_CONTROLS, getSensorControl } from '../../simulation/sensorControlConfig';
+import { getSensorControlForComponent } from '../../simulation/sensorControlConfig';
 import { DynamicComponent, createComponentFromMetadata } from '../DynamicComponent';
 import { InstrumentComponent } from '../components-instruments/InstrumentComponent';
 import { ComponentRegistry } from '../../services/ComponentRegistry';
@@ -83,6 +85,8 @@ import { webFlashAvailable, webFlashMpyAvailable } from '../../lib/proWebFlash';
 import { isEsp32Family } from '../../types/boardOptions';
 import { BoardOptionsModal } from './BoardOptionsModal';
 import { useOscilloscopeStore } from '../../store/useOscilloscopeStore';
+import { resolveProbe } from '../../simulation/probeResolve';
+import { showMessageDialog } from '../../store/useMessageDialogStore';
 import {
   trackSelectBoard,
   trackAddComponent,
@@ -218,6 +222,46 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
   const startWireCreation = useSimulatorStore((s) => s.startWireCreation);
   const updateWireInProgress = useSimulatorStore((s) => s.updateWireInProgress);
   const addWireWaypoint = useSimulatorStore((s) => s.addWireWaypoint);
+  const splitWireWithJunction = useSimulatorStore((s) => s.splitWireWithJunction);
+
+  /**
+   * Put a wire on the oscilloscope.
+   *
+   * The scope was a logic analyzer keyed (board, pin); a wire is neither, so
+   * resolveProbe decides what this one actually carries — a GPIO (directly or
+   * through passives, at CPU-cycle resolution) or a SPICE net (as a voltage).
+   * Nets come from the map the SOLVER publishes, never a local re-derivation:
+   * names are positional, so any disagreement about how many nets exist makes
+   * the probe report a neighbouring node.
+   */
+  const probeWire = useCallback((wireId: string) => {
+    const state = useSimulatorStore.getState();
+    const wire = state.wires.find((w) => w.id === wireId);
+    if (!wire) return;
+    const target = resolveProbe(wire, {
+      state,
+      pinNetMap: useElectricalStore.getState().pinNetMap,
+    });
+    const osc = useOscilloscopeStore.getState();
+    if (!target) {
+      // Nothing observable yet (an isolated wire, or before the first solve).
+      // Say so rather than adding a channel that would never draw.
+      showMessageDialog(
+        t(
+          'editor.canvas.probeNothing',
+          'This wire carries no signal the scope can read yet. Connect it to a board pin, or run the circuit so the solver reports a voltage for it.',
+        ),
+        { kind: 'info' },
+      );
+      return;
+    }
+    if (target.kind === 'digital') {
+      osc.addChannel(target.boardId, target.pin, target.label, target.amplitudeV);
+    } else {
+      osc.addNetChannel(target.netName, target.label);
+    }
+    osc.openOscilloscope();
+  }, [t]);
   const setWireInProgressColor = useSimulatorStore((s) => s.setWireInProgressColor);
   const finishWireCreation = useSimulatorStore((s) => s.finishWireCreation);
   const cancelWireCreation = useSimulatorStore((s) => s.cancelWireCreation);
@@ -329,9 +373,20 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
   // Component property dialog
   const [showPropertyDialog, setShowPropertyDialog] = useState(false);
   const [propertyDialogComponentId, setPropertyDialogComponentId] = useState<string | null>(null);
-  /** When non-null, the Custom Chip designer dialog is open for this component. */
+  /** When non-null, the Custom Chip examples gallery is open for this component. */
   const [customChipComponentId, setCustomChipComponentId] = useState<string | null>(null);
   const [propertyDialogPosition, setPropertyDialogPosition] = useState({ x: 0, y: 0 });
+
+  /** Focus a custom chip's file group in the editor and open its chip.c. */
+  const openChipInEditor = useCallback((chipId: string) => {
+    seedChipFileGroups();
+    const ed = useEditorStore.getState();
+    const gid = chipFileGroupId(chipId);
+    const files = ed.fileGroups[gid] ?? [];
+    const src = files.find((f) => isChipSourceFile(f.name)) ?? files[0];
+    ed.setActiveGroup(gid);
+    if (src) ed.openFile(src.id);
+  }, []);
 
   // Sensor control panel (shown instead of property dialog for sensor components during simulation)
   const [sensorControlComponentId, setSensorControlComponentId] = useState<string | null>(null);
@@ -347,11 +402,16 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     x: number;
     y: number;
   } | null>(null);
-  // Right-click context menu for a wire (color swatches + delete).
+  // Right-click context menu for a wire (add node + color swatches + delete).
   const [wireContextMenu, setWireContextMenu] = useState<{
     wireId: string;
+    /** Screen coords — where the menu paints. */
     x: number;
     y: number;
+    /** World coords of the same click, so "Add node here" drops the node
+     *  exactly under the cursor instead of at some default point. */
+    worldX: number;
+    worldY: number;
   } | null>(null);
   // Board removal confirmation dialog
   const [boardToRemove, setBoardToRemove] = useState<string | null>(null);
@@ -1005,6 +1065,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             x: nx,
             y: ny,
           } as any);
+          // Recalculate wire positions during touch drag so wires follow the component.
+          recalculateAllWirePositions();
         }
       }
     };
@@ -1109,7 +1171,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             const component = componentsRef.current.find((c) => c.id === touchId);
             if (component) {
               if (interactionRunningRef.current) {
-                if (getSensorControl(component.metadataId) !== undefined) {
+                if (getSensorControlForComponent(component) !== undefined) {
                   setSensorControlComponentId(touchId);
                   setSensorControlMetadataId(component.metadataId);
                 }
@@ -1593,7 +1655,19 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
   const handleSelectComponent = (metadata: ComponentMetadata) => {
     const { x, y } = nextDropSlot();
 
-    const component = createComponentFromMetadata(metadata, x, y);
+    // A saved chip from the user's My Chips library (overlay-merged entry,
+    // custom flag + the custom-chip element): dropping it COPIES its stored
+    // sources into a normal custom-chip component — projects stay
+    // self-contained, and every custom-chip pipeline (files, controls,
+    // compile) applies with no special-casing past this point.
+    const isUserChip = metadata.custom && metadata.tagName === 'velxio-custom-chip';
+    const effectiveMetadata = isUserChip
+      ? {
+          ...(ComponentRegistry.getInstance().getById('custom-chip') ?? metadata),
+          defaultValues: { ...metadata.defaultValues },
+        }
+      : metadata;
+    const component = createComponentFromMetadata(effectiveMetadata, x, y);
     trackAddComponent(metadata.id);
     // Recorded — user can Ctrl+Z to remove the just-added component.
     recordAddComponent(component as Parameters<typeof recordAddComponent>[0]);
@@ -1604,10 +1678,12 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     // moves to mark it.
     setSelectedComponentId(component.id);
 
-    // Custom Chips need a compile step before they can do anything — open the
-    // designer dialog immediately so the user lands in the editor.
-    if (metadata.id === 'custom-chip') {
-      setCustomChipComponentId(component.id);
+    // A fresh Custom Chip has no source yet — open the examples gallery so
+    // the user picks a starting point. A dropped library chip already
+    // carries source + compiled wasm; it goes straight to the editor.
+    if (effectiveMetadata.id === 'custom-chip') {
+      if (isUserChip) openChipInEditor(component.id);
+      else setCustomChipComponentId(component.id);
     }
   };
 
@@ -1643,7 +1719,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
     // panel). Mirrors the touch tap flow above.
     if (interactionRunning) {
       const component = components.find((c) => c.id === componentId);
-      const isSensor = !!component && getSensorControl(component.metadataId) !== undefined;
+      const isSensor = !!component && getSensorControlForComponent(component) !== undefined;
       if (!isSensor) return;
     }
 
@@ -1770,6 +1846,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         }
         updateComponent(draggedComponentId, { x: nx, y: ny } as any);
       }
+      // Recalculate wire positions during drag so wires follow the component.
+      recalculateAllWirePositions();
     }
 
     // Handle wire creation preview
@@ -1984,13 +2062,31 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
               // handle its own clicks, so we suppress the property
               // dialog entirely. This is the path that also unblocks
               // wokwi-slide-switch toggling in the digital examples.
-              if (getSensorControl(component.metadataId) !== undefined) {
+              if (getSensorControlForComponent(component) !== undefined) {
                 setSensorControlComponentId(draggedComponentId);
                 setSensorControlMetadataId(component.metadataId);
               }
             } else if (component.metadataId === 'custom-chip') {
-              // Custom Chips have their own designer (C editor + chip.json + Compile).
-              setCustomChipComponentId(draggedComponentId);
+              // Board-less special case: a compiled chip ticks the moment it
+              // exists (the rAF loop gates only on the electrical pause
+              // flag), but with no wires SPICE never submits a netlist, so
+              // interactionRunning stays false and the sensor panel above is
+              // unreachable — a chip-with-slider sitting alone on the canvas
+              // had working controls nobody could open. A LIVE chip with
+              // controls gets the panel; editing stays one click away in the
+              // file explorer (chip.c / chip.json are ordinary files there).
+              const boardlessLive =
+                useSimulatorStore.getState().boards.length === 0 &&
+                !useElectricalStore.getState().paused;
+              if (boardlessLive && getSensorControlForComponent(component) !== undefined) {
+                setSensorControlComponentId(draggedComponentId);
+                setSensorControlMetadataId(component.metadataId);
+              } else {
+                // A chip's sources are ordinary editor files — clicking the
+                // chip focuses its group and opens chip.c in the editor. The
+                // gallery dialog only opens for a freshly-dropped chip.
+                openChipInEditor(draggedComponentId);
+              }
             } else if (
               isBreadboard(component.metadataId) &&
               (() => {
@@ -2689,8 +2785,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 1000,
-            background: '#c0392b',
-            color: '#fff',
+            background: 'var(--color-feedback-error)',
+            color: 'var(--color-fg-on-action)',
             padding: '8px 16px',
             borderRadius: 6,
             display: 'flex',
@@ -2709,7 +2805,7 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             style={{
               background: 'transparent',
               border: '1px solid rgba(255,255,255,0.6)',
-              color: '#fff',
+              color: 'var(--color-fg-on-action)',
               borderRadius: 4,
               padding: '2px 8px',
               cursor: 'pointer',
@@ -2849,20 +2945,28 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     ) : null;
                   })()}
 
-                {/* WiFi status indicator + IoT-gateway launcher (ESP32 + Pico W) */}
+                {/* Overlay slot for the WiFi/network panel (local gateway
+                    pairing on velxio.dev). Empty in the OSS build. */}
+                <span data-velxio-slot="wifi-panel" />
+
+                {/* WiFi status indicator + IoT-gateway launcher (ESP32 + Pico W).
+                    Wokwi-style lifecycle: nothing until Run. The badge appears
+                    with the simulation (gray while the stack boots, green on
+                    got_ip) and leaves on Stop. The overlay hangs its WiFi
+                    panel off it while it is up. */}
                 {activeBoard &&
+                  activeBoard.running &&
                   (isEsp32Kind(activeBoard.boardKind) || activeBoard.boardKind === 'pi-pico-w') &&
-                  activeBoard.wifiStatus &&
                   (() => {
                     // The Pico W virtual net assigns its IP deterministically when
                     // the sketch connects; the bridge reports 'started' carrying the
                     // IP. Treat that as got_ip so the badge matches the ESP32 (green,
                     // clickable → the same /api/gateway proxy).
-                    const rawStatus = activeBoard.wifiStatus.status;
+                    const rawStatus = activeBoard.wifiStatus?.status ?? 'disconnected';
                     const status =
                       activeBoard.boardKind === 'pi-pico-w' &&
                       rawStatus === 'started' &&
-                      activeBoard.wifiStatus.ip
+                      activeBoard.wifiStatus?.ip
                         ? 'got_ip'
                         : rawStatus;
                     const hasIp = status === 'got_ip';
@@ -2873,8 +2977,27 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                       'http://localhost:8001/api';
                     const gatewayUrl = `${backendBase}/gateway/${clientId}/`;
 
+                    const togglePanel = (): boolean => {
+                      // A private overlay can hang its WiFi panel (networks on
+                      // the air, PCAP, local gateway) off this badge. OSS
+                      // builds install no hook -> false, nothing happens.
+                      const panel = (
+                        window as unknown as {
+                          __velxio_wifi_panel_toggle__?: () => boolean;
+                        }
+                      ).__velxio_wifi_panel_toggle__;
+                      return !!panel && panel();
+                    };
                     const openGateway = () => {
-                      if (!hasIp) return;
+                      // With an IP, a click opens the board's web server
+                      // DIRECTLY — the one-click flow users have muscle
+                      // memory for. The panel takes the click only while
+                      // there is nothing to open yet, and right-click
+                      // reaches it any time.
+                      if (!hasIp) {
+                        togglePanel();
+                        return;
+                      }
                       // A private overlay (velxio.dev) can install a synchronous
                       // gate to keep the IoT gateway behind a paid plan. When it
                       // returns true it has already handled the click (e.g. shown
@@ -2902,14 +3025,15 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                       }
                     };
                     return (
+                      <>
                       <span
-                        className={`canvas-wifi-badge canvas-wifi-${status}${hasIp ? ' canvas-wifi-clickable' : ''}`}
+                        className={`canvas-wifi-badge canvas-wifi-${status}${hasIp || (window as unknown as { __velxio_wifi_panel_toggle__?: unknown }).__velxio_wifi_panel_toggle__ ? ' canvas-wifi-clickable' : ''}`}
                         onClick={openGateway}
                         title={
                           hasIp
-                            ? `WiFi: ${activeBoard.wifiStatus.ssid ?? 'Velxio-GUEST'} — IP: ${activeBoard.wifiStatus.ip}\nClick to open IoT Gateway ↗`
+                            ? `WiFi: ${activeBoard.wifiStatus?.ssid ?? 'Velxio-GUEST'} — IP: ${activeBoard.wifiStatus?.ip}\nClick to open IoT Gateway ↗`
                             : status === 'connected'
-                              ? `WiFi: ${activeBoard.wifiStatus.ssid ?? 'Velxio-GUEST'} — Connecting...`
+                              ? `WiFi: ${activeBoard.wifiStatus?.ssid ?? 'Velxio-GUEST'} — Connecting...`
                               : status === 'initializing'
                                 ? 'WiFi: Initializing...'
                                 : 'WiFi: Disconnected'
@@ -2931,6 +3055,28 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                           <circle cx="12" cy="20" r="1" />
                         </svg>
                       </span>
+                        {/* Split-button caret: the badge keeps its one-click
+                            gateway action; the caret is the WiFi panel's
+                            handle — always reachable, run or not. Rendered
+                            only when an overlay installed the panel hook, so
+                            the OSS build shows exactly what it always did. */}
+                        {(window as unknown as { __velxio_wifi_panel_toggle__?: unknown })
+                          .__velxio_wifi_panel_toggle__ ? (
+                          <span
+                            className={`canvas-wifi-badge canvas-wifi-${status} canvas-wifi-clickable`}
+                            style={{ marginLeft: -4, paddingLeft: 2, paddingRight: 4 }}
+                            title={t('editor.canvas.wifiPanel')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePanel();
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </span>
+                        ) : null}
+                      </>
                     );
                   })()}
 
@@ -3064,12 +3210,46 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             const wire = findWireNearPoint(wiresRef.current, world.x, world.y, threshold);
             if (wire) {
               setSelectedWire(wire.id);
-              setWireContextMenu({ wireId: wire.id, x: e.clientX, y: e.clientY });
+              setWireContextMenu({
+                wireId: wire.id,
+                x: e.clientX,
+                y: e.clientY,
+                worldX: world.x,
+                worldY: world.y,
+              });
             }
           }}
           onClick={(e) => {
             if (wireInProgress) {
               const world = toWorld(e.clientX, e.clientY);
+              const threshold = 8 / zoomRef.current;
+              // Dropping the wire END onto another wire joins the two through a
+              // junction node: the wire underneath is split at the click and
+              // all three legs meet on the node's single pin. This is what lets
+              // a shared rail be ONE wire with taps instead of a star of wires
+              // back to the board.
+              //
+              // Wires touching the pin this wire started from are excluded — a
+              // click near your own origin means "place a waypoint", never
+              // "tap the wire I am leaving".
+              const startId = wireInProgress.startEndpoint.componentId;
+              const startPin = wireInProgress.startEndpoint.pinName;
+              const candidates = wiresRef.current.filter(
+                (w) =>
+                  !(w.start.componentId === startId && w.start.pinName === startPin) &&
+                  !(w.end.componentId === startId && w.end.pinName === startPin),
+              );
+              const target = findWireNearPoint(candidates, world.x, world.y, threshold);
+              if (target) {
+                const nodeId = splitWireWithJunction(
+                  target.id, world.x, world.y, threshold,
+                  { finishWireInProgress: true },
+                );
+                // A null result means the click landed on the wire's own
+                // endpoint (a degenerate zero-length split) — fall through and
+                // treat it as an ordinary waypoint.
+                if (nodeId) return;
+              }
               addWireWaypoint(world.x, world.y);
               return;
             }
@@ -3143,7 +3323,20 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                   key={`${sensorControlComponentId}:${sensorResetNonce}`}
                   componentId={sensorControlComponentId}
                   metadataId={sensorControlMetadataId}
-                  sensorName={meta?.name ?? sensorControlMetadataId}
+                  sensorName={
+                    // A custom chip's registry name is the generic "Custom
+                    // Chip"; the instance knows what it actually is. Without
+                    // this, every chip's panel carried the same title and two
+                    // different sensors on one canvas were indistinguishable.
+                    (sensorControlMetadataId === 'custom-chip'
+                      ? String(
+                          components.find((c) => c.id === sensorControlComponentId)
+                            ?.properties?.chipName ?? '',
+                        )
+                      : '') ||
+                    meta?.name ||
+                    sensorControlMetadataId
+                  }
                   onClose={() => {
                     setSensorControlComponentId(null);
                     setSensorControlMetadataId(null);
@@ -3621,7 +3814,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
           );
         })()}
 
-      {/* Custom Chip Designer Dialog */}
+      {/* Custom Chip examples gallery — picking an example stores its
+          sources on the component; chipFiles.ts then surfaces them as
+          chip.c / chip.json in the chip's file-explorer section, where all
+          further editing happens (common editor, per-chip Compile, Run). */}
       {customChipComponentId &&
         (() => {
           const comp = components.find((c) => c.id === customChipComponentId);
@@ -3629,21 +3825,30 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
           const props = comp.properties as Record<string, unknown>;
           return (
             <CustomChipDialog
-              initial={{
-                chipName: String(props.chipName ?? 'My Chip'),
-                sourceC: String(props.sourceC ?? ''),
-                chipJson: String(props.chipJson ?? ''),
-                wasmBase64: String(props.wasmBase64 ?? ''),
-                attrs: (props.attrs as Record<string, number>) ?? {},
-              }}
+              chipName={String(props.chipName ?? 'My Chip')}
               onClose={() => setCustomChipComponentId(null)}
-              onSave={(data) => {
+              onPick={(example) => {
+                let pickedName = String(props.chipName ?? 'My Chip');
+                try {
+                  const obj = JSON.parse(example.chipJson);
+                  if (obj && typeof obj.name === 'string' && obj.name.trim()) pickedName = obj.name;
+                } catch { /* keep current name */ }
                 updateComponent(customChipComponentId, {
-                  properties: { ...comp.properties, ...data },
+                  properties: {
+                    ...comp.properties,
+                    chipName: pickedName,
+                    sourceC: example.sourceC,
+                    chipJson: example.chipJson,
+                    // Loaded sources need a fresh compile — and a stale ROM
+                    // from a previous CPU example must not survive either.
+                    wasmBase64: '',
+                    sourceHash: '',
+                    romBytes: '',
+                  },
                 } as any);
                 setCustomChipComponentId(null);
-                // Force the chip's pin layout to re-render after the save.
                 recalculateAllWirePositions();
+                openChipInEditor(customChipComponentId);
               }}
             />
           );
@@ -3695,8 +3900,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                   position: 'fixed',
                   left: wireContextMenu.x,
                   top: wireContextMenu.y,
-                  background: '#252526',
-                  border: '1px solid #3c3c3c',
+                  background: 'var(--wb-3)',
+                  border: '1px solid var(--wb-7)',
                   borderRadius: 6,
                   padding: 8,
                   zIndex: 9999,
@@ -3705,7 +3910,106 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                   fontSize: 13,
                 }}
               >
-                <div style={{ padding: '2px 4px 8px', color: '#888', fontSize: 11 }}>
+                {/* Add node — first, and the reason the discoverability of the
+                    toolbar tool alone was not enough: right-clicking the wire
+                    is where people actually look for "do something to this
+                    wire", and the click position is already the drop point. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    splitWireWithJunction(
+                      wireContextMenu.wireId,
+                      wireContextMenu.worldX,
+                      wireContextMenu.worldY,
+                      8 / zoomRef.current,
+                    );
+                    setSelectedWire(null);
+                    setWireContextMenu(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    marginBottom: 8,
+                    padding: '7px 6px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: '1px solid var(--wb-7)',
+                    color: '#e6e6e6',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--wb-4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'none';
+                  }}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <path d="M2 12h20M12 12v10" />
+                    <circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none" />
+                  </svg>
+                  {t('editor.canvas.addNodeHere', 'Add node here')}
+                </button>
+
+                {/* Put this wire on the scope. Sits beside "Add node here"
+                    because both answer "do something to this wire", which is
+                    what a right-click on it means. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    probeWire(wireContextMenu.wireId);
+                    setWireContextMenu(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    marginBottom: 8,
+                    padding: '7px 6px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: '1px solid var(--wb-7)',
+                    color: '#e6e6e6',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--wb-4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'none';
+                  }}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="2 14 6 8 10 14 14 6 18 14 22 10" />
+                  </svg>
+                  {t('editor.canvas.probeWire', 'Add to scope')}
+                </button>
+
+                <div style={{ padding: '2px 4px 8px', color: 'var(--wb-10)', fontSize: 11 }}>
                   {t('editor.selectionBar.changeColor')}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -3725,8 +4029,8 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                         backgroundColor: color,
                         border:
                           color.toLowerCase() === wire.color?.toLowerCase()
-                            ? '2px solid #fff'
-                            : '1px solid rgba(255,255,255,0.2)',
+                            ? '2px solid var(--wb-13)'
+                            : '1px solid var(--color-border-strong)',
                         cursor: 'pointer',
                         padding: 0,
                         flexShrink: 0,
@@ -3750,14 +4054,14 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     padding: '7px 6px',
                     background: 'none',
                     border: 'none',
-                    borderTop: '1px solid #3c3c3c',
-                    color: '#e06c75',
+                    borderTop: '1px solid var(--wb-7)',
+                    color: 'var(--color-feedback-error)',
                     cursor: 'pointer',
                     fontSize: 13,
                     textAlign: 'left',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#2a2d2e';
+                    e.currentTarget.style.background = 'var(--wb-4)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'none';
@@ -3834,18 +4138,18 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
             >
               <div
                 style={{
-                  background: '#1e1e1e',
-                  border: '1px solid #3c3c3c',
+                  background: 'var(--wb-2)',
+                  border: '1px solid var(--wb-7)',
                   borderRadius: 8,
                   padding: '20px 24px',
                   maxWidth: 380,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
                 }}
               >
-                <h3 style={{ margin: '0 0 10px', color: '#e0e0e0', fontSize: 15 }}>
+                <h3 style={{ margin: '0 0 10px', color: 'var(--wb-13)', fontSize: 15 }}>
                   {t('editor.canvas.removeConfirm.title', { label })}
                 </h3>
-                <p style={{ margin: '0 0 16px', color: '#999', fontSize: 13, lineHeight: 1.5 }}>
+                <p style={{ margin: '0 0 16px', color: 'var(--wb-10)', fontSize: 13, lineHeight: 1.5 }}>
                   {connectedWires > 0
                     ? t('editor.canvas.removeConfirm.bodyWithWires', { count: connectedWires })
                     : t('editor.canvas.removeConfirm.body')}
@@ -3855,10 +4159,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     onClick={() => setBoardToRemove(null)}
                     style={{
                       padding: '6px 16px',
-                      background: '#333',
-                      border: '1px solid #555',
+                      background: 'var(--wb-6)',
+                      border: '1px solid var(--wb-8)',
                       borderRadius: 4,
-                      color: '#ccc',
+                      color: 'var(--wb-12)',
                       cursor: 'pointer',
                       fontSize: 13,
                     }}
@@ -3872,10 +4176,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
                     }}
                     style={{
                       padding: '6px 16px',
-                      background: '#e06c75',
+                      background: 'var(--color-feedback-error)',
                       border: 'none',
                       borderRadius: 4,
-                      color: '#fff',
+                      color: 'var(--color-fg-on-action)',
                       cursor: 'pointer',
                       fontSize: 13,
                     }}

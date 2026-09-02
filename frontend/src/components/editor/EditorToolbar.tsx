@@ -19,11 +19,16 @@ import {
   formatForFile,
   targetForChip,
 } from '../../services/romCompileService';
-import { compileChip } from '../../services/chipCompileService';
+import { ensureChipWasm, flushChipFileSync } from '../../services/chipFiles';
 import { clearChipDrives } from '../../simulation/customChips/chipPinDrives';
 import { requestElectricalResolve } from '../../simulation/spice/electricalResolveHook';
 import { reportRunEvent } from '../../services/metricsService';
 import { useProjectStore } from '../../store/useProjectStore';
+import { triggerDownloadVlx } from '../../utils/vlxFile';
+import {
+  compileProgress,
+  MULTI_BOARD_PROGRESS_ID,
+} from '../../store/useCompileProgressStore';
 import { LibraryManagerModal } from '../simulator/LibraryManagerModal';
 import { InstallLibrariesModal } from '../simulator/InstallLibrariesModal';
 import { mergeSuggestedLibraries } from '../../utils/libraryManifest';
@@ -41,6 +46,8 @@ import {
   trackOpenLibraryManager,
 } from '../../utils/analytics';
 import './EditorToolbar.css';
+import { ThemeToggle } from '../layout/ThemeToggle';
+import { getResolvedTheme } from '../../lib/theme';
 
 /**
  * Output-console group for circuit pre-flight + runtime faults. Routing these
@@ -141,18 +148,18 @@ const BOARD_PILL_COLOR: Record<BoardKind, string> = {
   'arduino-nano': '#4fc3f7',
   'arduino-mega': '#4fc3f7',
   'raspberry-pi-pico': '#ce93d8',
-  'raspberry-pi-3': '#ef9a9a',
-  'raspberry-pi-4': '#ef9a9a',
-  'raspberry-pi-5': '#ef9a9a',
-  esp32: '#a5d6a7',
-  'esp32-s3': '#a5d6a7',
-  'esp32-c3': '#a5d6a7',
-  'stm32-bluepill': '#80cbc4',
-  'stm32-blackpill': '#b0bec5',
-  'stm32-bluepill-f103cb': '#80cbc4',
-  'stm32-blackpill-f401': '#b0bec5',
-  'stm32-f4-discovery': '#90caf9',
-  'stm32-olimex-h405': '#a5d6a7',
+  'raspberry-pi-3': 'var(--color-feedback-error)',
+  'raspberry-pi-4': 'var(--color-feedback-error)',
+  'raspberry-pi-5': 'var(--color-feedback-error)',
+  esp32: 'var(--color-feedback-success)',
+  'esp32-s3': 'var(--color-feedback-success)',
+  'esp32-c3': 'var(--color-feedback-success)',
+  'stm32-bluepill': 'var(--color-accent-fg)',
+  'stm32-blackpill': 'var(--wb-12)',
+  'stm32-bluepill-f103cb': 'var(--color-accent-fg)',
+  'stm32-blackpill-f401': 'var(--wb-12)',
+  'stm32-f4-discovery': 'var(--color-accent-fg)',
+  'stm32-olimex-h405': 'var(--color-feedback-success)',
   'stm32-netduino-plus2': '#ce93d8',
   'stm32-netduino2': '#ce93d8',
 };
@@ -342,6 +349,10 @@ export const EditorToolbar = ({
       const updateComponent = useSimulatorStore.getState().updateComponent;
       let failed = 0;
 
+      // Commit any chip.c/chip.json edit still sitting in the sync debounce
+      // before reading properties — Run must never build a stale source.
+      flushChipFileSync();
+
       for (const chip of chips) {
         // Re-read the freshest properties each iteration (an earlier chip's
         // update doesn't touch this one, but be defensive).
@@ -350,36 +361,20 @@ export const EditorToolbar = ({
         const chipLabel = String(props.chipName ?? 'custom chip');
         const sourceC = String(props.sourceC ?? '');
         const chipJson = String(props.chipJson ?? '{}');
-        let changed = false;
         // Stamp every line for this chip with its target so the console groups
         // it under its own section (alongside the boards).
         const chipTarget: CompileTarget = { id: chip.id, label: chipLabel, kind: 'chip' };
         const clog = (type: CompilationLog['type'], message: string) =>
           addLog({ timestamp: new Date(), type, message, target: chipTarget });
 
-        // 1. C -> WASM. Only when missing — the chip designer fills this too.
-        if (!String(props.wasmBase64 ?? '') && sourceC) {
-          clog('info', `Compiling chip "${chipLabel}" to WASM...`);
-          try {
-            const r = await compileChip(sourceC, chipJson);
-            if (r.success && r.wasm_base64) {
-              props.wasmBase64 = r.wasm_base64;
-              changed = true;
-              clog('success', `Chip "${chipLabel}" compiled (${r.byte_size} B WASM).`);
-            } else {
-              clog(
-                'error',
-                `Chip "${chipLabel}" WASM compile failed: ${r.error || r.stderr || 'unknown error'}`,
-              );
-              failed++;
-            }
-          } catch (e) {
-            clog(
-              'error',
-              `Chip "${chipLabel}" WASM compile error: ${e instanceof Error ? e.message : String(e)}`,
-            );
-            failed++;
-          }
+        // 1. C -> WASM. ensureChipWasm recompiles when the wasm is missing
+        //    OR the source hash changed since the last build (chip.c edits
+        //    clear the wasm via the file sync, but a property written
+        //    directly — e.g. by the agent — must not leave a stale binary).
+        //    It writes the component itself, merging onto live properties.
+        if (sourceC) {
+          const r = await ensureChipWasm(chip.id, clog);
+          if (!r.ok) failed++;
         }
 
         // 2. program file -> ROM bytes (programmable CPU chips). Recompile
@@ -409,9 +404,17 @@ export const EditorToolbar = ({
             try {
               const rr = await compileRom(file.content, target, fmt);
               if (rr.success && rr.rom_base64) {
-                props.romBytes = rr.rom_base64;
-                props.programFile = programFile;
-                changed = true;
+                // Merge onto the LIVE properties — the compile was an await
+                // and a stale spread here would revert anything written in
+                // the meantime (the wasm step above, a concurrent edit).
+                const fresh = useSimulatorStore.getState().components.find((c) => c.id === chip.id);
+                updateComponent(chip.id, {
+                  properties: {
+                    ...((fresh?.properties ?? props) as Record<string, unknown>),
+                    romBytes: rr.rom_base64,
+                    programFile,
+                  },
+                } as any);
                 clog('success', `ROM ready: ${rr.byte_size} B injected into "${chipLabel}".`);
               } else {
                 clog(
@@ -428,10 +431,6 @@ export const EditorToolbar = ({
               failed++;
             }
           }
-        }
-
-        if (changed) {
-          updateComponent(chip.id, { properties: props } as any);
         }
       }
       return { failed };
@@ -530,6 +529,11 @@ export const EditorToolbar = ({
 
     blog('info', `Starting compilation for ${boardLabel} (${fqbn})...`);
 
+    // Board-less projects still compile (a sketch with no board on the canvas),
+    // but there is no board id to key the progress card on. Null = no card,
+    // which is the pre-existing behaviour for that case.
+    const progressBoardId = activeBoardId ?? null;
+
     try {
       // Reconcile the two "active group" pointers before reading sources.
       // If the editor drifted to another BOARD's group (dangling pointer
@@ -564,6 +568,12 @@ export const EditorToolbar = ({
           content: f.content,
         }));
 
+      // Progress card over the canvas: from here on the user can see the
+      // build advance (and, when the server is busy, that it is queued rather
+      // than stuck). Only the paths that actually reach the backend register —
+      // MicroPython and the Pi boards returned above without a build.
+      if (progressBoardId) compileProgress.begin(progressBoardId, boardLabel);
+
       // Stream live cmake + ninja output into the compilation console as
       // it arrives, instead of waiting for the whole build to finish.
       // Each poll the backend returns the cumulative stdout buffer; we
@@ -573,13 +583,20 @@ export const EditorToolbar = ({
         sketchFiles,
         fqbn,
         currentProject?.id ?? null,
-        ({ stdout }) => {
-          if (stdout.length <= lastStreamedLen) return;
-          const delta = stdout.slice(lastStreamedLen);
-          lastStreamedLen = stdout.length;
+        (info) => {
+          const { stdout } = info;
+          const grew = stdout.length > lastStreamedLen;
+          const delta = grew ? stdout.slice(lastStreamedLen) : '';
+          if (grew) lastStreamedLen = stdout.length;
           const newLines = delta
             .split('\n')
             .filter((s) => s.trim() && !isNoiseBuildLine(s));
+          // The card shows the newest line under the bar, so it updates on
+          // every poll — including the ones that brought no output at all,
+          // which is exactly when the queue/stage fields matter most.
+          if (progressBoardId) {
+            compileProgress.update(progressBoardId, info, newLines[newLines.length - 1]);
+          }
           if (!newLines.length) return;
           const now = new Date();
           setCompileLogs((prev: CompilationLog[]) => [
@@ -637,7 +654,9 @@ export const EditorToolbar = ({
         setMessage({ type: 'success', text: 'Compiled successfully' });
         markCompiled();
         setMissingLibHint(false);
+        if (progressBoardId) compileProgress.finish(progressBoardId, 'success');
       } else {
+        if (progressBoardId) compileProgress.finish(progressBoardId, 'error');
         const errText = result.error || result.stderr || 'Compile failed';
         setMessage({ type: 'error', text: errText });
         // Issue #208: drop the previous successful program from this
@@ -657,6 +676,7 @@ export const EditorToolbar = ({
       const errMsg = err instanceof Error ? err.message : 'Compile failed';
       blog('error', errMsg);
       setMessage({ type: 'error', text: errMsg });
+      if (progressBoardId) compileProgress.finish(progressBoardId, 'error');
     } finally {
       setCompiling(false);
     }
@@ -1060,6 +1080,22 @@ export const EditorToolbar = ({
     let ok = 0;
     let boardFailed = 0;
 
+    // One progress card for the whole run, relabelled per board — the builds
+    // are sequential, so "board 2 of 3" is the honest headline and the elapsed
+    // time should be the run's, not the current board's.
+    //
+    // The denominator counts boards that will REALLY reach the backend: Pi and
+    // MicroPython boards are handled locally, and a board with no FQBN is
+    // skipped before it ever compiles, so counting either left the label
+    // stuck at "(2/3)" for a run that only ever built two.
+    const compilableCount = boardsList.filter(
+      (b) =>
+        !isPiBoardKind(b.boardKind) &&
+        b.languageMode !== 'micropython' &&
+        !!fqbnForLanguage(b.boardKind, b.languageMode),
+    ).length;
+    let compiledIndex = 0;
+
     for (const board of boardsList) {
       const label = boardDisplayName(board);
       // Stamp this board's lines so the console groups them under its section.
@@ -1073,6 +1109,25 @@ export const EditorToolbar = ({
         continue;
       }
 
+      // MicroPython boards never go through the C++ toolchain — mirror the
+      // single-Run branch and load the firmware + user files instead. Without
+      // this, fqbnForLanguage falls back to the Arduino FQBN and the board's
+      // main.py is compiled as sketch.ino.cpp (issue #269).
+      if (board.languageMode === 'micropython') {
+        blog('info', 'MicroPython: loading firmware and user files...');
+        try {
+          const groupFiles = useEditorStore.getState().getGroupFiles(board.activeFileGroupId);
+          const pyFiles = groupFiles.map((f) => ({ name: f.name, content: f.content }));
+          await loadMicroPythonProgram(board.id, pyFiles);
+          blog('success', 'MicroPython firmware loaded successfully');
+          ok++;
+        } catch (err) {
+          blog('error', err instanceof Error ? err.message : 'Failed to load MicroPython');
+          boardFailed++;
+        }
+        continue;
+      }
+
       const fqbn = fqbnForLanguage(board.boardKind, board.languageMode);
       if (!fqbn) {
         blog('error', 'no FQBN configured');
@@ -1081,6 +1136,19 @@ export const EditorToolbar = ({
       }
 
       blog('info', 'compiling...');
+
+      compiledIndex++;
+      const cardLabel =
+        compilableCount > 1 ? `${label} (${compiledIndex}/${compilableCount})` : label;
+      // Raise the card at the FIRST real compile, not before the loop: any
+      // MicroPython / Pi boards ahead of it are handled locally, and starting
+      // the card early made it claim "Waiting for a build slot" while nothing
+      // had been submitted to the server at all.
+      if (compiledIndex === 1) {
+        compileProgress.begin(MULTI_BOARD_PROGRESS_ID, cardLabel);
+      } else {
+        compileProgress.relabel(MULTI_BOARD_PROGRESS_ID, cardLabel);
+      }
 
       try {
         const groupFiles = useEditorStore.getState().getGroupFiles(board.activeFileGroupId);
@@ -1094,13 +1162,17 @@ export const EditorToolbar = ({
           sketchFiles,
           fqbn,
           currentProject?.id ?? null,
-          ({ stdout }) => {
-            if (stdout.length <= lastStreamedLen) return;
-            const delta = stdout.slice(lastStreamedLen);
-            lastStreamedLen = stdout.length;
+          (info) => {
+            const { stdout } = info;
+            const grew = stdout.length > lastStreamedLen;
+            const delta = grew ? stdout.slice(lastStreamedLen) : '';
+            if (grew) lastStreamedLen = stdout.length;
             const newLines = delta
             .split('\n')
             .filter((s) => s.trim() && !isNoiseBuildLine(s));
+            compileProgress.update(
+              MULTI_BOARD_PROGRESS_ID, info, newLines[newLines.length - 1],
+            );
             if (!newLines.length) return;
             const now = new Date();
             setCompileLogs((prev: CompilationLog[]) => [
@@ -1136,6 +1208,12 @@ export const EditorToolbar = ({
         blog('error', err instanceof Error ? err.message : String(err));
         boardFailed++;
       }
+    }
+
+    if (compiledIndex > 0) {
+      compileProgress.finish(
+        MULTI_BOARD_PROGRESS_ID, boardFailed > 0 ? 'error' : 'success',
+      );
     }
 
     const failed = boardFailed + chipFailed;
@@ -1206,6 +1284,16 @@ export const EditorToolbar = ({
     for (const board of refreshed) {
       if (board.running) continue;
       if (isQemuBoardKind(board.boardKind) || board.compiledProgram || board.languageMode === 'micropython') {
+        // MicroPython boards get their firmware + project (re)loaded before
+        // every start, exactly like single Run does: the pending-program slot
+        // is consumed by each boot, so a re-run that skipped compileAllBoards
+        // (nothing changed) would otherwise boot into a bare REPL. The load
+        // is a setter, so doing it again right after compile-all is harmless.
+        if (board.languageMode === 'micropython') {
+          const groupFiles = useEditorStore.getState().getGroupFiles(board.activeFileGroupId);
+          const pyFiles = groupFiles.map((f) => ({ name: f.name, content: f.content }));
+          await loadMicroPythonProgram(board.id, pyFiles);
+        }
         trackRunSimulation(board.boardKind);
         reportRun(board.boardKind);
         startBoard(board.id);
@@ -1220,6 +1308,31 @@ export const EditorToolbar = ({
       useSimulatorStore.getState().restartParts();
       const anyBoardRunning = useSimulatorStore.getState().boards.some((b) => b.running);
       if (!anyBoardRunning) setElectricalPaused(false);
+    }
+  };
+
+  /** Export the workspace as a portable .vlx — the lossless format, unlike
+   *  the Wokwi .zip below which stores ONE board and drops the other boards'
+   *  wires. It was reachable only from the OSS save button (which the pro
+   *  overlay replaces with the server save modal) and from the desktop menu,
+   *  so on velxio.dev a .vlx could be imported but never produced. */
+  const handleExportVlx = () => {
+    try {
+      // Chip files sync on a 300 ms debounce; without this a chip.c edited
+      // seconds ago would export against stale properties.
+      flushChipFileSync();
+      const proj = useProjectStore.getState().currentProject;
+      const name =
+        proj?.slug ??
+        files.find((f) => f.name.endsWith('.ino'))?.name.replace('.ino', '') ??
+        undefined;
+      const filename = triggerDownloadVlx({ name });
+      setMessage({ type: 'success', text: `Exported ${filename}` });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: `Export failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   };
 
@@ -1283,9 +1396,15 @@ export const EditorToolbar = ({
     }
     setMessage({ type: 'info', text: 'Rendering screenshot — may take 5-10 seconds…' });
     try {
-      const resp = await fetch(`/api/pro/projects/${projectId}/screenshot.png`, {
-        credentials: 'include',
-      });
+      // The render happens in a headless browser on the server, which has
+      // no localStorage and therefore no idea which theme the user is
+      // looking at -- it used to hand back a dark image to someone working
+      // in light mode. Pass the RESOLVED theme so the export matches the
+      // canvas it was taken from.
+      const resp = await fetch(
+        `/api/pro/projects/${projectId}/screenshot.png?theme=${getResolvedTheme()}`,
+        { credentials: 'include' },
+      );
       if (resp.status === 402) {
         // Fire the in-place upgrade modal instead of bouncing to /pricing —
         // keeps the user in the editor with full context. The pro overlay's
@@ -1512,6 +1631,7 @@ export const EditorToolbar = ({
   const makeMenuCommands = () => ({
     import: () => importInputRef.current?.click(),
     export: () => void handleExport(),
+    exportVlx: () => handleExportVlx(),
     bom: () => void handleExportBom(),
     screenshot: () => void handleExportScreenshot(),
     firmware: () => firmwareInputRef.current?.click(),
@@ -1542,6 +1662,7 @@ export const EditorToolbar = ({
     const offs = [
       registerEditorCommand('project.import', () => menuCommandsRef.current.import()),
       registerEditorCommand('project.export', () => menuCommandsRef.current.export()),
+      registerEditorCommand('project.exportVlx', () => menuCommandsRef.current.exportVlx()),
       registerEditorCommand('project.exportBom', () => menuCommandsRef.current.bom()),
       registerEditorCommand('project.exportScreenshot', () => menuCommandsRef.current.screenshot()),
       registerEditorCommand('firmware.upload', () => menuCommandsRef.current.firmware()),
@@ -1578,9 +1699,9 @@ export const EditorToolbar = ({
               }}
               title={t('editor.toolbar.languageMode')}
               style={{
-                background: '#2d2d2d',
-                color: '#ccc',
-                border: '1px solid #444',
+                background: 'var(--wb-5)',
+                color: 'var(--wb-12)',
+                border: '1px solid var(--wb-7)',
                 borderRadius: 4,
                 height: 28,
                 alignSelf: 'center',
@@ -1935,6 +2056,7 @@ export const EditorToolbar = ({
                 <line x1="12" y1="19" x2="20" y2="19" />
               </svg>
             </button>
+            <ThemeToggle />
             {rightSlot}
           </div>
         </div>

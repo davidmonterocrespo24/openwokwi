@@ -41,7 +41,7 @@ const IcoFolder = ({ open }: { open: boolean }) => (
 
 const IcoFile = ({ name }: { name: string }) => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  const color = ext === 'py' ? '#4fc3f7' : ext === 'sh' ? '#a5d6a7' : '#aaa';
+  const color = ext === 'py' ? '#4fc3f7' : ext === 'sh' ? 'var(--color-feedback-success)' : 'var(--wb-11)';
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -529,8 +529,8 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     width: '100%',
     height: '100%',
-    background: '#252526',
-    borderRight: '1px solid #333',
+    background: 'var(--wb-3)',
+    borderRight: '1px solid var(--wb-6)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -544,11 +544,11 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     padding: '0 8px',
     height: 36,
-    borderBottom: '1px solid #333',
+    borderBottom: '1px solid var(--wb-6)',
     flexShrink: 0,
   },
   title: {
-    color: '#9d9d9d',
+    color: 'var(--wb-11)',
     fontSize: 10,
     fontWeight: 700,
     letterSpacing: 0.5,
@@ -574,17 +574,17 @@ const styles: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
     padding: '4px 0',
     scrollbarWidth: 'thin',
-    scrollbarColor: '#3c3c3c transparent',
+    scrollbarColor: 'var(--wb-7) transparent',
   },
   empty: {
-    color: '#666',
+    color: 'var(--wb-9)',
     fontSize: 11,
     padding: 12,
   },
   ctxMenu: {
     position: 'fixed',
-    background: '#2d2d2d',
-    border: '1px solid #3c3c3c',
+    background: 'var(--wb-5)',
+    border: '1px solid var(--wb-7)',
     borderRadius: 4,
     zIndex: 2000,
     display: 'flex',
@@ -596,7 +596,7 @@ const styles: Record<string, React.CSSProperties> = {
   ctxBtn: {
     background: 'none',
     border: 'none',
-    color: '#ccc',
+    color: 'var(--wb-12)',
     padding: '7px 14px',
     textAlign: 'left',
     cursor: 'pointer',
@@ -605,7 +605,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   ctxSep: {
     height: 1,
-    background: '#3c3c3c',
+    background: 'var(--wb-7)',
     margin: '2px 0',
   },
 };

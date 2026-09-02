@@ -133,6 +133,29 @@ export const ONLINE_ONLY_BOARD_ADS: OnlineOnlyBoardAd[] = [
       '</svg>',
   },
   {
+    id: 'esp32-p4-preview',
+    label: 'ESP32-P4 Preview',
+    description: 'Bare ESP32-P4 DevKit: dual-core RISC-V 400MHz, 32MB PSRAM, every GPIO broken out for your own circuits — in-browser emulation',
+    thumbnailSvg:
+      '<svg width="72" height="72" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="20" y="4" width="32" height="64" rx="3" fill="#17181c" stroke="#3a3d42"/>' +
+      '<rect x="27" y="9" width="18" height="16" rx="1.5" fill="#b8bec6"/>' +
+      '<text x="36" y="19" text-anchor="middle" font-size="6" font-family="monospace" fill="#2d3138">P4</text>' +
+      '<g fill="#d8b44a">' +
+      '<rect x="22" y="9" width="3.5" height="3" rx="0.8"/><rect x="22" y="16" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="22" y="23" width="3.5" height="3" rx="0.8"/><rect x="22" y="30" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="22" y="37" width="3.5" height="3" rx="0.8"/><rect x="22" y="44" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="22" y="51" width="3.5" height="3" rx="0.8"/><rect x="22" y="58" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="46.5" y="9" width="3.5" height="3" rx="0.8"/><rect x="46.5" y="16" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="46.5" y="23" width="3.5" height="3" rx="0.8"/><rect x="46.5" y="30" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="46.5" y="37" width="3.5" height="3" rx="0.8"/><rect x="46.5" y="44" width="3.5" height="3" rx="0.8"/>' +
+      '<rect x="46.5" y="51" width="3.5" height="3" rx="0.8"/><rect x="46.5" y="58" width="3.5" height="3" rx="0.8"/>' +
+      '</g>' +
+      '<rect x="30" y="60" width="12" height="6" rx="1" fill="#8a8f96"/>' +
+      '<circle cx="36" cy="31" r="1.8" fill="#ff3b30"/>' +
+      '</svg>',
+  },
+  {
     id: 'esp-sensairshuttle',
     label: 'ESP-SensAirShuttle',
     description: 'Espressif ESP32-C5 sensing devkit: BME690 gas sensor + BMM350 magnetometer shuttles, 1.9" touch LCD, WiFi 6 dual-band — in-browser emulation',
@@ -352,6 +375,76 @@ export const ONLINE_ONLY_COMPONENT_ADS: OnlineOnlyComponentAd[] = [
     description: 'A 320x240 ILI9341 panel with an XPT2046 resistive touch screen on the same SPI bus - available in the online editor',
     category: 'displays',
     thumbnailSvg: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><rect x='6' y='4' width='48' height='52' rx='3' fill='#16233a' stroke='#0b1424' stroke-width='1'/><rect x='10' y='11' width='40' height='38' rx='1.5' fill='#05070c' stroke='#243349' stroke-width='1'/><rect x='12' y='13' width='36' height='34' fill='#102030'/><circle cx='34' cy='32' r='5.5' fill='none' stroke='#5cd8ff' stroke-width='1.6'/><circle cx='34' cy='32' r='2' fill='#5cd8ff'/><rect x='16' y='17' width='16' height='3' rx='1.5' fill='#2e7dd1'/><rect x='16' y='23' width='11' height='3' rx='1.5' fill='#394a5e'/></svg>",
+  },
+  {
+    id: 'pro-dc-motor',
+    label: 'DC Motor / Fan',
+    description: 'A brushed motor that spins as fast as the PWM lets it, with inertia and a stall current - available in the online editor',
+    category: 'motors',
+    thumbnailSvg: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><rect x='16' y='10' width='28' height='16' rx='4' fill='#9aa4ac' stroke='#6b757c' stroke-width='1'/><rect x='20' y='26' width='20' height='4' rx='1.5' fill='#78828a'/><rect x='28' y='30' width='4' height='6' rx='1.5' fill='#7f8a92'/><g transform='translate(30 42)'><path d='M0 0 C6 -5 13 -6 18 -2 C14 4 7 6 0 3 Z' fill='#cdd6dd' stroke='#8d979f' stroke-width='0.8'/><path d='M0 0 C6 -5 13 -6 18 -2 C14 4 7 6 0 3 Z' fill='#cdd6dd' stroke='#8d979f' stroke-width='0.8' transform='rotate(120)'/><path d='M0 0 C6 -5 13 -6 18 -2 C14 4 7 6 0 3 Z' fill='#cdd6dd' stroke='#8d979f' stroke-width='0.8' transform='rotate(240)'/></g><circle cx='30' cy='42' r='4' fill='#5d666c'/></svg>",
+  },
+  {
+    id: 'pro-heater',
+    label: 'Heater Block',
+    description: 'A heater with real thermal mass: it warms what is around it and cools to ambient when you cut the power - available in the online editor',
+    category: 'output',
+    thumbnailSvg: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><rect x='10' y='18' width='40' height='26' rx='3' fill='#8d959b' stroke='#5f676c' stroke-width='1'/><rect x='10' y='18' width='40' height='26' rx='3' fill='#e2521a' opacity='0.75'/><rect x='15' y='27' width='15' height='6' rx='3' fill='#5d666c'/><circle cx='42' cy='30' r='3.4' fill='#4a5257'/><path d='M22 18 L22 8' stroke='#c0392b' stroke-width='2.4'/><path d='M38 18 L38 8' stroke='#2c3e50' stroke-width='2.4'/><circle cx='22' cy='8' r='2.6' fill='#c9a23a'/><circle cx='38' cy='8' r='2.6' fill='#c9a23a'/></svg>",
+  },
+  {
+    id: 'pro-ssr',
+    label: 'Solid State Relay (SSR-25DA)',
+    description: 'Zero-cross solid-state relay: a logic pin switches the load, the way a real oven or reflow controller drives one - available in the online editor',
+    category: 'electromech',
+    thumbnailSvg: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><rect x='6' y='16' width='48' height='22' rx='2' fill='#242629' stroke='#101214' stroke-width='1'/><rect x='6' y='33' width='48' height='5' rx='1.5' fill='#171a1c'/><g fill='#8d959b'><rect x='9' y='38' width='3' height='8' rx='1'/><rect x='17' y='38' width='3' height='8' rx='1'/><rect x='25' y='38' width='3' height='8' rx='1'/><rect x='33' y='38' width='3' height='8' rx='1'/><rect x='41' y='38' width='3' height='8' rx='1'/><rect x='48' y='38' width='3' height='8' rx='1'/></g><circle cx='30' cy='26' r='3' fill='#ff5b4a'/><g fill='#cfd6da'><circle cx='13' cy='21' r='3'/><circle cx='22' cy='21' r='3'/><circle cx='38' cy='21' r='3'/><circle cx='47' cy='21' r='3'/></g></svg>",
+  },
+  {
+    id: 'dfr-mq7-co',
+    label: 'Gravity: Analog CO Sensor (MQ7)',
+    description: 'Analog carbon-monoxide sensor on an ADC pin, with a slider for the ppm in the air - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"14\" y=\"4\" width=\"36\" height=\"52\" rx=\"5\" fill=\"#141414\"/><circle cx=\"22\" cy=\"12\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"22\" cy=\"12\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"42\" cy=\"12\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"42\" cy=\"12\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"22\" cy=\"48\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"22\" cy=\"48\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"42\" cy=\"48\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"42\" cy=\"48\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"32\" cy=\"30\" r=\"14\" fill=\"#f0885a\"/><circle cx=\"32\" cy=\"30\" r=\"9\" fill=\"#e7e7e7\"/><rect x=\"24\" y=\"55\" width=\"16\" height=\"6\" rx=\"1\" fill=\"#fef6d4\"/></svg>",
+  },
+  {
+    id: 'dfr-ecg-ad8232',
+    label: 'Gravity: Heart Rate Monitor (ECG, AD8232)',
+    description: 'AD8232 ECG front-end whose analog output is a real PQRST waveform, at the BPM you dial in - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"4\" y=\"16\" width=\"56\" height=\"32\" rx=\"5\" fill=\"#141414\"/><circle cx=\"14\" cy=\"24\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"14\" cy=\"24\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"14\" cy=\"40\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"14\" cy=\"40\" r=\"2.1\" fill=\"#fff\"/><rect x=\"2\" y=\"28\" width=\"18\" height=\"8\" rx=\"1.5\" fill=\"#0a0a0a\" stroke=\"#3a3a3a\"/><polyline points=\"26,38 30,38 33,28 36,46 39,34 42,38 48,38\" fill=\"none\" stroke=\"#4ade80\" stroke-width=\"2\"/><rect x=\"52\" y=\"24\" width=\"7\" height=\"16\" rx=\"1.5\" fill=\"#fef6d4\"/></svg>",
+  },
+  {
+    id: 'dfr-soil-moisture',
+    label: 'Gravity: Capacitive Soil Moisture (IP65)',
+    description: 'Capacitive soil probe: drier soil, higher voltage, and a slider to water the pot - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"4\" y=\"26\" width=\"7\" height=\"12\" rx=\"1.5\" fill=\"#fef6d4\"/><path d=\"M11 32 H16\" stroke=\"#2b2f36\" stroke-width=\"3\"/><rect x=\"15\" y=\"20\" width=\"16\" height=\"24\" rx=\"4\" fill=\"#43474e\" stroke=\"#5b616b\"/><path d=\"M19 26 l4 4 4 -4M19 34 l4 4 4 -4\" fill=\"none\" stroke=\"#9aa1ab\" stroke-width=\"2\" stroke-linecap=\"round\"/><rect x=\"30\" y=\"24\" width=\"24\" height=\"16\" rx=\"2\" fill=\"#f4f5f7\" stroke=\"#b9bec6\"/><path d=\"M53 24 L61 32 L53 40 Z\" fill=\"#2b2f36\"/></svg>",
+  },
+  {
+    id: 'dfr-ph-industrial',
+    label: 'Gravity: Industrial Analog pH Sensor',
+    description: 'Industrial pH probe and transmitter, on the curve the DFRobot_PH library expects - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"2\" y=\"28\" width=\"14\" height=\"8\" rx=\"2\" fill=\"#2a2e33\" stroke=\"#4a5057\"/><rect x=\"16\" y=\"26\" width=\"6\" height=\"12\" rx=\"1.5\" fill=\"#a7adb5\"/><rect x=\"22\" y=\"10\" width=\"40\" height=\"44\" rx=\"5\" fill=\"#141414\"/><circle cx=\"30\" cy=\"18\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"30\" cy=\"18\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"54\" cy=\"18\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"54\" cy=\"18\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"30\" cy=\"46\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"30\" cy=\"46\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"54\" cy=\"46\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"54\" cy=\"46\" r=\"2.1\" fill=\"#fff\"/><path d=\"M42 24 c4 6 6 8 6 11 a6 6 0 0 1 -12 0 c0 -3 2 -5 6 -11 z\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.6\"/></svg>",
+  },
+  {
+    id: 'dfr-c4001-mmwave',
+    label: 'Gravity: C4001 24GHz mmWave Radar',
+    description: '24GHz FMCW radar for presence and motion over I2C: walk a target in and out of its cone - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"14\" y=\"4\" width=\"36\" height=\"52\" rx=\"5\" fill=\"#141414\"/><rect x=\"20\" y=\"7\" width=\"15\" height=\"46\" rx=\"1.5\" fill=\"#fce9a4\"/><rect x=\"23\" y=\"13\" width=\"9\" height=\"8\" rx=\"1\" fill=\"#e8c063\"/><rect x=\"23\" y=\"34\" width=\"9\" height=\"8\" rx=\"1\" fill=\"#e8c063\"/><circle cx=\"42\" cy=\"14\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"42\" cy=\"14\" r=\"2.1\" fill=\"#fff\"/><circle cx=\"42\" cy=\"42\" r=\"5\" fill=\"#d99c43\"/><circle cx=\"42\" cy=\"42\" r=\"2.1\" fill=\"#fff\"/><rect x=\"30\" y=\"24\" width=\"10\" height=\"10\" rx=\"1.5\" fill=\"#2f3237\"/><rect x=\"24\" y=\"55\" width=\"18\" height=\"6\" rx=\"1\" fill=\"#fef6d4\"/></svg>",
+  },
+  {
+    id: 'dfr-huskylens',
+    label: 'HuskyLens AI Vision Sensor',
+    description: 'The plug-and-play K210 AI camera, modelled whole: live screen, the algorithm menu, and faces and tags it learns - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"10\" y=\"8\" width=\"44\" height=\"48\" rx=\"5\" fill=\"#101216\"/><rect x=\"16\" y=\"14\" width=\"32\" height=\"24\" rx=\"2\" fill=\"#05070c\"/><rect x=\"24\" y=\"20\" width=\"14\" height=\"12\" fill=\"none\" stroke=\"#ffd23f\" stroke-width=\"1.5\"/><circle cx=\"46\" cy=\"48\" r=\"4\" fill=\"#05070c\" stroke=\"#3a3f49\"/></svg>",
+  },
+  {
+    id: 'dfr-df2301q-voice',
+    label: 'Gravity: DF2301Q Voice Recognition',
+    description: 'Offline speech recognition that reports command IDs over I2C - speak to it from the canvas - available in the online editor',
+    category: 'input',
+    thumbnailSvg: "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"6\" y=\"14\" width=\"52\" height=\"36\" rx=\"4\" fill=\"#0f7a4d\"/><circle cx=\"20\" cy=\"32\" r=\"8\" fill=\"#101216\"/><circle cx=\"20\" cy=\"32\" r=\"3\" fill=\"#05070c\"/><rect x=\"34\" y=\"22\" width=\"20\" height=\"6\" rx=\"3\" fill=\"#1d2635\"/><rect x=\"34\" y=\"32\" width=\"20\" height=\"6\" rx=\"3\" fill=\"#1d2635\"/></svg>",
   },
   {
     id: 'm5stack-chain-8x8',

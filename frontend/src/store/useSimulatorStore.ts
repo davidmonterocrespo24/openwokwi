@@ -28,6 +28,7 @@ import type { RP2040I2CDevice } from '../simulation/RP2040Simulator';
 import type { Wire, WireInProgress, WireEndpoint } from '../types/wire';
 import type { BoardKind, BoardInstance, LanguageMode, WifiStatus } from '../types/board';
 import { BOARD_KIND_FQBN, BOARD_SUPPORTS_ESPIDF, BOARD_SUPPORTS_MICROPYTHON, EMULATED_WIFI_SSIDS, isPiBoardKind, isStm32BoardKind } from '../types/board';
+import { annotateSerialChunk } from '../utils/serialDiagnostics';
 import { boardGateDecision, proBoardFeatureName, triggerProUpgradePrompt } from '../lib/proBoardGate';
 import { getSerialTxInterceptor } from '../lib/proHardwareSerial';
 import { calculatePinPosition } from '../utils/pinPositionCalculator';
@@ -47,6 +48,8 @@ import {
   normalizeWireWaypoints,
   previewElbow,
 } from '../utils/wireUtils';
+import { computeWireSplit } from '../utils/wireSplit';
+import { generateUUID } from '../utils/uuid';
 import {
   routeAroundObstacles,
   collectComponentObstacles,
@@ -64,7 +67,7 @@ import {
   updateWires as icUpdateWires,
   setInterconnectRuntime,
 } from '../simulation/Interconnect';
-import { SENSOR_CONTROLS, getSensorControl } from '../simulation/sensorControlConfig';
+import { SENSOR_CONTROLS, getSensorControl, getSensorControlForComponent } from '../simulation/sensorControlConfig';
 import { SINGLE_WIRE_SENSOR_MODELS } from '../simulation/sensorModels';
 import { traceBoardGpio } from '../simulation/PinTrace';
 import { dispatchSensorUpdate } from '../simulation/SensorUpdateRegistry';
@@ -1180,6 +1183,22 @@ interface SimulatorState {
   wireInProgress: WireInProgress | null;
   addWire: (wire: Wire) => void;
   removeWire: (wireId: string) => void;
+  /**
+   * Drop a junction node onto `wireId` at (x, y), splitting it in two, and
+   * optionally land the wire currently being drawn on the new node.
+   *
+   * The whole gesture is ONE undo command: Ctrl+Z restores the original wire
+   * and removes the node, rather than leaving the user to unpick a half-split
+   * circuit. Returns the junction's component id, or null when the point is
+   * not actually on the wire (the caller then treats the click normally).
+   */
+  splitWireWithJunction: (
+    wireId: string,
+    x: number,
+    y: number,
+    threshold: number,
+    opts?: { finishWireInProgress?: boolean },
+  ) => string | null;
   updateWire: (wireId: string, updates: Partial<Wire>) => void;
   setSelectedWire: (wireId: string | null) => void;
   setWires: (wires: Wire[]) => void;
@@ -1312,8 +1331,11 @@ const { append: appendSerial } = createSerialBatcher((perBoard) => {
   useSimulatorStore.setState((s) => {
     let globalOut = s.serialOutput;
     const boards = s.boards.map((b) => {
-      const chunk = perBoard.get(b.id);
-      if (!chunk) return b;
+      const raw = perBoard.get(b.id);
+      if (!raw) return b;
+      // Attach the one-line explanation when a known cryptic firmware error
+      // scrolls past (issue #270); a no-op for ordinary output.
+      const chunk = annotateSerialChunk(b.serialOutput, raw);
       if (s.activeBoardId === b.id) globalOut += chunk;
       return { ...b, serialOutput: b.serialOutput + chunk };
     });
@@ -1341,6 +1363,9 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
     return (pin: number, state: boolean, timeMs: number) => {
       const { channels, pushSample } = useOscilloscopeStore.getState();
       for (const ch of channels) {
+        // Analog channels are fed by the SPICE bridge, not by GPIO edges —
+        // they carry a net name, not a (board, pin).
+        if (ch.kind !== 'digital') continue;
         if (ch.boardId === boardId && ch.pin === pin) pushSample(ch.id, timeMs, state);
       }
     };
@@ -2127,17 +2152,25 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
           // reviving the fake stub for them. Known SSIDs pass through
           // untouched, and the rewrite is announced on serial so nobody
           // debugs a connection they didn't make.
+          // Custom AP parts (overlay-provided window seam) replace the
+          // network list the shim knows about — and the redirect target
+          // becomes the FIRST project network instead of Velxio-GUEST.
+          // Without the provider (OSS build) the classic four stand.
+          const customSsids =
+            (window as { __velxio_custom_wifi_ssids__?: () => string[] | null })
+              .__velxio_custom_wifi_ssids__?.() ?? null;
+          const shimSsids: readonly string[] = customSsids ?? EMULATED_WIFI_SSIDS;
           const networkStub = wifiOn ? [
             'import network as _vlx_net',
             'import time as _vlx_time',
-            `_VLX_SSIDS = (${EMULATED_WIFI_SSIDS.map((s) => JSON.stringify(s)).join(', ')})`,
+            `_VLX_SSIDS = (${shimSsids.map((s) => JSON.stringify(s)).join(', ')},)`,
             'class _VlxWLAN:',
             '    def __init__(self, *a, **k):',
             '        self._w = _vlx_net.WLAN(*a, **k)',
             '    def connect(self, ssid=None, key=None, **kw):',
             '        if ssid is not None and ssid not in _VLX_SSIDS:',
-            '            print("[velxio] SSID %r is not part of the emulated network; connecting to \'Velxio-GUEST\' instead" % ssid)',
-            '            ssid, key = "Velxio-GUEST", ""',
+            `            print("[velxio] SSID %r is not part of the emulated network; connecting to ${JSON.stringify(shimSsids[0]).replace(/"/g, "'")} instead" % ssid)`,
+            `            ssid, key = ${JSON.stringify(shimSsids[0])}, ""`,
             '        if ssid is None:',
             '            return self._w.connect()',
             '        return self._w.connect(ssid, key, **kw)',
@@ -2327,6 +2360,18 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       const boardKindOfBoard = (b: { boardKind: string }): string => b.boardKind;
       const board = get().boards.find((b) => b.id === boardId);
       if (!board) return;
+
+      // A fresh run starts with a clean radio state. The WiFi/BLE badges are
+      // only visible while the board runs, and nothing else clears them, so
+      // without this a re-run opens showing the PREVIOUS run's association
+      // (a green got_ip badge for a connection nothing has made yet).
+      if (board.wifiStatus || board.bleStatus) {
+        set((s) => ({
+          boards: s.boards.map((b) =>
+            b.id === boardId ? { ...b, wifiStatus: undefined, bleStatus: undefined } : b,
+          ),
+        }));
+      }
 
       // Pro gate (run backstop): catches STM32/Pi boards that entered the
       // canvas via an example or a loaded project (which bypass the picker's
@@ -2715,18 +2760,25 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
       // 2.5V) and refreshes the panel's cached value; bumping sensorResetNonce
       // remounts the open SensorControlPanel so its slider snaps back too.
       const sensorComps = get().components.filter(
-        (c) => c.metadataId && getSensorControl(c.metadataId),
+        (c) => c.metadataId && getSensorControlForComponent(c),
       );
       if (sensorComps.length > 0) {
         set((s) => ({
           components: s.components.map((c) => {
-            const def = getSensorControl(c.metadataId);
-            return def ? { ...c, properties: { ...c.properties, ...def.defaultValues } } : c;
+            const def = getSensorControlForComponent(c);
+            if (!def) return c;
+            // Custom chips keep control values under properties.attrs (the
+            // chip reads them via vx_attr_read) — never as top-level props.
+            if (c.metadataId === 'custom-chip') {
+              const prev = (c.properties.attrs ?? {}) as Record<string, number>;
+              return { ...c, properties: { ...c.properties, attrs: { ...prev, ...def.defaultValues } } };
+            }
+            return { ...c, properties: { ...c.properties, ...def.defaultValues } };
           }),
           sensorResetNonce: s.sensorResetNonce + 1,
         }));
         for (const c of sensorComps) {
-          dispatchSensorUpdate(c.id, getSensorControl(c.metadataId)!.defaultValues);
+          dispatchSensorUpdate(c.id, getSensorControlForComponent(c)!.defaultValues);
         }
       }
     },
@@ -3258,6 +3310,76 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
     },
 
     addWire: (wire) => set((state) => ({ wires: [...state.wires, wire] })),
+
+    splitWireWithJunction: (wireId, x, y, threshold, opts) => {
+      const state = get();
+      const original = state.wires.find((w) => w.id === wireId);
+      if (!original) return null;
+
+      const split = computeWireSplit(original, x, y, threshold);
+      if (!split) return null;
+
+      // The wire being drawn, if the caller wants it landed on the new node.
+      // Captured BEFORE the command runs so undo can put it back.
+      const wip = opts?.finishWireInProgress ? state.wireInProgress : null;
+      let closing: Wire | null = null;
+      if (wip) {
+        const last = wip.waypoints.length
+          ? wip.waypoints[wip.waypoints.length - 1]
+          : { x: wip.startEndpoint.x, y: wip.startEndpoint.y };
+        const elbow = previewElbow(last, split.endpoint.x, split.endpoint.y);
+        closing = {
+          id: `wire-${generateUUID()}`,
+          start: wip.startEndpoint,
+          end: split.endpoint,
+          waypoints: normalizeWireWaypoints(
+            { x: wip.startEndpoint.x, y: wip.startEndpoint.y },
+            elbow ? [...wip.waypoints, elbow] : wip.waypoints,
+            { x: split.endpoint.x, y: split.endpoint.y },
+          ),
+          color: wip.color,
+          autoRouted: false,
+        };
+      }
+
+      const junction = split.junction as Component;
+      get().pushCommand({
+        description: 'Add wire junction',
+        execute: () =>
+          set((s2) => ({
+            components: [...s2.components, junction],
+            wires: [
+              ...s2.wires.filter((w) => w.id !== original.id),
+              split.wireA,
+              split.wireB,
+              ...(closing ? [closing] : []),
+            ],
+            wireInProgress: closing ? null : s2.wireInProgress,
+          })),
+        undo: () =>
+          set((s2) => ({
+            components: s2.components.filter((c) => c.id !== junction.id),
+            wires: [
+              ...s2.wires.filter(
+                (w) =>
+                  w.id !== split.wireA.id &&
+                  w.id !== split.wireB.id &&
+                  (!closing || w.id !== closing.id),
+              ),
+              original,
+            ],
+          })),
+      });
+
+      // The stored endpoint coords are exact by construction, but the node's
+      // pinInfo only becomes readable once its element mounts — re-stamp then
+      // so a later component move keeps every attached wire on the dot.
+      const recalc = () => get().updateWirePositions(junction.id);
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(recalc);
+      else recalc();
+
+      return junction.id;
+    },
 
     removeWire: (wireId) =>
       set((state) => ({

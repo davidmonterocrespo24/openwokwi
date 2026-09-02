@@ -189,7 +189,14 @@ export async function loadExample(
         useSimulatorStore.getState().updateBoard(boardId, { sdFiles: eb.sdFiles });
       }
 
-      if (eb.vfsFiles && isPiBoardKind(eb.boardKind)) {
+      // `vfsFiles` IS the declaration that this board's code is a guest
+      // script — no isPiBoardKind() check. That guard read the Pi-family
+      // registry, which an overlay fills at mount: a direct /example/<id>
+      // link to an overlay QEMU-Linux board (UNIHIKER M10) could load before
+      // its kind was registered, the branch was skipped, and the editor
+      // opened on the board group's Arduino blink default instead of the
+      // example's script. Only QEMU-Linux examples carry vfsFiles.
+      if (eb.vfsFiles) {
         // Pi example scripts go into the board's REGULAR file group — they
         // are edited in Monaco like any other board's code, and the run
         // path uploads the group into the guest home. (The old separate

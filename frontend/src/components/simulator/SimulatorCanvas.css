@@ -6,8 +6,8 @@
 
 .simulator-canvas {
   flex: 1;
-  background-color: #1a1a1a;
-  color: #e0e0e0;
+  background-color: var(--wb-1);
+  color: var(--wb-13);
   display: flex;
   flex-direction: column;
 }
@@ -16,8 +16,8 @@
 .canvas-header {
   height: 46px;
   padding: 0 10px;
-  background: #252526;
-  border-bottom: 1px solid #333;
+  background: var(--wb-3);
+  border-bottom: 1px solid var(--wb-6);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -56,13 +56,13 @@
 }
 
 .status-dot.running {
-  background: #4caf50;
+  background: var(--color-feedback-success);
   box-shadow: 0 0 6px rgba(76, 175, 80, 0.7);
   animation: pulse-green 2s ease-in-out infinite;
 }
 
 .status-dot.stopped {
-  background: #555;
+  background: var(--wb-8);
   box-shadow: none;
 }
 
@@ -79,9 +79,9 @@
 /* ── Board Selector ──────────────────────────────── */
 .board-selector {
   padding: 4px 8px;
-  background: #1e2a38;
-  color: #c9d1d9;
-  border: 1px solid #3a4a5a;
+  background: var(--color-accent-soft);
+  color: var(--wb-12);
+  border: 1px solid var(--color-accent-border);
   border-radius: 5px;
   font-size: 12px;
   font-weight: 500;
@@ -131,9 +131,9 @@
   padding: 0 10px;
   height: 28px;
   background: transparent;
-  border: 1px solid #3a4a5a;
+  border: 1px solid var(--color-accent-border);
   border-radius: 5px;
-  color: #9d9d9d;
+  color: var(--wb-11);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -146,11 +146,11 @@
 
 .canvas-serial-btn:hover {
   border-color: var(--color-action-primary);
-  color: #ccc;
+  color: var(--wb-12);
 }
 
 .canvas-serial-btn-active {
-  background: #0e3a5a;
+  background: var(--color-accent-soft);
   border-color: var(--color-action-primary);
   color: var(--color-action-primary);
 }
@@ -163,9 +163,9 @@
   width: 28px;
   height: 28px;
   background: transparent;
-  border: 1px solid #3a4a5a;
+  border: 1px solid var(--color-accent-border);
   border-radius: 5px;
-  color: #9d9d9d;
+  color: var(--wb-11);
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -177,7 +177,7 @@
 
 .canvas-icon-btn:hover:not(:disabled) {
   border-color: var(--color-action-primary);
-  color: #ccc;
+  color: var(--wb-12);
 }
 
 .canvas-icon-btn:disabled {
@@ -191,7 +191,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #666;
+  color: var(--wb-9);
 }
 
 /* ── Add Component button ────────────────────────── */
@@ -202,7 +202,7 @@
   padding: 0 10px;
   height: 28px;
   background: var(--color-action-primary);
-  color: #fff;
+  color: var(--color-fg-on-action);
   border: none;
   border-radius: 5px;
   font-size: 12px;
@@ -226,21 +226,21 @@
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: #1a1a1a;
+  background-color: var(--wb-1);
   background-image:
     repeating-linear-gradient(
       0deg,
       transparent,
       transparent 19px,
-      rgba(255, 255, 255, 0.025) 19px,
-      rgba(255, 255, 255, 0.025) 20px
+      var(--color-canvas-grid) 19px,
+      var(--color-canvas-grid) 20px
     ),
     repeating-linear-gradient(
       90deg,
       transparent,
       transparent 19px,
-      rgba(255, 255, 255, 0.025) 19px,
-      rgba(255, 255, 255, 0.025) 20px
+      var(--color-canvas-grid) 19px,
+      var(--color-canvas-grid) 20px
     );
   user-select: none;
   touch-action: none; /* Disable browser scroll/zoom so JS handlers take full control */
@@ -275,8 +275,8 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
+  background: var(--wb-2);
+  border: 1px solid var(--wb-6);
   border-radius: 5px;
   padding: 0 2px;
   height: 28px;
@@ -291,7 +291,7 @@
   bottom: 14px;
   z-index: 60;
   height: 32px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-2);
 }
 
 .zoom-btn {
@@ -303,14 +303,14 @@
   background: transparent;
   border: none;
   border-radius: 3px;
-  color: #9d9d9d;
+  color: var(--wb-11);
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .zoom-btn:hover {
-  background: #3a3a3a;
-  color: #ccc;
+  background: var(--wb-6);
+  color: var(--wb-12);
 }
 
 .zoom-level {
@@ -318,7 +318,7 @@
   text-align: center;
   background: transparent;
   border: none;
-  color: #9d9d9d;
+  color: var(--wb-11);
   font-size: 11px;
   font-family: monospace;
   cursor: pointer;
@@ -327,19 +327,19 @@
 }
 
 .zoom-level:hover {
-  background: #3a3a3a;
-  color: #ccc;
+  background: var(--wb-6);
+  color: var(--wb-12);
 }
 
 .component-label {
   font-size: 11px;
-  background-color: #252526;
+  background-color: var(--wb-3);
   padding: 3px 8px;
   border-radius: 3px;
   white-space: nowrap;
   margin-top: 5px;
   text-align: center;
-  color: #aaa;
+  color: var(--wb-11);
 }
 
 /* ── Wire creation mode banner ──────────────────── */
@@ -350,14 +350,14 @@
   transform: translateX(-50%);
   z-index: 100;
   background: rgba(0, 113, 227, 0.92);
-  color: #fff;
+  color: var(--color-fg-on-action);
   padding: 8px 16px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-2);
   backdrop-filter: blur(4px);
   white-space: nowrap;
   pointer-events: auto;
@@ -365,7 +365,7 @@
 
 .wire-mode-banner button {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--wb-13);
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 4px;
   padding: 4px 14px;
@@ -483,9 +483,19 @@
   height: 18px;
 }
 .unified-toolbar.unified-toolbar--compact .board-selector {
-  max-width: 120px;
+  /* 88px still shows enough of "ESP32 DevKit…" to tell boards apart, and the
+     full name is one hover away in the select itself. The 32px this gives
+     back is 32px of not wrapping the whole bar onto a second row. */
+  max-width: 88px;
   text-overflow: ellipsis;
   overflow: hidden;
+}
+
+/* The component count is the first thing to go when the row is tight: it is
+   a number you can also read on the canvas, and it costs 24px next to the
+   controls you actually press. */
+.unified-toolbar.unified-toolbar--compact .component-count {
+  display: none;
 }
 @container unified-toolbar (max-width: 905px) {
   .component-count {
@@ -520,16 +530,16 @@
 
 /* WiFi status colours */
 .canvas-wifi-initializing {
-  color: #f59e0b;
+  color: var(--color-feedback-warning);
 }
 .canvas-wifi-connected {
-  color: #f59e0b;
+  color: var(--color-feedback-warning);
 }
 .canvas-wifi-got_ip {
-  color: #22c55e;
+  color: var(--color-feedback-success);
 }
 .canvas-wifi-disconnected {
-  color: #6b7280;
+  color: var(--wb-9);
 }
 
 .canvas-wifi-clickable {
@@ -558,8 +568,8 @@
 
 /* ── Selection action bar (floating toolbar for selected wire/component/board) ─── */
 .selection-action-bar button:hover {
-  background: #2a2d2e !important;
-  border-color: #3c3c3c !important;
+  background: var(--wb-4) !important;
+  border-color: var(--wb-7) !important;
 }
 .selection-action-bar button:active {
   transform: scale(0.97);
@@ -618,7 +628,7 @@
 }
 
 .velxio-ants {
-  --ant-color: #2f9bff;
+  --ant-color: var(--color-accent-fg);
 }
 
 @keyframes velxio-ants {

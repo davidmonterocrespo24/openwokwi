@@ -6,11 +6,14 @@
  *   shadow-3 — modals, sheets
  *   shadow-4 — critical popovers, attention-needed surfaces
  *
- * Tuned for dark theme. When light mode lands, override these inside
- * [data-theme=light] to use lower-opacity black.
+ * Tuned for dark theme, where a shadow reads as absence of light and can be
+ * heavy. On white the same alphas turn into grey smudges, so the light block
+ * below drops them by roughly two thirds and leans on a hairline ring
+ * instead — the standard light-UI trick for keeping cards crisp.
  */
 
-:root {
+:root,
+[data-theme='dark'] {
   --shadow-flat: none;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.30),
               0 2px 6px rgba(0, 0, 0, 0.20);
@@ -24,4 +27,16 @@
   /* Legacy aliases */
   --shadow:    var(--shadow-3);
   --shadow-sm: var(--shadow-1);
+}
+
+:root[data-theme='light'],
+[data-theme='light'] {
+  --shadow-1: 0 1px 2px rgba(15, 15, 20, 0.06),
+              0 2px 6px rgba(15, 15, 20, 0.05);
+  --shadow-2: 0 2px 8px rgba(15, 15, 20, 0.08),
+              0 8px 16px rgba(15, 15, 20, 0.06);
+  --shadow-3: 0 4px 16px rgba(15, 15, 20, 0.10),
+              0 16px 40px rgba(15, 15, 20, 0.10);
+  --shadow-4: 0 8px 24px rgba(15, 15, 20, 0.14),
+              0 24px 64px rgba(15, 15, 20, 0.14);
 }

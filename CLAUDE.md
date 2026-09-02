@@ -205,6 +205,7 @@ Wire positions auto-update when components move via `updateWirePositions()`.
 - [backend/app/api/routes/iot_gateway.py](backend/app/api/routes/iot_gateway.py) - HTTP proxy for ESP32 web servers
 - [backend/app/services/arduino_cli.py](backend/app/services/arduino_cli.py) - arduino-cli wrapper
 - [backend/app/services/espidf_compiler.py](backend/app/services/espidf_compiler.py) - ESP-IDF compile wrapper
+- [backend/app/services/build_queue.py](backend/app/services/build_queue.py) - Priority admission gate for compile jobs (two lanes, unbounded, one slot per lane reserved for standard builds). Exposes only a coarse load level — queue depth and position never reach a client.
 - [backend/app/core/config.py](backend/app/core/config.py) - Minimal Settings (FRONTEND_URL only)
 - [backend/app/core/hooks.py](backend/app/core/hooks.py) - Extension hooks (record_compile, get_current_user_id, lifespan_startup) that the velxio-prod overlay fills in. OSS-default = no-op.
 

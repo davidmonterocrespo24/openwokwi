@@ -12,9 +12,9 @@ import { createPortal } from 'react-dom';
 import { useMessageDialogStore, type MessageDialogKind } from '../../store/useMessageDialogStore';
 
 const ACCENTS: Record<MessageDialogKind, { bg: string; fg: string; icon: string }> = {
-  info: { bg: '#16283a', fg: '#7cc4ff', icon: 'ℹ' },
-  success: { bg: '#143824', fg: '#7ee87e', icon: '✓' },
-  error: { bg: '#3a1a1a', fg: '#ff8585', icon: '⚠' },
+  info: { bg: 'var(--color-accent-soft)', fg: 'var(--color-accent-fg)', icon: 'ℹ' },
+  success: { bg: 'var(--color-feedback-success-soft)', fg: 'var(--color-feedback-success)', icon: '✓' },
+  error: { bg: 'var(--color-feedback-error-soft)', fg: 'var(--color-feedback-error)', icon: '⚠' },
 };
 
 export const MessageDialogHost = () => {
@@ -47,7 +47,8 @@ export const MessageDialogHost = () => {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.6)',
+        background: 'var(--color-bg-overlay)',
+        backdropFilter: 'blur(4px)',
         zIndex: 9700,
         display: 'flex',
         alignItems: 'center',
@@ -60,12 +61,12 @@ export const MessageDialogHost = () => {
           width: 440,
           maxWidth: 'calc(100vw - 32px)',
           maxHeight: 'calc(100vh - 64px)',
-          background: '#1a1d24',
-          color: '#e6e6e9',
-          border: '1px solid #2c2c33',
+          background: 'var(--wb-5)',
+          color: 'var(--wb-13)',
+          border: '1px solid var(--wb-6)',
           borderRadius: 8,
           padding: 20,
-          boxShadow: '0 12px 36px rgba(0,0,0,0.7)',
+          boxShadow: 'var(--shadow-4)',
           display: 'flex',
           flexDirection: 'column',
           gap: 14,
@@ -104,9 +105,9 @@ export const MessageDialogHost = () => {
                 padding: '7px 20px',
                 fontSize: 13,
                 fontWeight: 600,
-                color: '#e6e6e9',
-                background: '#2a2d35',
-                border: '1px solid #3a3d45',
+                color: 'var(--wb-12)',
+                background: 'transparent',
+                border: '1px solid var(--wb-6)',
                 borderRadius: 4,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -123,11 +124,11 @@ export const MessageDialogHost = () => {
               padding: '7px 20px',
               fontSize: 13,
               fontWeight: 600,
-              color: 'white',
+              color: 'var(--color-action-primary-fg)',
               background: danger
-                ? 'linear-gradient(135deg, #d64545 0%, #a12727 100%)'
-                : 'linear-gradient(135deg, #007acc 0%, #005ea1 100%)',
-              border: danger ? '1px solid #a12727' : '1px solid #005ea1',
+                ? 'var(--color-feedback-error)'
+                : 'var(--color-action-primary)',
+              border: 'none',
               borderRadius: 4,
               cursor: 'pointer',
               fontFamily: 'inherit',

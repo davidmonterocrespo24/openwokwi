@@ -483,6 +483,38 @@ export const SENSOR_CONTROLS: Record<string, SensorControlDef> = {
 // getSensorControl() so overlay-registered sensors surface their slider panel.
 const proSensorControls: Record<string, SensorControlDef> = {};
 
+/**
+ * Overlay seam — INSTANCE-level control resolution. Catalog sensors key
+ * their def by metadataId; some overlay parts (e.g. pro programmable
+ * sensor chips) derive controls from the component INSTANCE instead. The
+ * overlay installs a resolver here; pure OSS has none and every lookup
+ * falls back to the metadataId table.
+ */
+export type InstanceSensorControlResolver = (component: {
+  id: string;
+  metadataId?: string;
+  properties?: Record<string, unknown>;
+}) => SensorControlDef | undefined;
+
+let instanceResolver: InstanceSensorControlResolver | null = null;
+
+export function registerInstanceSensorControlResolver(
+  fn: InstanceSensorControlResolver,
+): void {
+  instanceResolver = fn;
+}
+
+/** metadataId lookup first (OSS + overlay-registered), then the overlay's
+ *  instance resolver. This is what the canvas click paths, the panel and
+ *  the reset path consume. */
+export function getSensorControlForComponent(component: {
+  id: string;
+  metadataId?: string;
+  properties?: Record<string, unknown>;
+}): SensorControlDef | undefined {
+  return getSensorControl(component.metadataId) ?? instanceResolver?.(component);
+}
+
 export function registerSensorControls(defs: Record<string, SensorControlDef>): void {
   Object.assign(proSensorControls, defs);
 }

@@ -11,7 +11,7 @@
  * - Handles component lifecycle
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useReducer } from 'react';
 import type { ComponentMetadata } from '../types/component-metadata';
 import {
   useSimulatorStore,
@@ -37,6 +37,7 @@ import { traceDetailed } from '../simulation/PinTrace';
 import { withPartPinOwnership, releasePartPins } from '../simulation/partPinOwnership';
 import { getMixedModeScheduler } from '../simulation/spice/MixedModeScheduler';
 import { getBoardLogicFamily } from '../simulation/LogicFamilies';
+import { getSensorControlForComponent } from '../simulation/sensorControlConfig';
 
 // Side-effect imports: register every web component we'll create at runtime.
 // `@wokwi/elements` covers the upstream catalog; `../velxio-elements` adds
@@ -115,9 +116,38 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
     return myWires.map((w) => w.id).join(',');
   });
 
+  // A custom chip attaches at hexEpoch time and skips itself when it has no
+  // compiled WASM yet. Board-less circuits never load a hex, so without this
+  // fingerprint a chip compiled AFTER being dropped (file-explorer hammer)
+  // stayed inert forever — attachEvents had nothing to re-trigger it. Keyed
+  // on sourceHash + wasm length so the debounced properties.attrs mirror from
+  // live sliders does NOT churn the effect.
+  const chipWasmFingerprint = useSimulatorStore((s) => {
+    if (metadata.id !== 'custom-chip') return '';
+    const c = s.components.find((cc) => cc.id === id);
+    const p = (c?.properties ?? {}) as Record<string, unknown>;
+    return `${String(p.sourceHash ?? '')}:${String(p.wasmBase64 ?? '').length}`;
+  });
+
   // Check if component is interactive (has simulation logic with attachEvents)
   const logic = PartSimulationRegistry.get(metadata.id || id.split('-')[0]);
   const isInteractive = logic?.attachEvents !== undefined;
+
+  // Live-controls hint: while the sim runs, a chip whose instance exposes
+  // sensor controls (sliders/buttons) gets a small badge so users learn the
+  // click-for-panel affordance. The per-instance resolver registers inside
+  // attachEvents (an effect), i.e. AFTER the render that flipped
+  // interactionRunning — the delayed bump re-checks once it has settled.
+  const [, bumpControlHint] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!interactionRunning || metadata.id !== 'custom-chip') return;
+    const t = setTimeout(bumpControlHint, 150);
+    return () => clearTimeout(t);
+  }, [interactionRunning, metadata.id, chipWasmFingerprint]);
+  const showControlHint =
+    interactionRunning &&
+    metadata.id === 'custom-chip' &&
+    getSensorControlForComponent({ id, metadataId: metadata.id, properties }) !== undefined;
 
   /**
    * Sync React properties to Web Component.
@@ -668,7 +698,7 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
       el.removeEventListener('button-press', onButtonPress);
       el.removeEventListener('button-release', onButtonRelease);
     };
-  }, [id, handleComponentEvent, metadata.id, simulator, hexEpoch, wireFingerprint]);
+  }, [id, handleComponentEvent, metadata.id, simulator, hexEpoch, wireFingerprint, chipWasmFingerprint]);
 
   // The wrapper uses `onMouseDownCapture` (not `onMouseDown`) so it sees
   // the mousedown BEFORE the inner wokwi-element. Interactive wokwi parts
@@ -727,6 +757,38 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
     >
       {/* Container for web component */}
       <div ref={containerRef} className="web-component-container" />
+
+      {/* Live-controls hint: this chip has a slider/button panel — click it */}
+      {showControlHint && !isBurnt && (
+        <div
+          className="velxio-control-hint"
+          title="Live controls — click the chip"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '-7px',
+            right: '-7px',
+            width: '18px',
+            height: '18px',
+            borderRadius: '50%',
+            background: '#7c3aed',
+            border: '1.5px solid #c4b5fd',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 6,
+            boxShadow: '0 0 6px rgba(124, 58, 237, 0.8)',
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <circle cx="9" cy="7" r="2.6" fill="#fff" stroke="none" />
+            <line x1="4" y1="17" x2="20" y2="17" />
+            <circle cx="15" cy="17" r="2.6" fill="#fff" stroke="none" />
+          </svg>
+        </div>
+      )}
 
       {/* Runtime-burnout smoke badge (P4) */}
       {isBurnt && (

@@ -20,9 +20,11 @@ import './inductor-element';
 import './custom-chip-element';
 import './breadboard-element';
 import './breadboard-mini-element';
+import './junction-element';
 
 export { CapacitorElement } from './capacitor-element';
 export { CapacitorElectrolyticElement } from './capacitor-electrolytic-element';
 export { InductorElement } from './inductor-element';
 export { BreadboardElement } from './breadboard-element';
 export { BreadboardMiniElement } from './breadboard-mini-element';
+export { JunctionElement } from './junction-element';

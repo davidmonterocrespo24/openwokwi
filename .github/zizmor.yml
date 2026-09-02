@@ -1,0 +1,14 @@
+# zizmor configuration - see https://docs.zizmor.sh/configuration/
+#
+# The blanket unpinned-uses policy demands a commit hash for every action.
+# That is the right rule for third-party actions (a tag can be moved onto a
+# malicious commit at any time) and unnecessary for actions published by
+# GitHub itself, where moving a tag would mean GitHub attacking its own
+# users. So: hash-pin everything, ref-pin the two first-party orgs.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        actions/*: ref-pin
+        github/*: ref-pin
+        "*": hash-pin

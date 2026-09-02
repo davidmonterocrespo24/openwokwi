@@ -1031,6 +1031,23 @@ export class AVRSimulator {
   }
 
   /**
+   * Schedule a callback N CPU cycles from now — cycle-accurate timing for
+   * external bit-bang sources (a custom chip's UART TX driving a GPIO that
+   * SoftwareSerial samples). Returns false when no CPU is live (not
+   * started / stopped); callers should drop rather than queue.
+   */
+  addClockEvent(callback: () => void, cycles: number): boolean {
+    if (!this.cpu) return false;
+    this.cpu.addClockEvent(callback, cycles);
+    return true;
+  }
+
+  /** CPU clock in Hz — every supported AVR variant here runs at 16 MHz. */
+  get clockFrequency(): number {
+    return 16000000;
+  }
+
+  /**
    * Set the state of an Arduino pin externally (e.g. from a UI button)
    */
   setPinState(arduinoPin: number, state: boolean): void {

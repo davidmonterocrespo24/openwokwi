@@ -1099,6 +1099,21 @@ class ArduinoCLIService:
     async def uninstall_library(self, library_name: str) -> dict:
         """
         Uninstall an Arduino library.
+
+        A no-op is reported as a FAILURE. arduino-cli prints "Library X is not
+        installed" and exits 0, which read as success and told the agent its
+        uninstall had worked; it recompiled, hit the same error, and uninstalled
+        the same library again. Three times, in the session that prompted this.
+
+        DELIBERATELY does NOT point at VELXIO_FALLBACK_SKETCHBOOK, even though
+        `list_installed_libraries` does. On velxio.dev that sketchbook's
+        libraries/ is a symlink to the shared content-addressed cache: every
+        library, for every user. Uninstall is a per-user operation and must
+        never be able to reach it. Making the two agree looked like a
+        consistency fix and was in fact a way to delete a library out from
+        under everyone (caught in review before it could be used, 2026-09-01).
+        The asymmetry is the safety property: listing is read-only, uninstall
+        is not.
         """
         try:
             print(f"Uninstalling library: {library_name}")
@@ -1106,12 +1121,26 @@ class ArduinoCLIService:
             def _run():
                 return subprocess.run(
                     [self.cli_path, "lib", "uninstall", library_name],
-                    capture_output=True, text=True, encoding='utf-8', errors='replace'
+                    capture_output=True, text=True, encoding='utf-8', errors='replace',
                 )
 
             result = await asyncio.to_thread(_run)
 
             if result.returncode == 0:
+                combined = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+                if "is not installed" in combined:
+                    print(f"Nothing to uninstall: {library_name} is not installed")
+                    return {
+                        "success": False,
+                        "error": (
+                            f"{library_name} is not installed in this project, so "
+                            f"there is nothing to uninstall. If a compile is failing "
+                            f"inside it, the library came from the server-wide shared "
+                            f"cache: declare the libraries your sketch actually uses "
+                            f"in the project manifest instead."
+                        ),
+                        "stdout": result.stdout,
+                    }
                 print(f"Successfully uninstalled {library_name}")
                 return {"success": True, "stdout": result.stdout}
             else:

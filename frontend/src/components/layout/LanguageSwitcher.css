@@ -9,7 +9,7 @@
   padding: 4px 8px;
   background: transparent;
   border: none;
-  color: #86868b;
+  color: var(--color-fg-muted);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
@@ -18,8 +18,8 @@
 }
 
 .velxio-language-btn:hover {
-  color: #f5f5f7;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--wb-13);
+  background: var(--color-wash-hover);
 }
 
 .velxio-language-current {
@@ -35,12 +35,12 @@
   list-style: none;
   margin: 6px 0 0;
   padding: 6px 0;
-  background: #1c1c1e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--wb-1);
+  border: 1px solid var(--color-wash-hover);
   border-radius: 8px;
   min-width: 200px;
   z-index: 200;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-3);
 }
 
 .velxio-language-item {
@@ -52,7 +52,7 @@
   background: transparent;
   border: none;
   padding: 8px 14px;
-  color: #ccc;
+  color: var(--wb-12);
   font-size: 13px;
   cursor: pointer;
   text-align: left;
@@ -61,18 +61,18 @@
 }
 
 .velxio-language-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #f5f5f7;
+  background: var(--color-wash-hover);
+  color: var(--wb-13);
 }
 
 .velxio-language-item-active {
-  color: #0071e3;
+  color: var(--color-action-primary);
   font-weight: 500;
 }
 
 .velxio-language-code {
   font-size: 11px;
-  color: #6e6e73;
+  color: var(--wb-9);
   letter-spacing: 0.4px;
 }
 

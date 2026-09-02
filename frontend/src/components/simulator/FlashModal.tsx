@@ -326,7 +326,8 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.6)',
+        background: 'var(--color-bg-overlay)',
+        backdropFilter: 'blur(4px)',
         zIndex: 9600,
         display: 'flex',
         alignItems: 'center',
@@ -338,12 +339,12 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
           width: 560,
           maxWidth: 'calc(100vw - 32px)',
           maxHeight: 'calc(100vh - 64px)',
-          background: '#1a1d24',
-          color: '#e6e6e9',
-          border: '1px solid #2c2c33',
+          background: 'var(--wb-5)',
+          color: 'var(--wb-13)',
+          border: '1px solid var(--wb-6)',
           borderRadius: 8,
           padding: 20,
-          boxShadow: '0 12px 36px rgba(0,0,0,0.7)',
+          boxShadow: 'var(--shadow-4)',
           display: 'flex',
           flexDirection: 'column',
           gap: 14,
@@ -367,7 +368,7 @@ export const FlashModal = ({ board: boardProp, fqbn, onClose }: Props) => {
         {!flashAllowed && <PaidGateView onClose={handleClose} />}
 
         {flashAllowed && state.kind === 'loading-ports' && (
-          <div style={{ padding: '24px 0', textAlign: 'center', color: '#888' }}>
+          <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--wb-10)' }}>
             {t('editor.flash.detectingPorts')}
           </div>
         )}
@@ -428,11 +429,11 @@ const PaidGateView = ({ onClose }: { onClose: () => void }) => {
   };
   return (
     <div>
-      <div style={{ padding: 16, background: '#0c0c11', borderRadius: 4, marginBottom: 12 }}>
-        <div style={{ color: '#e6e6e9', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+      <div style={{ ...insetBoxStyle, padding: 16, marginBottom: 12 }}>
+        <div style={{ color: 'var(--wb-13)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
           {t('editor.flash.paidOnlyTitle')}
         </div>
-        <div style={{ color: '#9aa5b1', fontSize: 12, lineHeight: 1.5 }}>
+        <div style={{ color: 'var(--wb-11)', fontSize: 12, lineHeight: 1.5 }}>
           {t('editor.flash.paidOnlyBody')}
         </div>
       </div>
@@ -480,8 +481,8 @@ const BuildNotice = ({ status }: { status: BuildStatus }) => {
       style={{
         marginTop: 10,
         padding: 10,
-        background: '#3a2e1a',
-        color: '#ffb84d',
+        background: 'var(--color-feedback-warning-soft)',
+        color: 'var(--color-feedback-warning)',
         borderRadius: 4,
         fontSize: 12,
         lineHeight: 1.45,
@@ -506,11 +507,11 @@ const PickerView = ({ board, ports, selected, onSelect, onRefresh, onFlash }: Pi
   if (ports.length === 0) {
     return (
       <div>
-        <div style={{ padding: 16, background: '#0c0c11', borderRadius: 4, marginBottom: 12 }}>
-          <div style={{ color: '#aaa', fontSize: 13, marginBottom: 8 }}>
+        <div style={{ ...insetBoxStyle, padding: 16, marginBottom: 12 }}>
+          <div style={{ color: 'var(--wb-11)', fontSize: 13, marginBottom: 8 }}>
             {t('editor.flash.noPorts')}
           </div>
-          <div style={{ color: '#777', fontSize: 12, lineHeight: 1.5 }}>
+          <div style={{ color: 'var(--wb-9)', fontSize: 12, lineHeight: 1.5 }}>
             {t('editor.flash.noPortsHint')}
             <pre style={{ marginTop: 6, fontSize: 11 }}>
               sudo usermod -a -G dialout $USER
@@ -529,7 +530,7 @@ const PickerView = ({ board, ports, selected, onSelect, onRefresh, onFlash }: Pi
 
   return (
     <div>
-      <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: '#aaa' }}>
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--wb-11)' }}>
         {t('editor.flash.serialPort')}
       </label>
       <select
@@ -582,18 +583,18 @@ const WebReadyView = ({ board, mpyWebOk, onFlash }: WebReadyProps) => {
   const canFlash = isMpy ? mpyWebOk : true;
   return (
     <div>
-      <div style={{ padding: 16, background: '#0c0c11', borderRadius: 4, marginBottom: 12 }}>
-        <div style={{ color: '#aaa', fontSize: 13, marginBottom: 8 }}>
+      <div style={{ ...insetBoxStyle, padding: 16, marginBottom: 12 }}>
+        <div style={{ color: 'var(--wb-11)', fontSize: 13, marginBottom: 8 }}>
           {t('editor.flash.webIntro')}
         </div>
-        <div style={{ color: '#777', fontSize: 12, lineHeight: 1.5 }}>
+        <div style={{ color: 'var(--wb-9)', fontSize: 12, lineHeight: 1.5 }}>
           {t('editor.flash.webHint')}
           {isMpy && mpyWebOk && <> {t('editor.flash.mpyTwoSteps')}</>}
         </div>
       </div>
 
       {isMpy && !mpyWebOk && (
-        <div style={{ padding: 10, background: '#3a2e1a', color: '#ffb84d', borderRadius: 4, fontSize: 12, marginBottom: 12 }}>
+        <div style={{ padding: 10, background: 'var(--color-feedback-warning-soft)', color: 'var(--color-feedback-warning)', borderRadius: 4, fontSize: 12, marginBottom: 12 }}>
           {t('editor.flash.mpyUnavailable')}
         </div>
       )}
@@ -646,44 +647,44 @@ const ProgressView = ({ state, webMode, onRetry, onClose, onBackToPicker }: Prog
     <div>
       {state.kind === 'compiling' && (
         <>
-          <div style={{ fontSize: 13, color: '#ccc', marginBottom: 8 }}>
+          <div style={{ fontSize: 13, color: 'var(--wb-12)', marginBottom: 8 }}>
             {t('editor.flash.compiling')}
           </div>
-          <div style={{ height: 6, background: '#0c0c11', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
-            <div className="flash-indeterminate" style={{ height: '100%', width: '35%', background: 'linear-gradient(90deg, #007acc 0%, #00a4ff 100%)' }} />
+          <div style={{ height: 6, background: 'var(--wb-3)', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+            <div className="flash-indeterminate" style={{ height: '100%', width: '35%', background: 'var(--color-action-primary)' }} />
           </div>
         </>
       )}
 
       {state.kind === 'flashing' && (
         <>
-          <div style={{ fontSize: 13, color: '#ccc', marginBottom: 8 }}>
+          <div style={{ fontSize: 13, color: 'var(--wb-12)', marginBottom: 8 }}>
             {t('editor.flash.flashingOn', { port: state.port })}
           </div>
-          <div style={{ height: 6, background: '#0c0c11', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
+          <div style={{ height: 6, background: 'var(--wb-3)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
             <div
               style={{
                 height: '100%',
                 width: `${Math.round(state.progress * 100)}%`,
-                background: 'linear-gradient(90deg, #007acc 0%, #00a4ff 100%)',
+                background: 'var(--color-action-primary)',
                 transition: 'width 0.2s ease',
               }}
             />
           </div>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--wb-10)', marginBottom: 12 }}>
             {Math.round(state.progress * 100)}%
           </div>
         </>
       )}
 
       {state.kind === 'success' && (
-        <div style={{ padding: 12, background: '#143824', color: '#7ee87e', borderRadius: 4, marginBottom: 12, fontSize: 13 }}>
+        <div style={{ padding: 12, background: 'var(--color-feedback-success-soft)', color: 'var(--color-feedback-success)', borderRadius: 4, marginBottom: 12, fontSize: 13 }}>
           {t('editor.flash.success', { seconds: (state.elapsedMs / 1000).toFixed(1) })}
         </div>
       )}
 
       {state.kind === 'error' && (
-        <div style={{ padding: 12, background: '#3a1a1a', color: '#ff8585', borderRadius: 4, marginBottom: 12, fontSize: 13 }}>
+        <div style={{ padding: 12, background: 'var(--color-feedback-error-soft)', color: 'var(--color-feedback-error)', borderRadius: 4, marginBottom: 12, fontSize: 13 }}>
           {state.message}
         </div>
       )}
@@ -694,8 +695,9 @@ const ProgressView = ({ state, webMode, onRetry, onClose, onBackToPicker }: Prog
           height: 240,
           margin: 0,
           padding: 10,
-          background: '#0c0c11',
-          color: '#9aa5b1',
+          background: 'var(--wb-0)',
+          color: 'var(--wb-12)',
+          border: '1px solid var(--wb-6)',
           borderRadius: 4,
           fontSize: 11,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -709,9 +711,9 @@ const ProgressView = ({ state, webMode, onRetry, onClose, onBackToPicker }: Prog
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
         {state.kind === 'flashing' ? (
-          <span style={{ fontSize: 11, color: '#666' }}>{t('editor.flash.dontUnplug')}</span>
+          <span style={{ fontSize: 11, color: 'var(--wb-9)' }}>{t('editor.flash.dontUnplug')}</span>
         ) : state.kind === 'compiling' ? (
-          <span style={{ fontSize: 11, color: '#666' }}>{t('editor.flash.compilingHint')}</span>
+          <span style={{ fontSize: 11, color: 'var(--wb-9)' }}>{t('editor.flash.compilingHint')}</span>
         ) : (
           <button type="button" onClick={onBackToPicker} style={secondaryBtnStyle}>
             {webMode ? t('editor.flash.startOver') : t('editor.flash.pickAnotherPort')}
@@ -771,21 +773,21 @@ const closeBtnStyle: React.CSSProperties = {
   height: 28,
   padding: 0,
   background: 'transparent',
-  border: '1px solid #2c2c33',
+  border: '1px solid var(--wb-6)',
   borderRadius: 4,
-  color: '#999',
+  color: 'var(--wb-11)',
   fontSize: 18,
   cursor: 'pointer',
   lineHeight: 1,
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding: '7px 16px',
+  padding: '8px 17px',
   fontSize: 13,
   fontWeight: 600,
-  color: 'white',
-  background: 'linear-gradient(135deg, #007acc 0%, #005ea1 100%)',
-  border: '1px solid #005ea1',
+  color: 'var(--color-action-primary-fg)',
+  background: 'var(--color-action-primary)',
+  border: 'none',
   borderRadius: 4,
   cursor: 'pointer',
   fontFamily: 'inherit',
@@ -794,9 +796,9 @@ const primaryBtnStyle: React.CSSProperties = {
 const secondaryBtnStyle: React.CSSProperties = {
   padding: '7px 14px',
   fontSize: 13,
-  color: '#bbb',
+  color: 'var(--wb-12)',
   background: 'transparent',
-  border: '1px solid #2c2c33',
+  border: '1px solid var(--wb-6)',
   borderRadius: 4,
   cursor: 'pointer',
   fontFamily: 'inherit',
@@ -805,10 +807,22 @@ const secondaryBtnStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = {
   width: '100%',
   padding: '8px 10px',
-  background: '#0c0c11',
-  color: '#e6e6e9',
-  border: '1px solid #2c2c33',
+  background: 'var(--wb-3)',
+  color: 'var(--wb-13)',
+  border: '1px solid var(--wb-6)',
   borderRadius: 4,
   fontSize: 13,
   fontFamily: 'inherit',
+};
+
+/**
+ * Bed for the explanatory blocks inside the dialog: one ramp step deeper
+ * than the --wb-5 panel, which is a step DOWN in both themes (#252526
+ * under #2d2d2d, #eceef1 under white). The hairline keeps the edge from
+ * disappearing where the two values sit close.
+ */
+const insetBoxStyle: React.CSSProperties = {
+  background: 'var(--wb-3)',
+  border: '1px solid var(--wb-6)',
+  borderRadius: 4,
 };

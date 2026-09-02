@@ -249,7 +249,7 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
     ({
       beginner: '#4ade80',
       intermediate: '#fbbf24',
-      advanced: '#f87171',
+      advanced: 'var(--color-feedback-error)',
     })[difficulty];
 
   const getBoardBadge = (
@@ -441,7 +441,7 @@ export const ExamplesGallery: React.FC<ExamplesGalleryProps> = ({ onLoadExample 
                   example={example}
                   width={300}
                   height={180}
-                  background="#0a0a0c"
+                  background="var(--wb-0)"
                   style={{ width: '100%', height: '100%' }}
                 />
               </div>

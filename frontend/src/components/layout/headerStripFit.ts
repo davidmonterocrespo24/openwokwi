@@ -30,11 +30,19 @@ export interface StripFitInput {
   hostMarginXBelow: number;
   /** Horizontal padding of the strip itself (`.unified-toolbar`). */
   stripPaddingX: number;
-  /** Natural width of each strip zone at its own content size, measured IN
-   *  the candidate layout it is compared against — the zones carry their
-   *  own container queries (the view-mode toggle hides under 760px, its
-   *  labels under 1140px, the board pill under 905px), so the same strip
-   *  is wider on the wide own-bar than on the narrow brand row. */
+  /** Natural OUTER width of each strip zone at its own content size —
+   *  border box plus horizontal margins — measured IN the candidate layout
+   *  it is compared against, since the zones carry their own container
+   *  queries (the view-mode toggle hides under 760px, its labels under
+   *  1140px, the board pill under 905px), so the same strip is wider on the
+   *  wide own-bar than on the narrow brand row.
+   *
+   *  Margins are part of the width on purpose: the view-mode toggle carries
+   *  `margin: 0 6px`, and leaving those 12px out made the decision claim a
+   *  strip fit on one row when it did not. It then WRAPPED inside the header
+   *  instead of collapsing to icons — a 44px row silently becoming 83px,
+   *  with the canvas controls stranded on a second line. Anything that
+   *  contributes to the row's used width belongs in this number. */
   inlineZoneWidths: readonly number[];
   inlineCompactZoneWidths: readonly number[];
   belowZoneWidths: readonly number[];
@@ -115,7 +123,9 @@ export function measureStripFit(header: HTMLElement): StripFitInput | null {
     const cs = getComputedStyle(el);
     return px(cs.marginLeft) + px(cs.marginRight);
   };
-  const zoneWidths = () => zones.map((z) => z.getBoundingClientRect().width);
+  /** Outer width: what the zone actually consumes on the row. Margins are
+   *  outside getBoundingClientRect, so they have to be added back. */
+  const zoneWidths = () => zones.map((z) => z.getBoundingClientRect().width + marginX(z));
 
   try {
     for (const z of zones) z.style.flex = '0 0 auto';

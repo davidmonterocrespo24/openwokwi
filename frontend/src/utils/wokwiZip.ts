@@ -214,6 +214,33 @@ function metadataIdToWokwiType(metadataId: string): string {
   return `wokwi-${metadataId}`;
 }
 
+// ── Custom chips (Wokwi `chip-<name>` parts + <name>.chip.c/.chip.json) ──────
+
+/**
+ * Deterministic per-chip export name: slug of the chip's display name, with
+ * `-2`, `-3`… suffixes when two chips share one. Keyed by component id so
+ * the diagram part (`chip-<name>`) and the zip files (`<name>.chip.c/json`)
+ * always agree.
+ */
+export function assignChipExportNames(
+  components: readonly VelxioComponent[],
+): Map<string, string> {
+  const names = new Map<string, string>();
+  const used = new Map<string, number>();
+  for (const c of components) {
+    if (c.metadataId !== 'custom-chip') continue;
+    const base =
+      String((c.properties as Record<string, unknown>)?.chipName ?? 'chip')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'chip';
+    const n = (used.get(base) ?? 0) + 1;
+    used.set(base, n);
+    names.set(c.id, n === 1 ? base : `${base}-${n}`);
+  }
+  return names;
+}
+
 // ── Library list parser ───────────────────────────────────────────────────────
 
 /**
@@ -274,12 +301,30 @@ export function buildWokwiDiagram(
 
   // Build parts — board first, then user components
   // Subtract boardPosition so coords are relative to the board
+  const chipNames = assignChipExportNames(components);
   const parts: WokwiPart[] = [
     { type: boardWokwiType, id: boardId, top: 0, left: 0, attrs: {} },
     ...components.map((c) => {
       // Rotation travels as Wokwi's top-level `rotate`, never as an attr.
       const { rotation, ...attrs } = (c.properties ?? {}) as Record<string, unknown>;
       const rotate = Number(rotation) || 0;
+      // A custom chip becomes a Wokwi `chip-<name>` part; its sources travel
+      // as <name>.chip.c/.chip.json files (exportToWokwiZip writes them) and
+      // only the attribute VALUES ride the part attrs — never the multi-KB
+      // sourceC/wasmBase64 blobs.
+      if (c.metadataId === 'custom-chip') {
+        const chipAttrs = (attrs.attrs ?? {}) as Record<string, unknown>;
+        return {
+          type: `chip-${chipNames.get(c.id)}`,
+          id: c.id,
+          top: Math.round(c.y - boardPosition.y),
+          left: Math.round(c.x - boardPosition.x),
+          ...(rotate ? { rotate } : {}),
+          attrs: Object.fromEntries(
+            Object.entries(chipAttrs).filter(([, v]) => typeof v === 'number' || typeof v === 'string'),
+          ) as Record<string, unknown>,
+        };
+      }
       return {
         type: metadataIdToWokwiType(c.metadataId),
         id: c.id,
@@ -362,6 +407,20 @@ export async function exportToWokwiZip(
 
   for (const f of files) {
     zip.file(f.name, f.content);
+  }
+
+  // Custom chip sources in the Wokwi layout: <name>.chip.c + <name>.chip.json
+  // next to diagram.json, matching the `chip-<name>` part types the diagram
+  // declares.
+  const chipNames = assignChipExportNames(components);
+  for (const c of components) {
+    const name = chipNames.get(c.id);
+    if (!name) continue;
+    const props = (c.properties ?? {}) as Record<string, unknown>;
+    const sourceC = String(props.sourceC ?? '');
+    const chipJson = String(props.chipJson ?? '');
+    if (sourceC) zip.file(`${name}.chip.c`, sourceC);
+    if (chipJson) zip.file(`${name}.chip.json`, chipJson);
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });
@@ -460,23 +519,67 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
     y: rawBoardY + offsetY,
   };
 
+  // Custom chip sources: a `chip-<name>` part's code lives in sibling
+  // <name>.chip.c / <name>.chip.json files. Load them up front so the part
+  // mapping below can be synchronous.
+  const chipFiles = new Map<string, { c?: string; json?: string }>();
+  for (const [filename, entry] of Object.entries(zip.files)) {
+    if (entry.dir) continue;
+    const basename = filename.split('/').pop() ?? filename;
+    const m = basename.match(/^(.+)\.chip\.(c|json)$/);
+    if (!m) continue;
+    const slot = chipFiles.get(m[1]) ?? {};
+    if (m[2] === 'c') slot.c = await entry.async('string');
+    else slot.json = await entry.async('string');
+    chipFiles.set(m[1], slot);
+  }
+
   // Convert non-board parts to Velxio components.
   // Apply the same offset so components keep their relative position to the board.
   const components: VelxioComponent[] = diagram.parts
     .filter((p) => wokwiTypeToBoardKind(p.type) === null)
-    .map((p) => ({
-      id: p.id,
-      metadataId: wokwiTypeToMetadataId(p.type),
-      x: p.left + offsetX,
-      y: p.top + offsetY,
-      // Wokwi stores rotation as a top-level `rotate` (degrees), not an
-      // attr — map it onto properties.rotation or every rotated part
-      // imports lying flat.
-      properties: {
-        ...p.attrs,
-        ...(p.rotate ? { rotation: p.rotate } : {}),
-      },
-    }));
+    .map((p) => {
+      // Wokwi custom chip part → Velxio custom-chip component. The part's
+      // attrs are the chip's attribute VALUES; the sources come from the
+      // matching .chip.c/.chip.json. wasmBase64 stays empty — Run compiles
+      // it (Wokwi's precompiled .wasm would target their ABI anyway).
+      if (p.type.startsWith('chip-')) {
+        const name = p.type.slice(5);
+        const src = chipFiles.get(name);
+        if (!src?.c) {
+          warnings.push(
+            `Custom chip "${name}" has no ${name}.chip.c in the zip — imported without source; edit its chip.c before running.`,
+          );
+        }
+        return {
+          id: p.id,
+          metadataId: 'custom-chip',
+          x: p.left + offsetX,
+          y: p.top + offsetY,
+          properties: {
+            chipName: name,
+            sourceC: src?.c ?? '',
+            chipJson: src?.json ?? JSON.stringify({ name, pins: [] }),
+            wasmBase64: '',
+            ...(Object.keys(p.attrs ?? {}).length ? { attrs: { ...p.attrs } } : {}),
+            ...(p.rotate ? { rotation: p.rotate } : {}),
+          },
+        };
+      }
+      return {
+        id: p.id,
+        metadataId: wokwiTypeToMetadataId(p.type),
+        x: p.left + offsetX,
+        y: p.top + offsetY,
+        // Wokwi stores rotation as a top-level `rotate` (degrees), not an
+        // attr — map it onto properties.rotation or every rotated part
+        // imports lying flat.
+        properties: {
+          ...p.attrs,
+          ...(p.rotate ? { rotation: p.rotate } : {}),
+        },
+      };
+    });
 
   // Convert connections to Velxio wires
   const wires: Wire[] = diagram.connections.map((conn, i) => {
@@ -551,6 +654,10 @@ export async function importFromWokwiZip(file: File): Promise<ImportResult> {
   for (const [filename, entry] of Object.entries(zip.files)) {
     if (entry.dir) continue;
     const basename = filename.split('/').pop() ?? filename;
+    // Chip sources belong to their chip's file group (loaded above), not to
+    // the board sketch — without this exclusion every <name>.chip.c would
+    // also land in the editor AND get fed to arduino-cli.
+    if (/\.chip\.(c|json)$/.test(basename)) continue;
     const ext = '.' + basename.split('.').pop()!.toLowerCase();
     if (CODE_EXTS.has(ext)) {
       const content = await entry.async('string');

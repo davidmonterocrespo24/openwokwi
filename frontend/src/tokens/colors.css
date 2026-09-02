@@ -7,6 +7,15 @@
  *      components. Swap themes by remapping semantics to different primitives.
  *   3. Legacy aliases (--accent, --bg, etc.) — kept temporarily so existing
  *      components keep working. Remove after full migration.
+ *
+ * THEMES
+ * ------
+ * Dark is the product default and lives on bare `:root`, so a page with no
+ * JavaScript (SSR, the pre-hydration paint) is dark — never a white flash.
+ * Light is an opt-in override under `:root[data-theme='light']`, set by the
+ * bootstrap in index.html and by src/lib/theme.ts. Nothing keys off
+ * `prefers-color-scheme` at this layer: the OS hint is resolved once, in JS,
+ * and only when the user picked the "system" mode (see lib/theme.ts).
  */
 
 :root {
@@ -38,6 +47,44 @@
   --green-600: #248a3d;
   --amber-500: #ff9f0a;
   --amber-600: #c93400;
+}
+
+/* Everything below is THEMED. The dual selector is what lets a subtree pin
+ * itself to dark inside a light page (see DarkSurface in the pro overlay:
+ * the marketing pages are art-directed on black and opt out of light mode).
+ * `:root` alone would only ever theme the document element. */
+:root,
+[data-theme='dark'] {
+
+  /* ── Workbench ramp (--wb-0 … --wb-13) ────────────────────────────────
+   * The editor shell — menu bar, toolbars, file explorer, canvas, consoles,
+   * dialogs — was built against a VS-Code-ish neutral palette that predates
+   * the --gray-* scale above and is deliberately warmer/lighter than it.
+   * Rather than restyle every panel, that palette is captured here as an
+   * ordered ramp so light mode can invert it in one place.
+   *
+   * The ramp is indexed by DEPTH, not by lightness: --wb-0 is "furthest
+   * back" (the ground a pane sits on) and --wb-13 is "strongest foreground"
+   * (primary text). That ordering is what makes the inversion mechanical —
+   * a token used as a panel background stays a background in light mode, and
+   * one used as text stays text, without auditing each call site.
+   *
+   * Dark values are byte-identical to the literals they replaced, so the
+   * dark theme is unchanged. */
+  --wb-0:  #111111;  /* deepest ground — console/terminal bed */
+  --wb-1:  #1a1a1a;  /* canvas ground */
+  --wb-2:  #1e1e1e;  /* editor / dialog surface */
+  --wb-3:  #252526;  /* panel: headers, toolbars, sidebars */
+  --wb-4:  #2a2a2a;  /* panel alt: rows, inputs, hover beds */
+  --wb-5:  #2d2d2d;  /* elevated: dropdowns, popovers */
+  --wb-6:  #333333;  /* border, and the hover fill over --wb-4 */
+  --wb-7:  #3d3d3d;  /* strong border, pressed fill */
+  --wb-8:  #555555;  /* disabled fill, divider on elevated surfaces */
+  --wb-9:  #6e6e6e;  /* faint text — placeholders, timestamps */
+  --wb-10: #888888;  /* subtle text — secondary labels */
+  --wb-11: #9d9d9d;  /* muted text — icons, inactive tabs */
+  --wb-12: #cccccc;  /* body text */
+  --wb-13: #f0f0f0;  /* strong text — titles, active tab */
 
   /* Semantic — backgrounds (dark theme baseline) */
   /* Canvas uses gray-950 (#0a0a0c), NOT gray-1000 (#000000). Pure-black
@@ -52,6 +99,10 @@
   --color-bg-surface-3: var(--gray-800);
   --color-bg-input:     var(--gray-850);
   --color-bg-overlay:   rgba(0, 0, 0, 0.6);
+  /* Frosted chrome: the app header and the mobile nav sheet sit ON TOP of
+   * scrolling content with a backdrop-filter behind them, so they need a
+   * translucent version of the canvas rather than the modal scrim. */
+  --color-bg-header:    rgba(10, 10, 12, 0.88);
 
   /* Semantic — foreground */
   --color-fg-default: var(--gray-100);
@@ -62,6 +113,14 @@
   /* Semantic — borders */
   --color-border-default: rgba(255, 255, 255, 0.09);
   --color-border-strong:  rgba(255, 255, 255, 0.16);
+  --color-border-subtle:  rgba(255, 255, 255, 0.04);
+
+  /* Semantic — hover/selection washes.
+   * A translucent wash tints whatever surface it sits on, so one token works
+   * on every panel depth. In light mode these flip to black at low alpha. */
+  --color-wash-hover:    rgba(255, 255, 255, 0.06);
+  --color-wash-active:   rgba(255, 255, 255, 0.10);
+  --color-wash-selected: rgba(0, 113, 227, 0.25);
 
   /* Semantic — actions */
   /* Solid UI doctrine: interactive surfaces use SOLID fills of these
@@ -74,10 +133,27 @@
   --color-action-secondary:     var(--gray-800);
   --color-action-secondary-hover: var(--gray-700);
 
+  /* Accent washes — tinted backgrounds for selected/active accents. */
+  --color-accent-soft:        rgba(0, 113, 227, 0.14);
+  --color-accent-soft-strong: rgba(0, 113, 227, 0.30);
+  --color-accent-fg:          var(--blue-400);
+
   /* Semantic — feedback */
   --color-feedback-error:   var(--red-500);
   --color-feedback-success: var(--green-500);
   --color-feedback-warning: var(--amber-500);
+  --color-feedback-info:    var(--blue-400);
+
+  --color-feedback-error-soft:   rgba(255, 69, 58, 0.14);
+  --color-feedback-success-soft: rgba(48, 209, 88, 0.14);
+  --color-feedback-warning-soft: rgba(255, 159, 10, 0.14);
+
+  /* Borders for those tinted panels. Translucent rather than solid so one
+   * value works over any panel depth, and so the hue survives inversion. */
+  --color-feedback-error-border:   rgba(255, 69, 58, 0.32);
+  --color-feedback-success-border: rgba(48, 209, 88, 0.32);
+  --color-feedback-warning-border: rgba(255, 159, 10, 0.32);
+  --color-accent-border:           rgba(0, 113, 227, 0.38);
 
   /* Focus ring — used by *:focus-visible across all interactives */
   --color-focus-ring: 0 0 0 2px var(--color-action-primary);
@@ -86,6 +162,58 @@
   --color-tier-free:  var(--gray-500);
   --color-tier-pro:   var(--blue-600);
   --color-tier-team:  var(--amber-500);
+
+  /* ── Simulator canvas ─────────────────────────────────────────────────
+   * The canvas is the one surface where the theme has to stop at the
+   * board's edge: the parts themselves are photographic (a red LED is red
+   * on any theme), so only the bed they sit on and the chrome drawn over
+   * them — grid, selection, probe overlays — take theme colors. */
+  --color-canvas-bg:        var(--wb-1);
+  --color-canvas-grid:      rgba(255, 255, 255, 0.025);
+  --color-canvas-panel:     var(--wb-2);
+  --color-canvas-panel-fg:  var(--wb-12);
+  --color-canvas-shadow:    rgba(0, 0, 0, 0.45);
+
+  /* SPICE overlay: the measurement pills drawn over the board (net voltages,
+   * the AC/DC summary). They are instrument annotations, so the hues carry
+   * meaning — gold for a DC level, cyan for AC — and light mode darkens them
+   * for contrast rather than swapping them for something else. */
+  /* Schematic symbol ink.
+   *
+   * Most parts on the canvas are photographic -- a board's PCB, an LED's
+   * lens -- and keep their colours on any theme. The transistor family is
+   * not: a BJT or MOSFET is a bare SCHEMATIC SYMBOL, strokes on the canvas
+   * with no body of its own, so its ink is drawing ink and has to invert
+   * like text does. Tuned light for the dark canvas, it disappeared
+   * outright on the light one. */
+  --color-symbol-ink:   #e6e6e6;
+  --color-symbol-lead:  #b8b8b8;
+  --color-symbol-label: #d0d0d0;
+  --color-symbol-body:  #7a7a7a;
+
+  /* Wire chrome. The wire's own colour is the user's; these two are the
+   * contrast outline that keeps crossings readable and the marker used for
+   * hover and selection, and both have to flip with the bed they sit on. */
+  --color-wire-outline: #1a1a1a;
+  --color-wire-marker:  #ffffff;
+
+  --color-canvas-label-bg: rgba(26, 26, 26, 0.85);
+  --color-probe-dc:        #ffd700;
+  --color-probe-dc-dim:    #ffa500;
+  --color-probe-ac:        #4dd0e1;
+  --color-probe-error:     #ff9999;
+  --color-probe-error-dim: #ff6666;
+
+  /* Serial monitor. A serial console is green-on-black the way an
+   * oscilloscope screen is a grid on black — the identity survives the
+   * theme, so light mode darkens the green instead of inverting the pair. */
+  --color-terminal-bg: #0a0a0a;
+  --color-terminal-fg: #00ff41;
+
+  /* Scrollbars (the editor panes style their own) */
+  --color-scrollbar-thumb:       var(--wb-7);
+  --color-scrollbar-thumb-hover: var(--wb-8);
+  --color-scrollbar-track:       transparent;
 
   /* Legacy aliases — DO NOT use in new code. Remove after migration. */
   --accent:       var(--color-action-primary);
@@ -99,4 +227,127 @@
   --text:         var(--color-fg-default);
   --text-muted:   var(--color-fg-muted);
   --text-dim:     var(--color-fg-subtle);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * LIGHT THEME
+ * ══════════════════════════════════════════════════════════════════════
+ * Only semantics are remapped — primitives never change. Every value here
+ * has a counterpart above; adding a semantic token without a light value is
+ * the one way to break this file, so keep the two blocks in the same order.
+ */
+:root[data-theme='light'],
+[data-theme='light'] {
+  /* Workbench ramp, inverted. Anchored on VS Code's Light+ workbench so the
+   * editor reads as a familiar light IDE rather than an inverted dark one:
+   * white editor bed, grey everywhere else, GitHub-ish neutral text.
+   *
+   * Only --wb-2 and --wb-5 are pure white, and both are earned: wb-2 is the
+   * bed you read CODE on, and wb-5 is what makes a dropdown or a dialog lift
+   * off the page. Everything structural -- the canvas (wb-1), the panels and
+   * toolbars (wb-3), the rows and hover beds (wb-4) -- is grey, which is how
+   * the light themes people compare us against read: white is the content,
+   * grey is the chrome around it. An all-white build looks unfinished and
+   * loses every edge between panes. */
+  --wb-0:  #fbfbfc;
+  --wb-1:  #e9ebee;
+  --wb-2:  #ffffff;
+  --wb-3:  #eceef1;
+  --wb-4:  #e0e3e8;
+  --wb-5:  #ffffff;
+  --wb-6:  #d5d9df;
+  --wb-7:  #c4c9d1;
+  --wb-8:  #aab0ba;
+  --wb-9:  #8c949e;
+  --wb-10: #6e7781;
+  --wb-11: #57606a;
+  --wb-12: #24292f;
+  --wb-13: #0d1117;
+
+  /* Backgrounds. Surface-1 is the card white; the canvas behind it is the
+   * light-gray ground, mirroring how dark puts the darkest value furthest
+   * back. */
+  --color-bg-canvas:    #eef0f3;
+  --color-bg-surface-1: var(--gray-0);
+  --color-bg-surface-2: #f6f7f9;
+  --color-bg-surface-3: var(--gray-200);
+  --color-bg-input:     var(--gray-0);
+  --color-bg-overlay:   rgba(20, 20, 22, 0.40);
+  --color-bg-header:    rgba(252, 252, 253, 0.88);
+
+  /* Foreground */
+  --color-fg-default: var(--gray-850);
+  --color-fg-muted:   var(--gray-600);
+  --color-fg-subtle:  var(--gray-500);
+  --color-fg-on-action: var(--gray-0);
+
+  /* Borders — black at low alpha, the mirror of dark's white-at-low-alpha. */
+  --color-border-default: rgba(0, 0, 0, 0.12);
+  --color-border-strong:  rgba(0, 0, 0, 0.22);
+  --color-border-subtle:  rgba(0, 0, 0, 0.06);
+
+  --color-wash-hover:    rgba(0, 0, 0, 0.05);
+  --color-wash-active:   rgba(0, 0, 0, 0.09);
+  --color-wash-selected: rgba(0, 113, 227, 0.16);
+
+  /* Actions. Hover DARKENS on light (blue-700) where dark LIGHTENS it
+   * (blue-500) — hover has to move away from the page, not toward it. */
+  --color-action-primary:       var(--blue-600);
+  --color-action-primary-hover: var(--blue-700);
+  --color-action-primary-fg:    var(--gray-0);
+  --color-action-secondary:     var(--gray-200);
+  --color-action-secondary-hover: var(--gray-300);
+
+  --color-accent-soft:        rgba(0, 113, 227, 0.10);
+  --color-accent-soft-strong: rgba(0, 113, 227, 0.20);
+  --color-accent-fg:          var(--blue-700);
+
+  /* Feedback — the 500s are tuned for contrast against black and go muddy
+   * on white, so light mode drops to the 600s. */
+  --color-feedback-error:   var(--red-600);
+  --color-feedback-success: var(--green-600);
+  --color-feedback-warning: var(--amber-600);
+  --color-feedback-info:    var(--blue-600);
+
+  --color-feedback-error-soft:   rgba(215, 0, 21, 0.10);
+  --color-feedback-success-soft: rgba(36, 138, 61, 0.12);
+  --color-feedback-warning-soft: rgba(201, 52, 0, 0.10);
+
+  --color-feedback-error-border:   rgba(215, 0, 21, 0.32);
+  --color-feedback-success-border: rgba(36, 138, 61, 0.35);
+  --color-feedback-warning-border: rgba(201, 52, 0, 0.30);
+  --color-accent-border:           rgba(0, 113, 227, 0.35);
+
+  --color-tier-free:  var(--gray-600);
+  --color-tier-pro:   var(--blue-600);
+  --color-tier-team:  var(--amber-600);
+
+  /* Canvas */
+  --color-canvas-bg:        var(--wb-1);
+  --color-canvas-grid:      rgba(23, 32, 48, 0.07);
+  --color-canvas-panel:     var(--wb-2);
+  --color-canvas-panel-fg:  var(--wb-12);
+  --color-canvas-shadow:    rgba(15, 15, 20, 0.16);
+
+  --color-symbol-ink:   #1f2430;
+  --color-symbol-lead:  #4a515e;
+  --color-symbol-label: #2b303a;
+  --color-symbol-body:  #8a909c;
+
+  --color-wire-outline: #ffffff;
+  --color-wire-marker:  #1f2430;
+
+  --color-canvas-label-bg: rgba(255, 255, 255, 0.92);
+  --color-probe-dc:        #8a6100;
+  --color-probe-dc-dim:    #9a5c00;
+  --color-probe-ac:        #0b6b78;
+  --color-probe-error:     #b3261e;
+  --color-probe-error-dim: #d70015;
+
+  --color-terminal-bg: var(--gray-0);
+  --color-terminal-fg: #0a7d33;
+
+  --color-scrollbar-thumb:       var(--wb-7);
+  --color-scrollbar-thumb-hover: var(--wb-8);
+  --color-scrollbar-track:       transparent;
 }

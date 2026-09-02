@@ -85,6 +85,35 @@ export interface ChipExample {
   chipJson: string;
 }
 
+/**
+ * Overlay seam — extra gallery examples (e.g. pro programmable sensors).
+ * The gallery reads getChipExamples() and subscribes to pick up entries
+ * registered after the overlay's dynamic import lands.
+ */
+const extraExamples: ChipExample[] = [];
+let examplesVersion = 0;
+const exampleListeners = new Set<() => void>();
+
+export function registerChipExamples(examples: ChipExample[]): void {
+  for (const e of examples) {
+    const i = extraExamples.findIndex((x) => x.id === e.id);
+    if (i >= 0) extraExamples[i] = e;
+    else extraExamples.push(e);
+  }
+  examplesVersion++;
+  exampleListeners.forEach((l) => l());
+}
+
+export function getChipExamples(): ChipExample[] {
+  return [...CHIP_EXAMPLES, ...extraExamples];
+}
+
+export const getChipExamplesVersion = (): number => examplesVersion;
+export const subscribeChipExamples = (cb: () => void): (() => void) => {
+  exampleListeners.add(cb);
+  return () => exampleListeners.delete(cb);
+};
+
 export const CHIP_EXAMPLES: ChipExample[] = [
   {
     id: 'inverter',

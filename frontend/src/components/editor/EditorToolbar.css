@@ -18,8 +18,8 @@
   justify-content: flex-start;
   padding: 0 6px;
   height: 38px;
-  background: #252526;
-  border-bottom: 1px solid #333;
+  background: var(--wb-3);
+  border-bottom: 1px solid var(--wb-6);
   flex-shrink: 0;
   gap: 4px;
   min-width: 0;
@@ -60,7 +60,7 @@
 .tb-divider {
   width: 1px;
   height: 18px;
-  background: #3a3a3a;
+  background: var(--wb-6);
   margin: 0 3px;
   align-self: center;
 }
@@ -78,7 +78,7 @@
   border-radius: 4px;
   cursor: pointer;
   background: transparent;
-  color: #9d9d9d;
+  color: var(--wb-11);
   transition:
     background 0.12s,
     color 0.12s;
@@ -96,11 +96,11 @@
   color: var(--color-action-primary);
 }
 .tb-btn-compile:hover:not(:disabled) {
-  background: rgba(0, 113, 227, 0.14);
+  background: var(--color-accent-soft);
   color: var(--color-action-primary-hover);
 }
 .tb-btn-compile:active:not(:disabled) {
-  background: rgba(0, 113, 227, 0.22);
+  background: var(--color-accent-soft-strong);
 }
 
 /* Run — semantic success green (token) */
@@ -108,7 +108,7 @@
   color: var(--color-feedback-success);
 }
 .tb-btn-run:hover:not(:disabled) {
-  background: rgba(48, 209, 88, 0.14);
+  background: var(--color-feedback-success-soft);
   color: var(--color-feedback-success);
 }
 
@@ -117,14 +117,14 @@
   color: var(--color-feedback-error);
 }
 .tb-btn-stop:hover:not(:disabled) {
-  background: rgba(255, 69, 58, 0.14);
+  background: var(--color-feedback-error-soft);
   color: var(--color-feedback-error);
 }
 
 /* Reset */
 .tb-btn-reset:hover:not(:disabled) {
-  background: #2a2d2e;
-  color: #ccc;
+  background: var(--wb-4);
+  color: var(--wb-12);
 }
 
 /* Libraries button (always visible, with label) */
@@ -138,7 +138,7 @@
   border-radius: 5px;
   cursor: pointer;
   background: var(--color-action-primary);
-  color: #fff;
+  color: var(--color-fg-on-action);
   font-size: 11px;
   font-weight: 500;
   font-family: inherit;
@@ -151,7 +151,7 @@
 }
 .tb-btn-libraries:hover {
   background: var(--color-action-primary-hover);
-  color: #fff;
+  color: var(--color-fg-on-action);
 }
 .tb-libraries-label {
   line-height: 1;
@@ -193,6 +193,30 @@
 .unified-toolbar.unified-toolbar--compact .tb-btn-libraries {
   padding: 0 6px;
 }
+
+/* ── Second-tier reclaims ─────────────────────────────────────────────
+   Everything below buys width for the SAME goal: keeping the strip on one
+   row when the AI chat is docked. Measured on a 1300px window with a board
+   loaded and the chat open, together they take the compact strip from
+   805px to 699px. Two rows is the failure state -- an orphan group of
+   canvas controls under a tall header -- so trimming a label or a dropdown
+   is the cheaper trade every time. */
+.unified-toolbar.unified-toolbar--compact .tb-lang-select {
+  max-width: 74px;
+}
+
+.unified-toolbar.unified-toolbar--compact .tb-btn {
+  padding: 0 5px;
+}
+
+.unified-toolbar.unified-toolbar--compact .toolbar-group {
+  gap: 2px;
+}
+
+/* The dividers only separate groups that the tighter gaps already separate. */
+.unified-toolbar.unified-toolbar--compact .tb-divider {
+  display: none;
+}
 @container unified-toolbar (max-width: 905px) {
   .tb-board-pill-label {
     display: none;
@@ -211,7 +235,7 @@
   color: var(--color-action-primary);
 }
 .tb-btn-lib:hover {
-  background: rgba(0, 113, 227, 0.12);
+  background: var(--color-accent-soft);
   color: var(--color-action-primary-hover);
 }
 
@@ -221,8 +245,8 @@
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  background: rgba(255, 159, 10, 0.1);
-  border-bottom: 1px solid rgba(255, 159, 10, 0.25);
+  background: var(--color-feedback-warning-soft);
+  border-bottom: 1px solid var(--color-feedback-warning-border);
   color: var(--color-feedback-warning);
   font-size: 12px;
   font-family: inherit;
@@ -235,7 +259,7 @@
   background: var(--color-action-primary);
   border: none;
   border-radius: 4px;
-  color: #fff;
+  color: var(--color-fg-on-action);
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
@@ -245,36 +269,36 @@
 }
 .tb-lib-hint-btn:hover {
   background: var(--color-action-primary-hover);
-  color: #fff;
+  color: var(--color-fg-on-action);
 }
 .tb-lib-hint-close {
   margin-left: auto;
   background: none;
   border: none;
-  color: #888;
+  color: var(--wb-10);
   font-size: 16px;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
 }
 .tb-lib-hint-close:hover {
-  color: #ccc;
+  color: var(--wb-12);
 }
 
 /* Output Console toggle */
 .tb-btn-output {
-  color: #9d9d9d;
+  color: var(--wb-11);
 }
 .tb-btn-output:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ccc;
+  background: var(--color-wash-hover);
+  color: var(--wb-12);
 }
 .tb-btn-output-active {
   color: var(--color-action-primary);
-  background: rgba(0, 113, 227, 0.12);
+  background: var(--color-accent-soft);
 }
 .tb-btn-output-active:hover {
-  background: rgba(0, 113, 227, 0.2);
+  background: var(--color-accent-soft-strong);
   color: var(--color-action-primary-hover);
 }
 
@@ -304,12 +328,12 @@
 
 .tb-status-success {
   color: var(--color-feedback-success);
-  background: rgba(48, 209, 88, 0.1);
+  background: var(--color-feedback-success-soft);
 }
 
 .tb-status-error {
   color: var(--color-feedback-error);
-  background: rgba(255, 69, 58, 0.1);
+  background: var(--color-feedback-error-soft);
 }
 
 .tb-status-text {
@@ -323,7 +347,7 @@
   color: var(--color-action-primary);
 }
 .tb-btn-compile-all:hover:not(:disabled) {
-  background: rgba(0, 113, 227, 0.14);
+  background: var(--color-accent-soft);
   color: var(--color-action-primary-hover);
 }
 
@@ -331,7 +355,7 @@
   color: var(--color-feedback-success);
 }
 .tb-btn-run-all:hover:not(:disabled) {
-  background: rgba(48, 209, 88, 0.14);
+  background: var(--color-feedback-success-soft);
   color: var(--color-feedback-success);
 }
 
@@ -348,7 +372,7 @@
   white-space: nowrap;
   opacity: 0.85;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-border-subtle);
   max-width: 170px;
   overflow: hidden;
 }
@@ -400,7 +424,7 @@
   color: var(--color-feedback-success);
 }
 .tb-btn-run-caret:hover:not(:disabled) {
-  background: rgba(48, 209, 88, 0.14);
+  background: var(--color-feedback-success-soft);
   color: var(--color-feedback-success);
 }
 .tb-run-menu {
@@ -408,12 +432,12 @@
   top: calc(100% + 6px);
   left: 0;
   z-index: 200;
-  background: #2a2a2c;
-  border: 1px solid #3a3a3c;
+  background: var(--wb-4);
+  border: 1px solid var(--wb-6);
   border-radius: 10px;
   padding: 6px;
   min-width: 200px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-3);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -426,7 +450,7 @@
   background: transparent;
   border: none;
   border-radius: 7px;
-  color: #ccc;
+  color: var(--wb-12);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
@@ -437,8 +461,8 @@
     color 0.12s;
 }
 .tb-run-menu-item:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-wash-hover);
+  color: var(--wb-13);
 }
 .tb-run-menu-item:disabled {
   opacity: 0.5;
@@ -452,9 +476,9 @@
 
 /* ── Error detail bar (for long compiler errors) ── */
 .toolbar-error-detail {
-  background: #1a0000;
-  border-bottom: 1px solid #5a1a1a;
-  color: #f48fb1;
+  background: var(--color-feedback-error-soft);
+  border-bottom: 1px solid var(--color-feedback-error-border);
+  color: var(--color-feedback-error);
   font-size: 11px;
   font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
   padding: 4px 12px;

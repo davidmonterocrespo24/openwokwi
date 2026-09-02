@@ -12,6 +12,8 @@
   font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
+  /* Dark is the no-JS baseline; the bootstrap in index.html overrides both
+   * this and [data-theme] inline before the first paint. */
   color-scheme: dark;
   color: var(--color-fg-default);
   background-color: var(--color-bg-canvas);
@@ -19,6 +21,10 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 *,
@@ -182,7 +188,7 @@ body {
   width: 100%;
   padding: 13px;
   background: #ffffff;
-  color: #1d1d1f;
+  color: var(--color-fg-default);
   border: none;
   border-radius: var(--radius-pill);
   font-size: 15px;
@@ -214,20 +220,20 @@ body {
 }
 
 .ap-error {
-  background: #2d0e0e;
-  border: 1px solid #7f1d1d;
+  background: var(--color-feedback-error-soft);
+  border: 1px solid var(--color-feedback-error-border);
   border-radius: var(--radius-sm);
-  color: #f87171;
+  color: var(--color-feedback-error);
   padding: 10px 14px;
   font-size: 13px;
   margin-bottom: var(--space-6);
 }
 
 .ap-success {
-  background: #0e2d18;
-  border: 1px solid #1d7f3a;
+  background: var(--color-feedback-success-soft);
+  border: 1px solid var(--color-feedback-success-border);
   border-radius: var(--radius-sm);
-  color: #4ade80;
+  color: var(--color-feedback-success);
   padding: 10px 14px;
   font-size: 13px;
   margin-bottom: var(--space-6);

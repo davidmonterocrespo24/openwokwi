@@ -4,8 +4,8 @@
 
 .component-property-dialog {
   position: absolute;
-  background-color: #2d2d2d;
-  border: 1px solid #555;
+  background-color: var(--wb-5);
+  border: 1px solid var(--wb-8);
   border-radius: 8px;
   padding: 12px;
   min-width: 200px;
@@ -16,10 +16,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-2);
   z-index: 1001;
   pointer-events: all;
-  color: #fff;
+  color: var(--wb-13);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
@@ -65,8 +65,8 @@
     flex-shrink: 0;
     margin-top: 8px;
     padding-top: 10px;
-    border-top: 1px solid #444;
-    background: #2d2d2d;
+    border-top: 1px solid var(--wb-7);
+    background: var(--wb-5);
   }
 }
 
@@ -76,19 +76,19 @@
   align-items: center;
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--wb-7);
 }
 
 .component-property-title {
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .property-close-button {
   background: transparent;
   border: none;
-  color: #aaa;
+  color: var(--wb-11);
   cursor: pointer;
   font-size: 20px;
   padding: 0;
@@ -104,8 +104,8 @@
 }
 
 .property-close-button:hover {
-  background-color: #444;
-  color: #fff;
+  background-color: var(--wb-7);
+  color: var(--wb-13);
 }
 
 .pin-roles-section {
@@ -114,17 +114,17 @@
 
 .pin-roles-label {
   font-size: 12px;
-  color: #aaa;
+  color: var(--wb-11);
   margin-bottom: 6px;
   font-weight: 500;
 }
 
 .pin-role-item {
   font-size: 12px;
-  color: #fff;
+  color: var(--wb-13);
   padding: 4px 8px;
   margin: 2px 0;
-  background-color: #3d3d3d;
+  background-color: var(--wb-7);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -145,12 +145,12 @@
     transform 0.05s;
 }
 .pin-role-item--interactive:hover {
-  background-color: #4a4a4a;
+  background-color: var(--wb-7);
   border-color: var(--color-action-primary);
 }
 .pin-role-item--interactive:active {
   transform: scale(0.98);
-  background-color: #2a2d2e;
+  background-color: var(--wb-4);
 }
 .pin-role-item--interactive:focus-visible {
   outline: 2px solid var(--color-action-primary);
@@ -165,12 +165,12 @@
 }
 
 .pin-name {
-  color: #00d9ff;
+  color: var(--color-accent-fg);
   font-weight: 500;
 }
 
 .pin-description {
-  color: #aaa;
+  color: var(--wb-11);
   font-size: 11px;
   margin-left: 4px;
 }
@@ -178,25 +178,25 @@
 .pin-assignment-section {
   margin-bottom: 12px;
   padding: 6px 8px;
-  background-color: #3d3d3d;
+  background-color: var(--wb-7);
   border-radius: 4px;
 }
 
 .pin-assignment-label {
   font-size: 11px;
-  color: #aaa;
+  color: var(--wb-11);
   margin-bottom: 4px;
 }
 
 .pin-assignment-value {
   font-size: 13px;
-  color: #00d9ff;
+  color: var(--color-accent-fg);
   font-weight: 600;
 }
 
 .property-edit-section {
   margin-bottom: 12px;
-  border-top: 1px solid #444;
+  border-top: 1px solid var(--wb-7);
   padding-top: 10px;
 }
 
@@ -210,7 +210,7 @@
 
 .property-edit-label {
   font-size: 12px;
-  color: #aaa;
+  color: var(--wb-11);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -221,9 +221,9 @@
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-  background-color: #3d3d3d;
-  border: 1px solid #555;
+  color: var(--wb-13);
+  background-color: var(--wb-7);
+  border: 1px solid var(--wb-8);
   border-radius: 4px;
   cursor: pointer;
   outline: none;
@@ -236,12 +236,12 @@
 
 .property-edit-select:focus {
   border-color: var(--color-action-primary);
-  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.25);
+  box-shadow: 0 0 0 2px var(--color-accent-soft-strong);
 }
 
 .property-edit-select option {
-  background-color: #2d2d2d;
-  color: #fff;
+  background-color: var(--wb-5);
+  color: var(--wb-13);
 }
 
 .property-edit-input {
@@ -250,9 +250,9 @@
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-  background-color: #3d3d3d;
-  border: 1px solid #555;
+  color: var(--wb-13);
+  background-color: var(--wb-7);
+  border: 1px solid var(--wb-8);
   border-radius: 4px;
   outline: none;
   transition: border-color 0.2s;
@@ -265,7 +265,7 @@
 
 .property-edit-input:focus {
   border-color: var(--color-action-primary);
-  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.25);
+  box-shadow: 0 0 0 2px var(--color-accent-soft-strong);
 }
 
 .property-actions {
@@ -282,7 +282,7 @@
 .property-confirm-label {
   flex-basis: 100%;
   font-size: 12px;
-  color: #f5b342;
+  color: var(--color-feedback-warning);
   font-weight: 500;
   text-align: center;
   padding: 2px 0 4px;
@@ -305,24 +305,24 @@
 
 .rotate-button {
   background-color: var(--color-action-primary);
-  color: white;
+  color: var(--color-fg-on-action);
 }
 
 .rotate-button:hover {
-  background-color: #005a9e;
+  background-color: var(--color-action-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+  box-shadow: 0 2px 8px var(--color-accent-soft-strong);
 }
 
 .delete-button {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--color-feedback-error);
+  color: var(--color-fg-on-action);
 }
 
 .delete-button:hover {
-  background-color: #c82333;
+  background-color: var(--color-feedback-error);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+  box-shadow: 0 2px 8px var(--color-feedback-error-border);
 }
 
 .property-action-button:active {
@@ -331,7 +331,7 @@
 
 /* ── microSD "SD Card" upload panel ─────────────────────────────────────── */
 .sd-card-section {
-  border-top: 1px solid #444;
+  border-top: 1px solid var(--wb-7);
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
@@ -349,14 +349,14 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #fff;
-  background: #b8860b;
+  color: var(--wb-13);
+  background: var(--color-feedback-warning);
   border-radius: 3px;
   padding: 1px 4px;
 }
 .sd-card-hint {
   font-size: 11px;
-  color: #aaa;
+  color: var(--wb-11);
   line-height: 1.3;
 }
 .sd-card-file {
@@ -373,14 +373,14 @@
 }
 .sd-card-file-size {
   flex: 0 0 auto;
-  color: #aaa;
+  color: var(--wb-11);
   font-variant-numeric: tabular-nums;
 }
 .sd-card-file-remove {
   flex: 0 0 auto;
   border: none;
   background: transparent;
-  color: #c0392b;
+  color: var(--color-feedback-error);
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
@@ -388,7 +388,7 @@
   border-radius: 3px;
 }
 .sd-card-file-remove:hover {
-  background: rgba(192, 57, 43, 0.12);
+  background: var(--color-feedback-error-soft);
 }
 .sd-card-footer {
   display: flex;
@@ -404,18 +404,18 @@
   border: none;
   border-radius: 4px;
   background-color: var(--color-action-primary);
-  color: #fff;
+  color: var(--color-fg-on-action);
   cursor: pointer;
   transition: all 0.2s;
 }
 .sd-card-add:hover {
-  background-color: #005a9e;
+  background-color: var(--color-action-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+  box-shadow: 0 2px 8px var(--color-accent-soft-strong);
 }
 .sd-card-total {
   font-size: 11px;
-  color: #aaa;
+  color: var(--wb-11);
   font-variant-numeric: tabular-nums;
 }
 .sd-card-label--live {
@@ -427,15 +427,15 @@
 .sd-card-refresh {
   font-size: 11px;
   padding: 2px 8px;
-  border: 1px solid #555;
+  border: 1px solid var(--wb-8);
   border-radius: 3px;
   background: transparent;
-  color: #bbb;
+  color: var(--wb-12);
   cursor: pointer;
 }
 .sd-card-refresh:hover {
-  border-color: #888;
-  color: #fff;
+  border-color: var(--wb-10);
+  color: var(--wb-13);
 }
 .sd-card-file-download {
   flex: 0 0 auto;
@@ -449,7 +449,7 @@
   border-radius: 3px;
 }
 .sd-card-file-download:hover {
-  background: rgba(0, 113, 227, 0.12);
+  background: var(--color-accent-soft);
 }
 
 /* ── Keyboard binding (pushbuttons) ────────────────────────────────── */
@@ -467,9 +467,9 @@
   font-size: 12px;
   font-weight: 600;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  color: #fff;
-  background-color: #3d3d3d;
-  border: 1px solid #555;
+  color: var(--wb-13);
+  background-color: var(--wb-7);
+  border: 1px solid var(--wb-8);
   border-bottom-width: 2px;
   border-radius: 4px;
   cursor: pointer;
@@ -484,7 +484,7 @@
 .keybind-chip--empty {
   font-family: inherit;
   font-weight: 500;
-  color: #aaa;
+  color: var(--wb-11);
   border-style: dashed;
   border-bottom-width: 1px;
 }
@@ -494,7 +494,7 @@
   font-weight: 500;
   color: var(--color-action-primary);
   border-color: var(--color-action-primary);
-  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.25);
+  box-shadow: 0 0 0 2px var(--color-accent-soft-strong);
 }
 
 .keybind-clear {
@@ -503,7 +503,7 @@
   padding: 0;
   font-size: 14px;
   line-height: 1;
-  color: #aaa;
+  color: var(--wb-11);
   background: none;
   border: none;
   border-radius: 4px;
@@ -511,12 +511,12 @@
 }
 
 .keybind-clear:hover {
-  color: #fff;
-  background-color: #3d3d3d;
+  color: var(--wb-13);
+  background-color: var(--wb-7);
 }
 
 .keybind-hint {
   margin-top: 2px;
   font-size: 11px;
-  color: #d19a66;
+  color: var(--color-feedback-warning);
 }

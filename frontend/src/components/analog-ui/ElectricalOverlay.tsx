@@ -2,7 +2,8 @@
  * Floating SVG overlay that renders voltage labels at wire midpoints.
  * SPICE is always active; this overlay is visible whenever a solve has
  * landed. Reads voltages from `useElectricalStore.nodeVoltages` (updated
- * by the scheduler) and maps wires to nets via `buildWireNetMap`.
+ * by the scheduler) and maps each wire to its net via the `pinNetMap` the
+ * solver publishes alongside them.
  *
  * For nets with AC content (detected via `.tran` `timeWaveforms`) labels
  * show `~<RMS>` prefixed with a tilde to mark them as time-varying. A
@@ -21,9 +22,9 @@
 import { useMemo } from 'react';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
-import { buildWireNetMap } from '../../simulation/spice/NetlistBuilder';
-import { BOARD_PIN_GROUPS } from '../../simulation/spice/boardPinGroups';
 import { rms, isAC } from '../../simulation/spice/waveformStats';
+import { cssVar } from '../../lib/theme';
+import { useResolvedTheme } from '../../hooks/useTheme';
 
 function formatV(v: number): string {
   const abs = Math.abs(v);
@@ -53,48 +54,26 @@ export function ElectricalOverlay({
   const solveMs = useElectricalStore((s) => s.lastSolveMs);
   const analysisMode = useElectricalStore((s) => s.analysisMode);
   const timeWaveforms = useElectricalStore((s) => s.timeWaveforms);
+  const pinNetMap = useElectricalStore((s) => s.pinNetMap);
 
   const wires = useSimulatorStore((s) => s.wires);
-  const components = useSimulatorStore((s) => s.components);
-  const boards = useSimulatorStore((s) => s.boards);
 
   const labels = useMemo(() => {
     if (Object.keys(nodeVoltages).length === 0) return [];
-
-    const boardsForSpice = boards.map((b) => {
-      const pg = BOARD_PIN_GROUPS[b.boardKind] ?? BOARD_PIN_GROUPS.default;
-      return {
-        id: b.id,
-        vcc: pg.vcc,
-        groundPinNames: pg.gnd,
-        vccPinNames: pg.vcc_pins,
-        auxPinNames: pg.aux?.pins,
-        auxVolts: pg.aux?.volts,
-        pins: {},
-      };
-    });
-    const compsForSpice = components.map((c) => ({
-      id: c.id,
-      metadataId: c.metadataId,
-      properties: c.properties ?? {},
-    }));
-    const wiresForSpice = wires.map((w) => ({
-      id: w.id,
-      start: { componentId: w.start.componentId, pinName: w.start.pinName },
-      end: { componentId: w.end.componentId, pinName: w.end.pinName },
-    }));
-
-    const wireNetMap = buildWireNetMap({
-      components: compsForSpice,
-      wires: wiresForSpice,
-      boards: boardsForSpice,
-    });
 
     return wires
       .map((w) => {
         const mx = (w.start.x + w.end.x) / 2;
         const my = (w.start.y + w.end.y) / 2;
-        const netName = wireNetMap.get(w.id);
+        // Ask the solver which net this wire sits on. Re-deriving it here
+        // from wires + boards looked equivalent and was not: any disagreement
+        // with the netlist (an unlisted board GND pin, a wire with a length)
+        // shifts the auto-generated n<N> names and the label then reports a
+        // NEIGHBOURING net's voltage. An endpoint absent from the map means
+        // the netlist did not place that pin, so there is nothing to show.
+        const netName =
+          pinNetMap.get(`${w.start.componentId}:${w.start.pinName}`) ??
+          pinNetMap.get(`${w.end.componentId}:${w.end.pinName}`);
         const samples = netName ? timeWaveforms?.nodes.get(netName) : undefined;
         const ac = samples && samples.length > 0 && isAC(samples);
         const displayV = ac ? rms(samples!) : netName ? nodeVoltages[netName] : undefined;
@@ -111,10 +90,10 @@ export function ElectricalOverlay({
         };
       })
       .filter((l) => l.v !== undefined && l.netName !== '0');
-  }, [wires, components, boards, nodeVoltages, timeWaveforms]);
+  }, [wires, pinNetMap, nodeVoltages, timeWaveforms]);
 
-  // Hover gate kept in its own memo: the netlist rebuild above is expensive
-  // and must not re-run every time the cursor moves.
+  // Hover gate kept in its own memo so the label list above does not rebuild
+  // every time the cursor moves.
   const visibleLabels = useMemo(() => {
     if (!hoveredWireId && !hoveredComponentId && !hoveredBoardId) return [];
     return labels.filter(
@@ -126,7 +105,22 @@ export function ElectricalOverlay({
   }, [labels, hoveredWireId, hoveredComponentId, hoveredBoardId]);
 
   const modeBadge = analysisMode === 'tran' ? 'AC' : 'DC';
-  const badgeColor = analysisMode === 'tran' ? '#4dd0e1' : '#ffa500';
+  // SVG attributes cannot take a CSS custom property, so the overlay resolves
+  // its tokens here. `theme` is read purely to re-resolve them when the user
+  // switches appearance — cssVar caches per theme.
+  const theme = useResolvedTheme();
+  const probe = useMemo(
+    () => ({
+      labelBg: cssVar('--color-canvas-label-bg'),
+      dc: cssVar('--color-probe-dc'),
+      dcDim: cssVar('--color-probe-dc-dim'),
+      ac: cssVar('--color-probe-ac'),
+      error: cssVar('--color-probe-error'),
+      errorDim: cssVar('--color-probe-error-dim'),
+    }),
+    [theme],
+  );
+  const badgeColor = analysisMode === 'tran' ? probe.ac : probe.dcDim;
 
   const summaryLines: string[] = [];
   if (error) summaryLines.push(`Warning: ${error}`);
@@ -157,8 +151,8 @@ export function ElectricalOverlay({
           ry={4}
           width={250}
           height={24}
-          fill="rgba(26, 26, 26, 0.85)"
-          stroke={error ? '#ff6666' : badgeColor}
+          fill={probe.labelBg}
+          stroke={error ? probe.errorDim : badgeColor}
         />
         <rect
           x={4}
@@ -186,7 +180,7 @@ export function ElectricalOverlay({
           x={32}
           y={17}
           fontSize={11}
-          fill={error ? '#ff9999' : '#ffa500'}
+          fill={error ? probe.error : probe.dcDim}
           fontFamily="monospace"
         >
           SPICE {summaryLines.join(' ')}
@@ -203,8 +197,8 @@ export function ElectricalOverlay({
             ry={3}
             width={44}
             height={16}
-            fill="rgba(0, 0, 0, 0.75)"
-            stroke={l.ac ? '#4dd0e1' : 'none'}
+            fill={probe.labelBg}
+            stroke={l.ac ? probe.ac : 'none'}
             strokeWidth={l.ac ? 0.5 : 0}
           />
           <text
@@ -213,7 +207,7 @@ export function ElectricalOverlay({
             textAnchor="middle"
             fontSize={10}
             fontFamily="monospace"
-            fill={l.ac ? '#4dd0e1' : '#ffd700'}
+            fill={l.ac ? probe.ac : probe.dc}
           >
             {l.ac ? `~${formatV(l.v!)}` : formatV(l.v!)}
           </text>

@@ -1,0 +1,208 @@
+# Supply-chain guard for incoming pull requests.
+#
+# Nothing here is AI. Every job is a deterministic rule engine: a diff scan,
+# static analysis, a secret scanner, and a dependency check. They cannot tell
+# you a PR is safe - only a human reading the diff does that. What they do is
+# make sure a human never merges the specific shapes an attack needs.
+#
+# Two rules make the difference between this file protecting the repository
+# and this file being the hole:
+#
+#   1. The trigger is `pull_request`, never `pull_request_target`. On
+#      `pull_request` a fork's code runs with a read-only GITHUB_TOKEN and no
+#      access to repository secrets. `pull_request_target` runs the fork's
+#      code with a WRITE token and full secret access, which is exactly the
+#      exfiltration path this workflow exists to catch.
+#   2. Third-party actions are pinned to a commit SHA, not a tag. Tags move;
+#      commits do not.
+#
+# Repository settings that matter more than any of this, all free and all
+# outside the workflow file:
+#   Settings > Actions > General > "Require approval for all external
+#     contributors" - stops a first-time contributor's workflow run before it
+#     starts.
+#   Settings > Code security - enable secret scanning, push protection and
+#     Dependabot alerts.
+#   Settings > Branches - protect master, require these checks, require a
+#     review, and disallow force pushes.
+
+name: PR Guard
+
+on:
+  pull_request:
+    branches: [master, main]
+
+# Read-only by default for every job in the file.
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------
+  # 1. Diff triage. Pure grep over what the PR adds - see the script for the
+  #    rule list. This is the job that catches install hooks, git hooks,
+  #    trojan-source Unicode, binaries and decode-then-exfiltrate shapes.
+  # ---------------------------------------------------------------------
+  risk-scan:
+    name: Diff risk scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Scan the diff
+        env:
+          # A maintainer who has read the findings can label the PR
+          # `security-reviewed` to turn blocking findings into warnings.
+          ALLOW_BLOCKS: ${{ contains(github.event.pull_request.labels.*.name, 'security-reviewed') && '1' || '0' }}
+        run: |
+          set -o pipefail
+          bash scripts/pr-risk-scan.sh \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------
+  # 2. The workflow files themselves. zizmor knows the Actions-specific
+  #    attacks: pull_request_target with a fork checkout, `${{ }}`
+  #    interpolation straight into a `run:` block (shell injection through a
+  #    branch or issue title), unpinned actions, over-broad permissions.
+  # ---------------------------------------------------------------------
+  workflow-audit:
+    name: Workflow audit (zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install zizmor==1.30.0
+
+      # Audit only the workflow files this PR touches. The repository has
+      # pre-existing findings (unpinned third-party actions, missing
+      # `permissions:` blocks) that are worth fixing but must not turn every
+      # contributor's PR red. Run `zizmor .github/workflows/` locally to see
+      # the full list.
+      - name: Audit the workflows this PR changes
+        run: |
+          set -o pipefail
+          changed=$(git diff --name-only --diff-filter=d \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            -- '.github/workflows/*' '.github/actions/*')
+          if [ -z "$changed" ]; then
+            echo "No workflow files changed."
+            exit 0
+          fi
+          echo "$changed"
+          # shellcheck disable=SC2086
+          zizmor --min-severity medium --format plain $changed
+
+  # ---------------------------------------------------------------------
+  # 3. CodeQL. Dataflow analysis, not pattern matching: it follows a value
+  #    from where it enters the program to where it is used, so it finds the
+  #    injection and path-traversal bugs a grep cannot see.
+  # ---------------------------------------------------------------------
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # `actions` analyses the workflow files themselves, with dataflow
+        # rather than zizmor's pattern rules - the two find different things.
+        language: [javascript-typescript, python, actions]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@v3
+        with:
+          # `languages`, plural. The singular form is silently ignored, and
+          # CodeQL then autodetects every language it can see - including the
+          # C/C++ in the ESP-IDF templates and sketches, which has no build
+          # here and fails the whole job with "could not process any code
+          # written in C/C++".
+          languages: ${{ matrix.language }}
+          # security-extended adds the lower-precision security queries;
+          # worth the extra noise on contributions from strangers.
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+
+  # ---------------------------------------------------------------------
+  # 4. Semgrep. Rule-based, runs offline against the public rulesets, no
+  #    account needed. --baseline-commit reports only findings the PR
+  #    introduces, so pre-existing issues do not drown the new ones.
+  # ---------------------------------------------------------------------
+  semgrep:
+    name: Semgrep (new findings only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install semgrep==1.176.0
+      - name: Scan changed code
+        run: |
+          semgrep scan \
+            --config p/javascript --config p/typescript --config p/react \
+            --config p/python --config p/secrets --config p/command-injection \
+            --baseline-commit "${{ github.event.pull_request.base.sha }}" \
+            --error --metrics=off --oss-only .
+
+  # ---------------------------------------------------------------------
+  # 5. Secrets. Catches a token the contributor leaked by accident, and a
+  #    token the contributor is trying to smuggle out. --only-verified means
+  #    it reports credentials it confirmed are live, so it barely false-
+  #    positives.
+  # ---------------------------------------------------------------------
+  secrets:
+    name: Secret scan (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: TruffleHog
+        # v3.97.1, pinned by SHA.
+        uses: trufflesecurity/trufflehog@20652fbbdefffcdaa493a5bf57ab2ac6b1db715b
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+  # ---------------------------------------------------------------------
+  # 6. Dependencies. Blocks a PR that pulls in a package with a known CVE or
+  #    an incompatible licence. Note: this repository gitignores its lock
+  #    files, so the review sees the ranges in package.json rather than the
+  #    exact resolved tree - treat it as a first pass, not the whole answer.
+  # ---------------------------------------------------------------------
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # v4.9.0, pinned by SHA.
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
+        with:
+          fail-on-severity: high
+          # AGPL-3.0 cannot absorb non-commercial or source-available terms.
+          deny-licenses: CC-BY-NC-4.0, BUSL-1.1, SSPL-1.0, Elastic-2.0

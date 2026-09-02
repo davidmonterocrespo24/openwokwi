@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -12,11 +13,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.core.hooks import (
+    compile_priority,
     get_current_user_id,
     get_project_libraries,
     resolve_compile_owner,
     record_compile,
 )
+from app.services import build_queue
 from app.services.arduino_cli import ArduinoCLIService
 from app.services.espidf_compiler import espidf_compiler
 
@@ -124,16 +127,20 @@ def _artifact_prune() -> None:
         pass
 
 # ── Concurrency control ──────────────────────────────────────────────────────
-# Two lanes. HEAVY = ESP-IDF (cmake + ninja, minutes on a cold cache): capped
-# at 2 — the VPS is modest (saw load avg 30 with 6 ninja processes peeling
-# each other apart). LIGHT = arduino-cli boards (AVR, RP2040, STM32...):
-# seconds each, so they get their own slots and never queue behind an
-# ESP-IDF cold build. Before the split a single Semaphore(2) gated both, and
-# a Uno blink could sit "compiling" for minutes while two ESP32 builds ran.
-# Concurrent compiles to the SAME ESP-IDF target would corrupt the persistent
-# build dir, so those are serialized with a per-target lock layered on top.
-_HEAVY_SEMAPHORE = asyncio.Semaphore(2)
-_LIGHT_SEMAPHORE = asyncio.Semaphore(3)
+# Two lanes, gated by app.services.build_queue. HEAVY = ESP-IDF (cmake + ninja,
+# minutes on a cold cache): capped low — the VPS is modest (saw load avg 30 with
+# 6 ninja processes peeling each other apart). LIGHT = arduino-cli boards (AVR,
+# RP2040, STM32...): seconds each, so they get their own slots and never queue
+# behind an ESP-IDF cold build. Before the split a single Semaphore(2) gated
+# both, and a Uno blink could sit "compiling" for minutes while two ESP32 builds
+# ran. Concurrent compiles to the SAME ESP-IDF target would corrupt the
+# persistent build dir, so those are serialized with a per-target lock layered
+# on top.
+#
+# BuildQueue replaced the two semaphores when velxio.dev started queueing for
+# real: a semaphore is FIFO and anonymous, so a paid build could not get past a
+# wall of gallery clicks and the route had nothing to tell the waiting user. The
+# queue is unbounded on purpose — a build is never refused, only delayed.
 _TARGET_LOCKS: dict[str, asyncio.Lock] = {}
 
 
@@ -190,6 +197,159 @@ def _target_lock(board_fqbn: str) -> asyncio.Lock:
     return lock
 
 
+# ── Progress + duration estimation ───────────────────────────────────────────
+# A spinner does not tell anyone whether to wait 8 seconds or 4 minutes, and a
+# cold ESP-IDF build looks identical to a hung one. Two sources feed the bar the
+# frontend draws:
+#
+#   1. REAL progress, when the build emits it. ninja prefixes every action with
+#      `[done/total]`, which is an exact fraction of the work left. Nothing
+#      guesses while that number is available.
+#   2. A time estimate for the rest — arduino-cli prints no counter at all, and
+#      even a ninja build has a silent cmake phase before the first action.
+#      `_DURATION_EMA` learns the real duration per build identity as builds
+#      complete, so the estimate is this server's actual numbers rather than a
+#      constant, from the second build of a given target onwards.
+
+_NINJA_PROGRESS_RE = re.compile(r"^\s*\[(\d+)/(\d+)\]")
+
+# Seed estimates, in seconds, until the EMA has seen a real build. Deliberately
+# on the pessimistic side: a bar that arrives early reads as fast, one that
+# stalls at 99% reads as broken.
+_SEED_ESTIMATE_S = {"heavy": 150.0, "light": 20.0}
+
+# Weight of the newest sample. High enough to follow a cache going cold within
+# a couple of builds, low enough that one outlier does not move the bar.
+_EMA_ALPHA = 0.3
+
+_DURATION_EMA: dict[str, float] = {}
+
+
+def _estimate_key(lane: str, board_fqbn: str) -> str:
+    return f"{lane}:{_build_identity(board_fqbn)}"
+
+
+def _estimated_seconds(lane: str, board_fqbn: str) -> float:
+    return _DURATION_EMA.get(
+        _estimate_key(lane, board_fqbn), _SEED_ESTIMATE_S.get(lane, 60.0)
+    )
+
+
+def _record_duration(lane: str, board_fqbn: str, seconds: float) -> None:
+    """Fold one completed build's wall time into the running estimate.
+
+    Only the BUILD is measured — queue time is excluded by the caller, or a
+    busy hour would teach the estimator that this target takes ten minutes and
+    leave the bar crawling once the queue drains.
+    """
+    if seconds <= 0 or seconds > 3600:
+        return
+    key = _estimate_key(lane, board_fqbn)
+    prev = _DURATION_EMA.get(key)
+    _DURATION_EMA[key] = seconds if prev is None else (
+        _EMA_ALPHA * seconds + (1 - _EMA_ALPHA) * prev
+    )
+
+
+def _scan_progress(line: str, job: dict[str, Any]) -> None:
+    """Update a job's `progress` / `stage` from one line of build output.
+
+    Cheap enough to run per line: one regex against the head of the string,
+    then a few substring checks on the phase keywords.
+    """
+    match = _NINJA_PROGRESS_RE.match(line)
+    if match:
+        done, total = int(match.group(1)), int(match.group(2))
+        if total <= 0:
+            return
+        # An ESP-IDF build runs NESTED ninjas: the bootloader is its own
+        # ExternalProject with its own small counter, so a raw reading goes
+        # [480/500] -> [3/40] and the bar visibly collapses mid-build. Track
+        # the largest total seen and ignore counters from a much smaller run —
+        # those belong to a sub-project, not to the work the user is waiting on.
+        biggest = int(job.get("progress_total", 0))
+        if total >= biggest:
+            job["progress_total"] = total
+        elif total * 4 < biggest:
+            return
+        # Held below 1.0 — ninja hits [512/512] well before esptool has
+        # produced the image the user is actually waiting for.
+        fraction = min(0.97, done / total)
+        # Never walk backwards: a bar that retreats reads as a bug even when
+        # the underlying number is honest.
+        job["progress"] = max(float(job.get("progress") or 0.0), fraction)
+        job["stage"] = "compiling"
+        return
+    lowered = line.lower()
+    if "linking" in lowered:
+        job["stage"] = "linking"
+    elif "esptool" in lowered or "creating esp32" in lowered:
+        # Deliberately NOT keying on bare "generating": cmake's configure phase
+        # prints "Generating done" minutes before any compilation, and the
+        # first live ESP32 probe (2026-09-01) showed the card saying
+        # "packaging" while cmake was still configuring.
+        job["stage"] = "packaging"
+
+
+def _job_progress(job: dict[str, Any]) -> tuple[float | None, float | None]:
+    """(progress 0..1, estimated total seconds) for a status response.
+
+    Returns the measured fraction when the build reported one, otherwise an
+    elapsed/estimate ratio capped short of full. A queued job has neither — it
+    has not started, and pretending otherwise would show a bar that moves while
+    nothing is happening.
+    """
+    if job.get("state") in ("done", "error"):
+        return 1.0, None
+    if job.get("stage") == "queued":
+        return None, None
+    estimate = job.get("estimate_s")
+    measured = job.get("progress")
+    if measured is not None:
+        return float(measured), estimate
+    run_started = job.get("run_started_at")
+    if run_started is None or not estimate:
+        return None, estimate
+    elapsed = max(0.0, time.time() - run_started)
+    # Asymptotic tail: an overrunning build keeps creeping instead of parking
+    # at the cap, so the bar never looks frozen on a slower-than-usual run.
+    ratio = elapsed / float(estimate)
+    return (min(0.9, ratio) if ratio < 0.9 else 0.9 + 0.09 * (1 - 1 / (1 + ratio - 0.9))), estimate
+
+
+def _job_display_fields(job_id: str) -> dict[str, Any]:
+    """The per-job labels that must survive a wholesale COMPILE_JOBS rewrite.
+
+    `_compile_job` replaces the whole job dict on completion (simpler than
+    patching six keys under a race), which used to drop the queue metadata with
+    it — a finished build then reported the wrong tier to a late poll.
+    """
+    job = COMPILE_JOBS.get(job_id) or {}
+    return {
+        key: job[key]
+        for key in ("tier", "priority", "lane", "estimate_s", "run_started_at")
+        if key in job
+    }
+
+
+async def _resolve_queue_priority(user_id: str | None) -> tuple[int, str]:
+    """(priority, display tier) for a compile. OSS default: everyone equal.
+
+    The tier string only ever reaches the client as a label ('pro' shows a
+    priority badge, 'free' shows the upgrade line). 'local' means no plan
+    vocabulary applies — a self-hosted OSS build — and the UI shows neither.
+    """
+    info = await compile_priority(user_id)
+    if not isinstance(info, dict):
+        return build_queue.PRIORITY_STANDARD, "local"
+    try:
+        priority = int(info.get("priority", build_queue.PRIORITY_STANDARD))
+    except (TypeError, ValueError):
+        priority = build_queue.PRIORITY_STANDARD
+    tier = str(info.get("tier") or "standard")
+    return priority, tier
+
+
 def _job_key(
     files: list[dict[str, str]],
     board_fqbn: str,
@@ -198,6 +358,7 @@ def _job_key(
     libraries: list[str] | None = None,
     owner_id: str | None = None,
     language: str | None = None,
+    custom_wifi_ssids: list[str] | None = None,
 ) -> str:
     """Stable content hash of (files, board, options, spiffs, libraries, owner)
     used as the deduplication key.
@@ -232,6 +393,15 @@ def _job_key(
         import json
         h.update(json.dumps(board_options, sort_keys=True).encode())
         h.update(b"\0")
+    if custom_wifi_ssids:
+        # Custom APs suppress the SSID rewrite, so the same source builds
+        # DIFFERENT bytes with vs without them — the key must see it. Only
+        # presence matters for the rewrite, but hash the sorted list so a
+        # rename also invalidates cleanly.
+        for ssid in sorted(custom_wifi_ssids):
+            h.update(ssid.encode())
+            h.update(b"\0")
+        h.update(b"\0custom-aps\0")
     if spiffs_files:
         for f in sorted(spiffs_files, key=lambda x: x["name"]):
             h.update(f["name"].encode())
@@ -315,6 +485,12 @@ class CompileRequest(BaseModel):
     # backend deploy — espidf_compiler.compile validates known keys and
     # ignores the rest. None / missing on non-ESP32 boards.
     board_options: dict[str, str | int | bool] | None = None
+    # Optional: the SSIDs of the project's custom WiFi access points (the
+    # velxio-wifi-ap parts on the canvas, overlay feature). When non-empty
+    # the compiler does NOT rewrite the sketch's SSID literals — the project
+    # defines its own airspace, so what the user typed is what exists. Empty
+    # / missing keeps the legacy behavior (rewrite to the built-in networks).
+    custom_wifi_ssids: list[str] | None = None
     # User-uploaded files to bake into the SPIFFS partition (#162). Empty /
     # None means the SPIFFS region stays blank (current behaviour).
     spiffs_files: list[SpiffsFileBody] | None = None
@@ -495,6 +671,7 @@ async def _run_compile(
             allowed_libraries=allowed_libraries,
             owner_id=owner_id,
             pure_idf=pure_idf,
+            custom_wifi_ssids=request.custom_wifi_ssids,
         )
         return CompileResponse(
             success=result["success"],
@@ -581,8 +758,9 @@ async def _compile_job(
     files: list[dict[str, str]],
     user_id: str | None,
     scope: tuple[set[str] | None, str | None] | None = None,
+    priority: int = build_queue.PRIORITY_STANDARD,
 ) -> None:
-    """Background worker: acquire global semaphore + per-target lock, run the
+    """Background worker: acquire a build slot + per-target lock, run the
     compile, store result in COMPILE_JOBS.
 
     `scope` is the (allowed_libraries, owner_id) already resolved by
@@ -590,9 +768,14 @@ async def _compile_job(
     exact same scope the key was computed from (no second resolution that could
     disagree under a transient owner-lookup failure).
 
+    `priority` decides where this job sits in its lane's queue (lower runs
+    first); it comes from the plan resolved at /compile/start.
+
     `state=pending` while waiting on either gate; transitions to `running`
     only once the actual build is about to start, so clients polling
-    /compile/status see an accurate snapshot of where their job is.
+    /compile/status see an accurate snapshot of where their job is. The finer
+    `stage` field distinguishes "queued behind other builds" from "the build
+    is running but has not printed anything yet".
 
     Live build output is appended to COMPILE_JOBS[job_id]['stdout_buffer']
     line-by-line as cmake + ninja emit it, so /compile/status responses
@@ -620,18 +803,27 @@ async def _compile_job(
         if len(new) > 262_144:
             new = new[-262_144:]
         current["stdout_buffer"] = new
+        _scan_progress(line, current)
+
+    heavy = _is_heavy_compile(request.board_fqbn)
+    lane_name = "heavy" if heavy else "light"
+    lane = build_queue.lane_for(heavy)
+    build_started = started
+
+    def on_queued() -> None:
+        # Tell the user WHY nothing is happening yet. Deliberately says
+        # nothing about how many builds are ahead: a queue depth is worse
+        # than no number at all, and it publishes how busy the service is.
+        current = COMPILE_JOBS.get(job_id)
+        if current is not None:
+            current["stage"] = "queued"
+        on_progress_line(
+            "[queue] Waiting for a free build slot — your build starts "
+            "automatically, and is never dropped.\n"
+        )
 
     try:
-        lane = _HEAVY_SEMAPHORE if _is_heavy_compile(request.board_fqbn) else _LIGHT_SEMAPHORE
-        if lane.locked():
-            # Tell the user's console WHY nothing is happening yet: every
-            # slot of this lane is busy. The frontend streams stdout while
-            # the job is still 'pending'.
-            on_progress_line(
-                "[queue] All build slots are busy — waiting for a free one "
-                "(your build starts automatically)...\n"
-            )
-        async with lane:
+        async with lane.slot(priority=priority, key=job_id, on_queued=on_queued):
             async with _target_lock(request.board_fqbn):
                 # Job may have been purged or replaced while we were queued.
                 # Re-fetch and bail out if so.
@@ -639,12 +831,27 @@ async def _compile_job(
                     logger.info(f"[compile] job {job_id} purged before run; skipping")
                     return
                 COMPILE_JOBS[job_id]["state"] = "running"
+                COMPILE_JOBS[job_id]["stage"] = "preparing"
+                # Progress and ETA are measured from HERE, not from the moment
+                # the job was queued — otherwise every build that waited would
+                # render as already half-finished the instant it starts.
+                COMPILE_JOBS[job_id]["run_started_at"] = time.time()
+                COMPILE_JOBS[job_id]["estimate_s"] = _estimated_seconds(
+                    lane_name, request.board_fqbn
+                )
+                build_started = time.monotonic()
                 response = await _run_compile(
                     request, files, progress_callback=on_progress_line,
                     requester_id=user_id, scope=scope,
                 )
+        if response.success:
+            _record_duration(
+                lane_name, request.board_fqbn, time.monotonic() - build_started
+            )
         COMPILE_JOBS[job_id] = {
+            **_job_display_fields(job_id),
             "state": "done",
+            "stage": "done",
             "started_at": started_at,
             "finished_at": time.time(),
             "result": response.model_dump(),
@@ -676,12 +883,21 @@ async def _compile_job(
                 "example_id": request.example_id,
                 "partition_scheme": (request.board_options or {}).get("partitionScheme"),
                 "spiffs_file_count": len(request.spiffs_files or []),
+                # duration_ms is queue + build, which it always was (the old
+                # semaphore wait counted too). Splitting the wait out is what
+                # tells the operator whether a slow week means slow builds or a
+                # deep queue — i.e. whether to buy CPU or raise the lane caps.
+                "queue_ms": int((build_started - started) * 1000),
+                "lane": lane_name,
+                "priority": priority,
             },
         )
     except Exception as exc:
         logger.exception(f"[compile] async job {job_id} failed")
         COMPILE_JOBS[job_id] = {
+            **_job_display_fields(job_id),
             "state": "error",
+            "stage": "done",
             "started_at": started_at,
             "finished_at": time.time(),
             "error": str(exc)[:500],
@@ -718,6 +934,21 @@ async def compile_sketch(
     """
     files = _resolve_files(request)
     started = time.monotonic()
+
+    priority, _tier = await _resolve_queue_priority(user_id)
+    lane = build_queue.lane_for(_is_heavy_compile(request.board_fqbn))
+
+    async def _gated_compile() -> CompileResponse:
+        # This path used to call _run_compile directly — no build slot and, far
+        # worse, no per-target lock, so a sync compile could run inside the
+        # same persistent ESP-IDF build dir as an async one and hand back the
+        # other sketch's firmware (the failure _build_identity documents). It
+        # also meant an API caller bypassed the queue entirely while everyone
+        # in the editor waited.
+        async with lane.slot(priority=priority):
+            async with _target_lock(request.board_fqbn):
+                return await _run_compile(request, files, requester_id=user_id)
+
     try:
         # Shielded: when the client (or a proxy timeout - nginx 504s a cold
         # ESP-IDF build well before it finishes) drops the connection,
@@ -728,9 +959,19 @@ async def compile_sketch(
         # staging the day the P4 lane landed). The shield lets the build run
         # to completion and keep the cache consistent; only the response is
         # lost.
-        response = await asyncio.shield(
-            asyncio.ensure_future(_run_compile(request, files, requester_id=user_id))
-        )
+        #
+        # The shield covers the queue wait too. Dropping the slot on
+        # disconnect and letting the shielded build run on would put a build
+        # outside the concurrency cap — the one thing the lane exists to
+        # prevent, so the whole gated coroutine is shielded together.
+        #
+        # The cost is real and worth naming: this path neither reads nor writes
+        # the artifact cache (only the async job path does), so a request
+        # abandoned while queued still consumes a slot for a build whose result
+        # nobody receives and nothing caches. Acceptable because the sync
+        # endpoint is the API/legacy path — the editor uses /compile/start —
+        # and a corrupted shared build dir is far worse than a wasted slot.
+        response = await asyncio.shield(asyncio.ensure_future(_gated_compile()))
     except Exception as e:
         await record_compile(
             user_id=user_id,
@@ -782,6 +1023,34 @@ class CompileStatusResponse(BaseModel):
     result: CompileResponse | None = None
     error: str | None = None
 
+    # ── Queue + progress telemetry (drives the compile overlay) ──────────
+    # What this job is doing right now, finer than `state`:
+    #   queued     — waiting for a build slot (nothing is running yet)
+    #   preparing  — has a slot; cmake / core setup, no output yet
+    #   compiling  — actions are running (ninja is reporting a fraction)
+    #   linking / packaging — the tail end of the build
+    #   done       — finished, successfully or not
+    stage: str = "preparing"
+    # 0..1, or null when there is nothing honest to draw (a queued job).
+    # Measured from ninja's [done/total] where available, estimated from this
+    # server's own recent build times otherwise.
+    progress: float | None = None
+    # What the estimate above is based on, in seconds. Null while queued.
+    estimated_seconds: float | None = None
+    # Seconds this job has been BUILDING (excludes queue time), so the timer
+    # on screen matches the bar next to it.
+    build_seconds: float = 0.0
+    # Coarse build-server pressure: 'low' | 'moderate' | 'high' | 'peak'.
+    # Deliberately a bucket, never a count: queue depth and position stay
+    # server-side (see app/services/build_queue.py).
+    server_load: str = "low"
+    # Display label for the requester's plan — 'local' (self-hosted OSS, no
+    # plan vocabulary), 'anonymous', 'free', 'maker', 'pro'. The UI uses it to
+    # choose between a priority badge and an upgrade line; it grants nothing.
+    tier: str = "local"
+    # Whether this job was admitted ahead of standard builds.
+    priority: bool = False
+
 
 @router.post("/start", response_model=CompileStartResponse)
 async def compile_start(
@@ -815,17 +1084,47 @@ async def compile_start(
     # when a manifest applies, to preserve owner-independent dedup for index-
     # only / no-manifest compiles) is then threaded into the job so the build
     # never re-resolves and the two can't diverge.
+    # Where this build sits in the queue. Resolved once, here, so a single
+    # plan lookup covers the whole job and the tier the UI displays is the
+    # same one the queue actually ordered on.
+    priority, tier = await _resolve_queue_priority(user_id)
+    heavy = _is_heavy_compile(request.board_fqbn)
+    queue_fields = {
+        "tier": tier,
+        "priority": priority,
+        "lane": "heavy" if heavy else "light",
+    }
+
     allowed_libraries, owner_id = await _resolve_compile_scope(request, user_id)
     key = _job_key(
         files, request.board_fqbn, request.board_options, spiffs_dicts,
         sorted(allowed_libraries) if allowed_libraries else None,
         owner_id if allowed_libraries else None,
         language=request.language,
+        custom_wifi_ssids=request.custom_wifi_ssids,
     )
     existing_id = JOB_BY_KEY.get(key)
     if existing_id is not None:
         existing = COMPILE_JOBS.get(existing_id)
         if existing is not None and existing.get("state") in ("pending", "running"):
+            # Two users submitting byte-identical sources for the same board
+            # share ONE build. The job keeps whoever asked first, which used to
+            # mean a pro user landing on a queued anonymous build of a popular
+            # gallery example waited at standard priority AND was shown the
+            # anonymous tier (upgrade prompt and all). Lift the shared job to
+            # the better entitlement instead — it never demotes, so the first
+            # submitter cannot lose ground either.
+            if priority < int(existing.get("priority", build_queue.PRIORITY_STANDARD)):
+                existing["priority"] = priority
+                existing["tier"] = tier
+                lane_for_existing = build_queue.lane_for(
+                    existing.get("lane") == "heavy"
+                )
+                lane_for_existing.reprioritize(existing_id, priority)
+                logger.info(
+                    "[compile] dedup hit — job %s lifted to %s priority",
+                    existing_id, tier,
+                )
             logger.info(f"[compile] dedup hit — reusing job {existing_id}")
             return CompileStartResponse(job_id=existing_id)
 
@@ -836,9 +1135,12 @@ async def compile_start(
         job_id = uuid.uuid4().hex
         now = time.time()
         COMPILE_JOBS[job_id] = {
+            **queue_fields,
             "state": "done",
+            "stage": "done",
             "started_at": now,
             "finished_at": now,
+            "run_started_at": now,
             "result": cached,
             "key": key,
             "stdout_buffer": cached.get("stdout", ""),
@@ -863,7 +1165,16 @@ async def compile_start(
         return CompileStartResponse(job_id=job_id)
 
     job_id = uuid.uuid4().hex
-    COMPILE_JOBS[job_id] = {"state": "pending", "started_at": time.time(), "key": key}
+    COMPILE_JOBS[job_id] = {
+        **queue_fields,
+        "state": "pending",
+        # Every job starts as 'queued': the background task has not reached the
+        # admission gate yet, and claiming 'preparing' before it does would show
+        # a bar for a build that has not started.
+        "stage": "queued",
+        "started_at": time.time(),
+        "key": key,
+    }
     JOB_BY_KEY[key] = job_id
 
     asyncio.create_task(
@@ -873,6 +1184,7 @@ async def compile_start(
             files=files,
             user_id=user_id,
             scope=(allowed_libraries, owner_id),
+            priority=priority,
         ),
     )
     return CompileStartResponse(job_id=job_id)
@@ -891,13 +1203,27 @@ async def compile_status(job_id: str):
     job = COMPILE_JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found or expired")
+    progress, estimate = _job_progress(job)
+    run_started = job.get("run_started_at")
+    finished = job.get("finished_at")
+    build_seconds = (
+        max(0.0, (finished or time.time()) - run_started) if run_started else 0.0
+    )
     return CompileStatusResponse(
         state=job["state"],
         started_at=job["started_at"],
-        finished_at=job.get("finished_at"),
+        finished_at=finished,
         stdout=job.get("stdout_buffer", "") or "",
         result=job.get("result"),
         error=job.get("error"),
+        stage=job.get("stage", "preparing"),
+        progress=progress,
+        estimated_seconds=estimate,
+        build_seconds=build_seconds,
+        server_load=build_queue.load_level(),
+        tier=job.get("tier", "local"),
+        priority=int(job.get("priority", build_queue.PRIORITY_STANDARD))
+        < build_queue.STANDARD_THRESHOLD,
     )
 
 

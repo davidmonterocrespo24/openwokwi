@@ -3,7 +3,7 @@
 .new-project-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--color-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,15 +22,15 @@
 }
 
 .new-project-dialog {
-  background: #1e1e1e;
-  border: 1px solid #444;
+  background: var(--wb-2);
+  border: 1px solid var(--wb-7);
   border-radius: 10px;
   width: min(840px, 94vw);
   max-height: 86vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-3);
 }
 
 .new-project-head {
@@ -40,14 +40,14 @@
 
 .new-project-title {
   margin: 0;
-  color: #e8e8e8;
+  color: var(--wb-13);
   font-size: 17px;
   font-weight: 600;
 }
 
 .new-project-sub {
   margin: 6px 0 0;
-  color: #8f949c;
+  color: var(--wb-10);
   font-size: 12.5px;
   line-height: 1.45;
 }
@@ -59,7 +59,7 @@
 
 .new-project-section-title {
   margin: 16px 0 8px;
-  color: #8a8f98;
+  color: var(--wb-10);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -77,20 +77,20 @@
   display: flex;
   flex-direction: column;
   text-align: left;
-  background: #2b2b2b;
-  border: 1px solid #3d3d3d;
+  background: var(--wb-4);
+  border: 1px solid var(--wb-7);
   border-radius: 8px;
   padding: 0;
   overflow: hidden;
-  color: #ddd;
+  color: var(--wb-13);
   cursor: pointer;
   font: inherit;
   transition: background 0.1s ease, border-color 0.1s ease;
 }
 
 .new-project-card:hover {
-  background: #343434;
-  border-color: #5a5a5a;
+  background: var(--wb-6);
+  border-color: var(--wb-8);
 }
 
 /* Circuit thumbnail — same 300x180 (5:3) frame as the gallery cards. */
@@ -98,7 +98,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 5 / 3;
-  background: #0a0a0c;
+  background: var(--color-bg-canvas);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -120,7 +120,7 @@
 
 .new-project-card-blank {
   border-style: dashed;
-  border-color: #4a4f58;
+  border-color: var(--wb-7);
   margin-top: 12px;
 }
 
@@ -130,7 +130,7 @@
   justify-content: center;
   font-size: 64px;
   font-weight: 300;
-  color: #4a9eff;
+  color: var(--color-accent-fg);
   background: transparent;
 }
 
@@ -143,7 +143,7 @@
 
 .new-project-card-desc {
   font-size: 10.5px;
-  color: #8f949c;
+  color: var(--wb-10);
   line-height: 1.35;
 }
 
@@ -160,12 +160,12 @@
   letter-spacing: 0.6px;
   color: #1a1205;
   background: linear-gradient(180deg, #ffd566, #f5a623);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-1);
 }
 
 .new-project-foot {
   padding: 12px 24px 16px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--wb-6);
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
@@ -174,14 +174,14 @@
 .new-project-cancel {
   padding: 6px 16px;
   background: transparent;
-  border: 1px solid #555;
+  border: 1px solid var(--wb-8);
   border-radius: 6px;
-  color: #999;
+  color: var(--wb-10);
   cursor: pointer;
   font-size: 12.5px;
 }
 
 .new-project-cancel:hover {
-  color: #ccc;
-  border-color: #777;
+  color: var(--wb-12);
+  border-color: var(--wb-9);
 }

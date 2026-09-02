@@ -49,6 +49,10 @@ export interface SimulatorBridges {
 
 const SIM_BRIDGES = new WeakMap<object, SimulatorBridges>();
 
+/** Hard cap on the AVR RX FIFO (see avrUartTx) — at the 1 byte/ms drain
+ *  rate this is ~4 s of backlog, plenty for bursts, bounded for firehoses. */
+const MAX_UART_RX_QUEUE = 4096;
+
 export function getSimulatorBridges(simulator: any): SimulatorBridges {
   let b = SIM_BRIDGES.get(simulator);
   if (!b) {
@@ -137,6 +141,11 @@ export function avrUartTx(simulator: any, byte: number): void {
     // which is a different bridge entirely (TODO).
     if (!simulator.usart || typeof simulator.usart.writeByte !== 'function') return;
     const b = getSimulatorBridges(simulator);
+    // Bound the FIFO: a chip streaming while the sketch never reads (RX busy
+    // forever) grew this array without limit — the browser tab died of
+    // memory, not of CPU. Beyond the cap, drop new bytes and keep the oldest
+    // so a sketch that starts reading late still sees the stream's head.
+    if (b.uartRxQueue.length >= MAX_UART_RX_QUEUE) return;
     b.uartRxQueue.push(byte & 0xff);
     if (!b.uartDrainHandle) {
       const drain = () => {

@@ -45,7 +45,16 @@ const ADC_6CH = adcRange('A', 0, 6);
 const ADC_8CH = adcRange('A', 0, 8);
 const ADC_16CH = adcRange('A', 0, 16);
 
-const ADC_PIN_MAP: Partial<Record<BoardKind, Array<{ pinName: string; channel: number }>>> = {
+/**
+ * Which pin names on each board are ADC inputs.
+ *
+ * Exported because the scope's probe resolver needs the same answer: an
+ * analogRead pin carries a VOLTAGE, so a wire landing on it must be plotted as
+ * an analog trace, not as the logic level its Arduino pin number would suggest
+ * (A0 is pin 14 on an Uno, and a square wave of a divider tap is nonsense).
+ * One table, so the two cannot drift.
+ */
+export const ADC_PIN_MAP: Partial<Record<BoardKind, Array<{ pinName: string; channel: number }>>> = {
   // AVR
   'arduino-uno': ADC_6CH,
   'arduino-nano': ADC_8CH,

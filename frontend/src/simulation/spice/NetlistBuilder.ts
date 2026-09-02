@@ -62,11 +62,11 @@ function unionBreadboardGroups(
 // spellings boards actually emit: GND.1 / GND.2 (dotted), GND2 / GND3 (bare),
 // GND_2 (underscore). Several dev-kit board elements label their extra ground
 // pad "GND2" (no dot), which previously fell through and floated.
-const GROUND_PIN_RE = /^(gnd|vss|vee|ground)([._]?\d+)?$/i;
+export const GROUND_PIN_RE = /^(gnd|vss|vee|ground)([._]?\d+)?$/i;
 // Deliberately excludes "V+" / "V-" (which are probe terminals) and
 // "VBB" (non-standard). VCC-like pins on boards are handled via the
 // board.vccPinNames list, not this regex.
-const VCC_PIN_RE = /^(vcc|vdd|vcc_rail|5v|3v3|3\.3v)$/i;
+export const VCC_PIN_RE = /^(vcc|vdd|vcc_rail|5v|3v3|3\.3v)$/i;
 
 /** metadataId prefixes of components that must NOT be auto-canonicalized
  *  by the pin-name regex (their pins are just probe labels). */
@@ -522,18 +522,32 @@ export function buildWireNetMap(
     const b = pin(w.end.componentId, w.end.pinName);
     uf.add(a);
     uf.add(b);
-    uf.union(a, b);
+    // A wire with a length stays TWO nets in buildNetlist (it stamps an
+    // R_wire card between them). Unioning it here collapsed one net and
+    // shifted every later n<N> name by one, so callers read a neighbour's
+    // voltage.
+    if (w.length_cm === undefined || w.length_cm <= 0) uf.union(a, b);
   }
 
   // Breadboards: join wired holes that share an internal strip/rail.
   unionBreadboardGroups(uf, components, wires, pin);
 
   for (const board of boards) {
+    const auxNet = board.auxVolts !== undefined ? auxRailNetName(board.auxVolts) : null;
+    const auxPins = new Set(auxNet ? (board.auxPinNames ?? []) : []);
     for (const pName of board.groundPinNames ?? []) uf.setCanonical(pin(board.id, pName), '0');
     for (const pName of board.vccPinNames ?? []) uf.setCanonical(pin(board.id, pName), 'vcc_rail');
-    if (board.auxVolts !== undefined) {
-      const auxNet = auxRailNetName(board.auxVolts);
-      for (const pName of board.auxPinNames ?? []) uf.setCanonical(pin(board.id, pName), auxNet);
+    if (auxNet) {
+      for (const pName of auxPins) uf.setCanonical(pin(board.id, pName), auxNet);
+    }
+    // Same fallback buildNetlist applies: a board pin NAMED like a ground /
+    // supply pin anchors its net even when the per-board list misses it
+    // (dev kits routinely ship a "GND2" that is not in groundPinNames).
+    for (const pName of pinsReferencedByWires(board.id, wires)) {
+      if (GROUND_PIN_RE.test(pName)) uf.setCanonical(pin(board.id, pName), '0');
+      else if (!auxPins.has(pName) && VCC_PIN_RE.test(pName)) {
+        uf.setCanonical(pin(board.id, pName), 'vcc_rail');
+      }
     }
   }
   for (const comp of components) {
@@ -556,87 +570,6 @@ export function buildWireNetMap(
   return result;
 }
 
-/**
- * Build a map from `"${boardId}:${pinName}"` → SPICE net name for every
- * board pin that participates in the circuit. Used by the ADC injection
- * step in subscribeToStore so it can look up voltages by pin name.
- */
-export function buildBoardPinNetMap(
-  input: Pick<BuildNetlistInput, 'components' | 'wires' | 'boards'>,
-): Map<string, string> {
-  const { wires, boards, components } = input;
-  const uf = new UnionFind();
-  const pin = (cId: string, pName: string) => `${cId}:${pName}`;
-
-  // Collect board IDs for fast lookup
-  const boardIds = new Set(boards.map((b) => b.id));
-
-  for (const w of wires) {
-    const a = pin(w.start.componentId, w.start.pinName);
-    const b = pin(w.end.componentId, w.end.pinName);
-    uf.add(a);
-    uf.add(b);
-    uf.union(a, b);
-  }
-
-  // Breadboards: join wired holes that share an internal strip/rail.
-  unionBreadboardGroups(uf, components, wires, pin);
-
-  // Canonicalize board ground/vcc/aux pins (from boardPinGroups metadata)
-  for (const board of boards) {
-    for (const pName of board.groundPinNames ?? []) {
-      const k = pin(board.id, pName);
-      uf.add(k);
-      uf.setCanonical(k, '0');
-    }
-    for (const pName of board.vccPinNames ?? []) {
-      const k = pin(board.id, pName);
-      uf.add(k);
-      uf.setCanonical(k, 'vcc_rail');
-    }
-    if (board.auxVolts !== undefined) {
-      const auxNet = auxRailNetName(board.auxVolts);
-      for (const pName of board.auxPinNames ?? []) {
-        const k = pin(board.id, pName);
-        uf.add(k);
-        uf.setCanonical(k, auxNet);
-      }
-    }
-  }
-  // Canonicalize non-board component GND/VCC pins referenced by wires
-  for (const comp of components) {
-    if (comp.metadataId.startsWith('instr-')) continue;
-    if (boardIds.has(comp.id)) continue; // board handled above
-    for (const pName of pinsReferencedByWires(comp.id, wires)) {
-      if (GROUND_PIN_RE.test(pName)) uf.setCanonical(pin(comp.id, pName), '0');
-      else if (VCC_PIN_RE.test(pName)) uf.setCanonical(pin(comp.id, pName), 'vcc_rail');
-    }
-  }
-
-  const netNames = assignDeterministicNetNames(uf);
-  const result = new Map<string, string>();
-
-  // For each board, collect ALL pins that appear in wires (via wire endpoints)
-  // plus the explicit groundPinNames/vccPinNames/pins lists.
-  for (const board of boards) {
-    const wireReferencedPins = pinsReferencedByWires(board.id, wires);
-    const allPins = new Set([
-      ...(board.groundPinNames ?? []),
-      ...(board.vccPinNames ?? []),
-      ...(board.auxPinNames ?? []),
-      ...Object.keys(board.pins ?? {}),
-      ...wireReferencedPins, // ← the pins that actually exist in the UF
-    ]);
-    for (const pName of allPins) {
-      const k = pin(board.id, pName);
-      if (uf.has(k)) {
-        const netName = netNames.get(uf.find(k));
-        if (netName) result.set(k, netName);
-      }
-    }
-  }
-  return result;
-}
 
 /** Re-export types for callers. */
 export type { BuildNetlistInput, ComponentForSpice, BoardForSpice, WireForSpice } from './types';

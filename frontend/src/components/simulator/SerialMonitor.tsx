@@ -63,20 +63,20 @@ const BOARD_COLOR: Partial<Record<string, string>> = {
   'arduino-mega': '#4fc3f7',
   'raspberry-pi-pico': '#ce93d8',
   'pi-pico-w': '#ce93d8',
-  'raspberry-pi-3': '#ef9a9a',
-  'raspberry-pi-4': '#ef9a9a',
-  'raspberry-pi-5': '#ef9a9a',
-  esp32: '#a5d6a7',
-  'esp32-devkit-c-v4': '#a5d6a7',
-  'esp32-cam': '#a5d6a7',
-  'wemos-lolin32-lite': '#a5d6a7',
-  'esp32-s3': '#a5d6a7',
-  'xiao-esp32-s3': '#a5d6a7',
-  'arduino-nano-esp32': '#a5d6a7',
-  'esp32-c3': '#a5d6a7',
-  'xiao-esp32-c3': '#a5d6a7',
-  'aitewinrobot-esp32c3-supermini': '#a5d6a7',
-  attiny85: '#ffcc80',
+  'raspberry-pi-3': 'var(--color-feedback-error)',
+  'raspberry-pi-4': 'var(--color-feedback-error)',
+  'raspberry-pi-5': 'var(--color-feedback-error)',
+  esp32: 'var(--color-feedback-success)',
+  'esp32-devkit-c-v4': 'var(--color-feedback-success)',
+  'esp32-cam': 'var(--color-feedback-success)',
+  'wemos-lolin32-lite': 'var(--color-feedback-success)',
+  'esp32-s3': 'var(--color-feedback-success)',
+  'xiao-esp32-s3': 'var(--color-feedback-success)',
+  'arduino-nano-esp32': 'var(--color-feedback-success)',
+  'esp32-c3': 'var(--color-feedback-success)',
+  'xiao-esp32-c3': 'var(--color-feedback-success)',
+  'aitewinrobot-esp32c3-supermini': 'var(--color-feedback-success)',
+  attiny85: 'var(--color-feedback-warning)',
 };
 
 export const SerialMonitor: React.FC = () => {
@@ -199,7 +199,7 @@ export const SerialMonitor: React.FC = () => {
       <div style={styles.tabStrip}>
         {boards.map((board) => {
           const isActive = board.id === resolvedTabId;
-          const color = BOARD_COLOR[board.boardKind] ?? '#999';
+          const color = BOARD_COLOR[board.boardKind] ?? 'var(--wb-10)';
           const hasUnread = board.serialOutput.length > (lastSeenLen[board.id] ?? 0);
           return (
             <button
@@ -211,7 +211,7 @@ export const SerialMonitor: React.FC = () => {
               onClick={() => handleTabClick(board.id)}
               title={boardDisplayName(board)}
             >
-              <span style={{ fontSize: 9, marginRight: 3, color: isActive ? color : '#888' }}>
+              <span style={{ fontSize: 9, marginRight: 3, color: isActive ? color : 'var(--wb-10)' }}>
                 {BOARD_ICON[board.boardKind] ?? '●'}
               </span>
               {board.name?.trim() || BOARD_SHORT_LABEL[board.boardKind] || board.boardKind}
@@ -293,7 +293,20 @@ export const SerialMonitor: React.FC = () => {
               // the emulated network. The trailing dot-check keeps a longer
               // address like 192.168.4.15.99 from half-matching.
               const ipRegex = /(?:http:\/\/)?(?:192\.168\.4|10\.13\.37)\.(\d{1,3})(?!\d|\.\d)(\/[^\s]*)?/g;
-              const matches = [...text.matchAll(ipRegex)];
+              // ...but ONLY once the board actually joined a network. A sketch
+              // that calls WiFi.softAP() becomes the access point instead of a
+              // client, and the ESP32's SoftAP default address is 192.168.4.1
+              // — the very subnet above. The address alone cannot tell the two
+              // apart, so a captive-portal sketch used to get a gateway link
+              // that could never resolve: the bridge the proxy looks up is
+              // registered on 'got_ip', which only a STATION ever reaches, so
+              // the click landed on a 404 telling the user to connect to WiFi
+              // when the sketch had deliberately chosen not to. Gate on the
+              // status every family reports: QEMU (wifi_status_parser),
+              // the in-browser JS engines, and the Pico W's cyw43 peripheral
+              // all emit 'got_ip'. Without it the IP stays plain text.
+              const reachable = activeBoard.wifiStatus?.status === 'got_ip';
+              const matches = reachable ? [...text.matchAll(ipRegex)] : [];
 
               if (matches.length > 0) {
                 const parts: (string | React.ReactNode)[] = [];
@@ -402,8 +415,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#1e1e1e',
-    borderTop: '1px solid #333',
+    background: 'var(--wb-2)',
+    borderTop: '1px solid var(--wb-6)',
     fontFamily: 'monospace',
     fontSize: 13,
     minHeight: 0,
@@ -411,8 +424,8 @@ const styles: Record<string, React.CSSProperties> = {
   tabStrip: {
     display: 'flex',
     alignItems: 'center',
-    background: '#252526',
-    borderBottom: '1px solid #333',
+    background: 'var(--wb-3)',
+    borderBottom: '1px solid var(--wb-6)',
     minHeight: 32,
     flexShrink: 0,
     overflow: 'hidden',
@@ -421,7 +434,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     border: 'none',
     borderBottom: '2px solid transparent',
-    color: '#999',
+    color: 'var(--wb-10)',
     padding: '5px 12px',
     cursor: 'pointer',
     fontSize: 11,
@@ -453,21 +466,21 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: 3,
   },
   title: {
-    color: '#cccccc',
+    color: 'var(--wb-12)',
     fontWeight: 600,
     fontSize: 12,
   },
   baudRate: {
-    color: '#569cd6',
+    color: 'var(--color-accent-fg)',
     fontSize: 11,
     fontFamily: 'monospace',
-    background: '#1e1e1e',
-    border: '1px solid #3a3a3a',
+    background: 'var(--wb-2)',
+    border: '1px solid var(--wb-6)',
     borderRadius: 3,
     padding: '1px 6px',
   },
   autoscrollLabel: {
-    color: '#999',
+    color: 'var(--wb-10)',
     fontSize: 11,
     display: 'flex',
     alignItems: 'center',
@@ -480,8 +493,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   clearBtn: {
     background: 'transparent',
-    border: '1px solid #555',
-    color: '#ccc',
+    border: '1px solid var(--wb-8)',
+    color: 'var(--wb-12)',
     padding: '2px 8px',
     borderRadius: 3,
     cursor: 'pointer',
@@ -491,8 +504,8 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     margin: 0,
     padding: 8,
-    color: '#00ff41',
-    background: '#0a0a0a',
+    color: 'var(--color-terminal-fg)',
+    background: 'var(--color-terminal-bg)',
     overflowY: 'auto',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
@@ -504,15 +517,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: 4,
     padding: 4,
-    background: '#252526',
-    borderTop: '1px solid #333',
+    background: 'var(--wb-3)',
+    borderTop: '1px solid var(--wb-6)',
     flexShrink: 0,
   },
   input: {
     flex: 1,
-    background: '#1e1e1e',
-    border: '1px solid #444',
-    color: '#ccc',
+    background: 'var(--wb-2)',
+    border: '1px solid var(--wb-7)',
+    color: 'var(--wb-12)',
     padding: '4px 8px',
     borderRadius: 3,
     fontFamily: 'monospace',
@@ -520,18 +533,18 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
   },
   select: {
-    background: '#1e1e1e',
-    border: '1px solid #444',
-    color: '#ccc',
+    background: 'var(--wb-2)',
+    border: '1px solid var(--wb-7)',
+    color: 'var(--wb-12)',
     padding: '4px',
     borderRadius: 3,
     fontSize: 11,
     outline: 'none',
   },
   sendBtn: {
-    background: '#0e639c',
+    background: 'var(--color-action-primary)',
     border: 'none',
-    color: '#fff',
+    color: 'var(--color-fg-on-action)',
     padding: '4px 12px',
     borderRadius: 3,
     cursor: 'pointer',

@@ -33,13 +33,16 @@
       "exportBom": "Stückliste exportieren (CSV — Pro)",
       "exportScreenshot": "Schaltplan als Bild exportieren (PNG — Pro)",
       "importLabel": "Projekt importieren",
+      "exportVlxLabel": "Projekt exportieren (.vlx)",
       "exportLabel": "Projekt exportieren (.zip)",
       "exportBomLabel": "Stückliste (CSV)",
       "exportScreenshotLabel": "Schaltplanbild (PNG)",
       "shareLabel": "Teilen / Einbetten",
       "githubSyncLabel": "Mit GitHub synchronisieren",
       "uploadFirmwareLabel": "Firmware hochladen",
-      "recordLabel": "Simulation aufzeichnen"
+      "recordLabel": "Simulation aufzeichnen",
+      "themeToLight": "Switch to light theme",
+      "themeToDark": "Switch to dark theme"
     },
     "fileExplorer": {
       "workspace": "ARBEITSBEREICH",
@@ -176,7 +179,8 @@
         "mpyUnavailable": "MicroPython-Projekte können von hier aus nicht geflasht werden: nur Arduino-Sketches",
         "ready": "Den kompilierten Sketch auf ein echtes, per USB angeschlossenes Board flashen",
         "willCompile": "Den Sketch kompilieren und auf ein echtes, per USB angeschlossenes Board flashen"
-      }
+      },
+      "wifiPanel": "WLAN-Panel"
     },
     "componentPicker": {
       "title": "Komponente hinzufügen",
@@ -397,13 +401,18 @@
       "compile": "Kompilieren",
       "run": "Ausführen",
       "hideExplorer": "Datei-Explorer ausblenden",
-      "showExplorer": "Datei-Explorer einblenden"
+      "showExplorer": "Datei-Explorer einblenden",
+      "appearance": "Appearance",
+      "themeDark": "Dark",
+      "themeLight": "Light",
+      "themeSystem": "Match system"
     },
     "inspector": {
       "propertiesTab": "Eigenschaften",
       "datasheetTab": "Datenblatt",
       "examplesTitle": "Beispielprojekte",
-      "productPage": "Produktseite"
+      "productPage": "Produktseite",
+      "datasheetPage": "Specifications"
     },
     "flash": {
       "title": "{{board}} flashen",

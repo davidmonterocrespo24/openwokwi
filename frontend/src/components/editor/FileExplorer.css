@@ -1,7 +1,7 @@
 .file-explorer {
   width: 100%;
-  background: #252526;
-  border-right: 1px solid #333;
+  background: var(--wb-3);
+  border-right: 1px solid var(--wb-6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -21,11 +21,11 @@
   justify-content: center;
   gap: 3px;
   padding: 6px 6px 6px 8px;
-  color: #9d9d9d;
+  color: var(--wb-11);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.3px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--wb-6);
   flex-shrink: 0;
 }
 
@@ -46,7 +46,7 @@
 .file-explorer-new-btn {
   background: none;
   border: none;
-  color: #9d9d9d;
+  color: var(--wb-11);
   cursor: pointer;
   padding: 2px;
   border-radius: 3px;
@@ -64,14 +64,14 @@
 }
 
 .file-explorer-new-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-wash-hover);
+  color: var(--wb-13);
 }
 
 .file-explorer-save-btn {
   background: none;
   border: none;
-  color: #9d9d9d;
+  color: var(--wb-11);
   cursor: pointer;
   padding: 2px;
   border-radius: 3px;
@@ -83,24 +83,24 @@
 }
 
 .file-explorer-save-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-wash-hover);
   color: var(--color-action-primary);
 }
 
 /* The Save button doubles as the auto-save indicator once a project is
    loaded (replaces the "Unsaved changes" text pill in the header). */
 .file-explorer-save-btn.is-saved {
-  color: #3fb950;
+  color: var(--color-feedback-success);
 }
 .file-explorer-save-btn.is-dirty {
-  color: #f0883e;
+  color: var(--color-feedback-warning);
 }
 .file-explorer-save-btn.is-saving {
-  color: #3fb950;
+  color: var(--color-feedback-success);
   animation: velxio-pulse 1s ease-in-out infinite;
 }
 .file-explorer-save-btn.is-error {
-  color: #f85149;
+  color: var(--color-feedback-error);
 }
 .file-explorer-save-btn.is-saved:hover,
 .file-explorer-save-btn.is-dirty:hover,
@@ -113,7 +113,7 @@
   overflow-y: auto;
   padding: 2px 0;
   scrollbar-width: thin;
-  scrollbar-color: #3c3c3c transparent;
+  scrollbar-color: var(--wb-7) transparent;
 }
 
 /* Rows are deliberately compact (VS Code density): the explorer is a narrow
@@ -125,7 +125,7 @@
   gap: 4px;
   padding: 3px 6px;
   cursor: pointer;
-  color: #ccc;
+  color: var(--wb-12);
   border-radius: 3px;
   margin: 0 2px;
   font-size: 11px;
@@ -136,16 +136,16 @@
 }
 
 .file-explorer-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-wash-hover);
 }
 
 .file-explorer-item-active {
-  background: rgba(0, 113, 227, 0.12);
-  color: #e2e2e2;
+  background: var(--color-accent-soft);
+  color: var(--wb-13);
 }
 
 .file-explorer-item-new {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-border-subtle);
 }
 
 .file-explorer-icon {
@@ -170,15 +170,15 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #e8a87c;
+  background: var(--color-feedback-warning);
   flex-shrink: 0;
 }
 
 .file-explorer-rename-input {
   flex: 1;
-  background: #3c3c3c;
+  background: var(--wb-7);
   border: 1px solid var(--color-action-primary);
-  color: #fff;
+  color: var(--wb-13);
   font-size: 11px;
   padding: 1px 4px;
   border-radius: 2px;
@@ -190,21 +190,21 @@
 /* Context menu */
 .file-explorer-context-menu {
   position: fixed;
-  background: #2d2d2d;
-  border: 1px solid #3c3c3c;
+  background: var(--wb-5);
+  border: 1px solid var(--wb-7);
   border-radius: 4px;
   z-index: 2000;
   display: flex;
   flex-direction: column;
   min-width: 120px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 
 .file-explorer-context-menu button {
   background: none;
   border: none;
-  color: #ccc;
+  color: var(--wb-12);
   padding: 7px 14px;
   text-align: left;
   cursor: pointer;
@@ -213,8 +213,8 @@
 }
 
 .file-explorer-context-menu button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-wash-hover);
+  color: var(--wb-13);
 }
 
 .file-explorer-context-menu button:disabled {
@@ -223,7 +223,7 @@
 }
 
 .ctx-delete:hover:not(:disabled) {
-  color: #ef5350 !important;
+  color: var(--color-feedback-error) !important;
 }
 
 /* ─── Board-grouped FileExplorer ─────────────────── */
@@ -242,7 +242,7 @@
   gap: 1px;
   padding: 2px 4px 3px 2px;
   cursor: pointer;
-  color: #aaa;
+  color: var(--wb-11);
   border-radius: 3px;
   margin: 0 2px;
   user-select: none;
@@ -273,13 +273,13 @@
 }
 
 .fe-board-header:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ddd;
+  background: var(--color-wash-hover);
+  color: var(--wb-13);
 }
 
 .fe-board-header-active {
-  background: rgba(255, 255, 255, 0.05);
-  color: #e2e2e2;
+  background: var(--color-wash-hover);
+  color: var(--wb-13);
 }
 
 .fe-collapse-btn {
@@ -333,7 +333,7 @@
 .fe-board-new-btn {
   background: none;
   border: none;
-  color: #9d9d9d;
+  color: var(--wb-11);
   cursor: pointer;
   padding: 0;
   border-radius: 3px;
@@ -358,8 +358,8 @@
 }
 
 .fe-board-new-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--color-wash-active);
+  color: var(--wb-13);
 }
 
 .fe-board-files {
@@ -383,11 +383,11 @@
   display: inline-flex;
   align-items: center;
   margin-right: 2px;
-  color: #9d9d9d;
+  color: var(--wb-11);
 }
 
 .fe-folder-icon {
-  color: #d8a12a;
+  color: var(--color-feedback-warning);
 }
 
 .fe-folder-actions {
@@ -408,11 +408,11 @@
   border: none;
   padding: 1px;
   cursor: pointer;
-  color: #9d9d9d;
+  color: var(--wb-11);
 }
 
 .fe-folder-actions button:hover {
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .fe-folder-actions button svg {
@@ -421,5 +421,5 @@
 }
 
 .fe-folder-actions .fe-folder-delete:hover {
-  color: #f87171;
+  color: var(--color-feedback-error);
 }

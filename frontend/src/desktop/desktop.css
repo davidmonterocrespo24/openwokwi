@@ -4,8 +4,8 @@
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: #0c0c11;
-  color: #e6e6e9;
+  background: var(--wb-0);
+  color: var(--wb-13);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15,10 +15,10 @@
 .vlx-desktop-welcome-card {
   width: min(440px, 92vw);
   padding: 36px;
-  background: #15151b;
-  border: 1px solid #2c2c33;
+  background: var(--wb-1);
+  border: 1px solid var(--wb-4);
   border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-4);
 }
 
 .vlx-desktop-welcome-brand h1 {
@@ -29,16 +29,16 @@
 
 .vlx-desktop-welcome-brand p {
   margin: 0 0 24px;
-  color: #888;
+  color: var(--wb-10);
   font-size: 14px;
 }
 
 .vlx-desktop-welcome-error {
   margin-bottom: 16px;
   padding: 10px 12px;
-  background: #3a1a1a;
-  border: 1px solid #6a2a2a;
-  color: #ff8585;
+  background: var(--color-feedback-error-soft);
+  border: 1px solid var(--color-feedback-error-border);
+  color: var(--color-feedback-error);
   border-radius: 6px;
   font-size: 13px;
 }
@@ -63,9 +63,9 @@
 }
 
 .vlx-desktop-welcome-primary {
-  background: linear-gradient(135deg, var(--color-action-primary) 0%, #005ea1 100%);
-  color: #fff;
-  border: 1px solid #005ea1;
+  background: linear-gradient(135deg, var(--color-action-primary) 0%, var(--color-action-primary-hover) 100%);
+  color: var(--color-fg-on-action);
+  border: 1px solid var(--color-action-primary-hover);
   font-weight: 600;
 }
 
@@ -82,24 +82,24 @@
 
 .vlx-desktop-welcome-secondary {
   background: transparent;
-  color: #e6e6e9;
-  border: 1px solid #2c2c33;
+  color: var(--wb-13);
+  border: 1px solid var(--wb-4);
 }
 
 .vlx-desktop-welcome-secondary:hover:not(:disabled) {
-  background: #1c1c22;
+  background: var(--wb-1);
 }
 
 .vlx-desktop-welcome-link {
   background: transparent;
-  color: #888;
+  color: var(--wb-10);
   border: none;
   font-size: 13px;
   padding: 6px;
 }
 
 .vlx-desktop-welcome-link:hover:not(:disabled) {
-  color: #ccc;
+  color: var(--wb-12);
   text-decoration: underline;
 }
 
@@ -107,7 +107,7 @@
   display: block;
   margin-bottom: 6px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--wb-11);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -115,9 +115,9 @@
 .vlx-desktop-welcome-paste input {
   width: 100%;
   padding: 10px 12px;
-  background: #0c0c11;
-  color: #e6e6e9;
-  border: 1px solid #2c2c33;
+  background: var(--wb-0);
+  color: var(--wb-13);
+  border: 1px solid var(--wb-4);
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
@@ -132,7 +132,7 @@
 
 .vlx-desktop-welcome-trust {
   margin: 16px 0 0;
-  color: #666;
+  color: var(--wb-9);
   font-size: 12px;
   text-align: center;
 }
@@ -149,9 +149,9 @@
   align-items: center;
   gap: 16px;
   padding: 10px 18px;
-  color: #fff;
+  color: var(--color-fg-on-action);
   font-size: 13px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-2);
 }
 
 .vlx-desktop-grace-warn {
@@ -174,7 +174,7 @@
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-fg-on-action);
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 4px;
@@ -207,7 +207,7 @@
 
 .vlx-desktop-grace-dismiss:hover {
   background: rgba(0, 0, 0, 0.25);
-  color: #fff;
+  color: var(--color-fg-on-action);
 }
 
 /* Indeterminate progress strip used by Esp32QemuPrompt while
@@ -224,7 +224,7 @@
   inset: 0;
   z-index: 10001; /* above the welcome (10000) so a stale welcome can't peek through */
   background: rgba(8, 8, 12, 0.96);
-  color: #e6e6e9;
+  color: var(--color-fg-on-action);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,22 +236,22 @@
 .vlx-desktop-lockout-card {
   width: min(460px, 92vw);
   padding: 36px;
-  background: #15151b;
-  border: 1px solid #2c2c33;
+  background: var(--wb-1);
+  border: 1px solid var(--wb-4);
   border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--shadow-4);
 }
 
 .vlx-desktop-lockout-brand h1 {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 600;
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .vlx-desktop-lockout-brand p {
   margin: 0 0 24px;
-  color: #aaa;
+  color: var(--wb-11);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -278,11 +278,11 @@ body.vlx-desktop-readonly [data-velxio-action="save"] {
   width: 340px;
   max-width: calc(100vw - 32px);
   padding: 16px;
-  background: #1a1d24;
-  color: #e6e6e9;
-  border: 1px solid #2c2c33;
+  background: var(--wb-1);
+  color: var(--wb-13);
+  border: 1px solid var(--wb-4);
   border-radius: 8px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-3);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
   animation: vlx-update-toast-in 0.25s ease;
@@ -307,8 +307,8 @@ body.vlx-desktop-readonly [data-velxio-action="save"] {
   width: 28px;
   height: 28px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--color-action-primary) 0%, #005ea1 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-action-primary) 0%, var(--color-action-primary-hover) 100%);
+  color: var(--color-fg-on-action);
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
@@ -317,22 +317,22 @@ body.vlx-desktop-readonly [data-velxio-action="save"] {
 .vlx-desktop-update-toast-title {
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--wb-13);
   margin-bottom: 2px;
 }
 
 .vlx-desktop-update-toast-version {
   font-size: 12px;
-  color: #888;
+  color: var(--wb-10);
 }
 
 .vlx-desktop-update-toast-notes {
   margin: 8px 0 12px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-border-subtle);
   border-radius: 4px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--wb-11);
   line-height: 1.45;
   max-height: 100px;
   overflow-y: auto;
@@ -349,9 +349,9 @@ body.vlx-desktop-readonly [data-velxio-action="save"] {
   padding: 7px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: white;
-  background: linear-gradient(135deg, var(--color-action-primary) 0%, #005ea1 100%);
-  border: 1px solid #005ea1;
+  color: var(--color-fg-on-action);
+  background: linear-gradient(135deg, var(--color-action-primary) 0%, var(--color-action-primary-hover) 100%);
+  border: 1px solid var(--color-action-primary-hover);
   border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
@@ -364,23 +364,23 @@ body.vlx-desktop-readonly [data-velxio-action="save"] {
 .vlx-desktop-update-toast-secondary {
   padding: 7px 14px;
   font-size: 13px;
-  color: #aaa;
+  color: var(--wb-11);
   background: transparent;
-  border: 1px solid #2c2c33;
+  border: 1px solid var(--wb-4);
   border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
 }
 
 .vlx-desktop-update-toast-secondary:hover {
-  background: #232730;
-  color: #ddd;
+  background: var(--wb-3);
+  color: var(--wb-13);
 }
 
 .vlx-desktop-update-toast-progress {
   margin: 12px 0 6px;
   height: 6px;
-  background: #0c0c11;
+  background: var(--wb-0);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -393,6 +393,6 @@ body.vlx-desktop-readonly [data-velxio-action="save"] {
 
 .vlx-desktop-update-toast-progress-label {
   font-size: 11px;
-  color: #888;
+  color: var(--wb-10);
   font-variant-numeric: tabular-nums;
 }

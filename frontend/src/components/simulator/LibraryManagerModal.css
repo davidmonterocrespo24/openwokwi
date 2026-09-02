@@ -2,7 +2,7 @@
 .lib-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--color-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -24,8 +24,8 @@
 
 /* Modal */
 .lib-modal {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--wb-1);
+  border: 1px solid var(--wb-6);
   border-radius: 8px;
   width: 680px;
   max-width: 95vw;
@@ -35,7 +35,7 @@
   max-height: 92vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-4);
   animation: lib-slideIn 0.2s ease;
   overflow: hidden;
 }
@@ -58,8 +58,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: #111;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-bottom: 1px solid var(--wb-4);
 }
 
 .lib-modal-title {
@@ -69,7 +69,7 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #ccc;
+  color: var(--wb-12);
   text-transform: uppercase;
 }
 
@@ -83,7 +83,7 @@
 .lib-close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--wb-10);
   font-size: 18px;
   cursor: pointer;
   padding: 4px 8px;
@@ -93,15 +93,15 @@
 }
 
 .lib-close-btn:hover {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--wb-4);
+  color: var(--wb-13);
 }
 
 /* Tabs */
 .lib-tabs {
   display: flex;
-  background: #111;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--wb-0);
+  border-bottom: 1px solid var(--wb-4);
   padding: 0 18px;
   gap: 4px;
 }
@@ -110,7 +110,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #888;
+  color: var(--wb-10);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -120,7 +120,7 @@
 }
 
 .lib-tab:hover {
-  color: #ccc;
+  color: var(--wb-12);
 }
 
 .lib-tab.active {
@@ -137,15 +137,15 @@
 }
 
 .lib-status.success {
-  background: #0d2b1e;
-  color: #4ade80;
-  border-bottom-color: #1a4731;
+  background: var(--color-feedback-success-soft);
+  color: var(--color-feedback-success);
+  border-bottom-color: var(--color-feedback-success-border);
 }
 
 .lib-status.error {
-  background: #2b0d0d;
-  color: #f87171;
-  border-bottom-color: #4a1a1a;
+  background: var(--color-feedback-error-soft);
+  color: var(--color-feedback-error);
+  border-bottom-color: var(--color-feedback-error-border);
 }
 
 /* Content */
@@ -162,14 +162,14 @@
   align-items: center;
   gap: 10px;
   padding: 12px 18px;
-  border-bottom: 1px solid #2a2a2a;
-  background: #111;
+  border-bottom: 1px solid var(--wb-4);
+  background: var(--wb-0);
 }
 
 .lib-search-icon {
   width: 16px;
   height: 16px;
-  color: #555;
+  color: var(--wb-8);
   flex-shrink: 0;
 }
 
@@ -178,13 +178,13 @@
   background: transparent;
   border: none;
   outline: none;
-  color: #ddd;
+  color: var(--wb-13);
   font-size: 14px;
   caret-color: var(--color-action-primary);
 }
 
 .lib-search-bar input::placeholder {
-  color: #555;
+  color: var(--wb-8);
 }
 
 .lib-spinner {
@@ -223,11 +223,11 @@
 }
 
 .lib-list::-webkit-scrollbar-track {
-  background: #111;
+  background: var(--wb-0);
 }
 
 .lib-list::-webkit-scrollbar-thumb {
-  background: #333;
+  background: var(--wb-6);
   border-radius: 3px;
 }
 
@@ -238,7 +238,7 @@
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #555;
+  color: var(--wb-8);
   font-size: 14px;
   gap: 8px;
   text-align: center;
@@ -246,7 +246,7 @@
 
 .lib-empty-sub {
   font-size: 12px;
-  color: #444;
+  color: var(--wb-7);
 }
 
 /* Library item */
@@ -256,12 +256,12 @@
   justify-content: space-between;
   gap: 16px;
   padding: 14px 18px;
-  border-bottom: 1px solid #1f1f1f;
+  border-bottom: 1px solid var(--wb-2);
   transition: background 0.1s;
 }
 
 .lib-item:hover {
-  background: #1f1f1f;
+  background: var(--wb-2);
 }
 
 .lib-item-info {
@@ -279,17 +279,17 @@
 
 .lib-item-name {
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--wb-13);
   font-size: 14px;
 }
 
 .lib-item-author {
-  color: #777;
+  color: var(--wb-9);
   font-size: 12px;
 }
 
 .lib-item-desc {
-  color: #888;
+  color: var(--wb-10);
   font-size: 12px;
   line-height: 1.5;
   margin: 0;
@@ -310,18 +310,18 @@
 
 .lib-item-version {
   font-size: 11px;
-  color: #666;
-  background: #1a1a1a;
-  border: 1px solid #333;
+  color: var(--wb-9);
+  background: var(--wb-1);
+  border: 1px solid var(--wb-6);
   border-radius: 3px;
   padding: 2px 6px;
   white-space: nowrap;
 }
 
 .lib-installed-badge {
-  color: #4ade80;
-  border-color: #1a4731;
-  background: #0d2b1e;
+  color: var(--color-feedback-success);
+  border-color: var(--color-feedback-success-border);
+  background: var(--color-feedback-success-soft);
 }
 
 /* Install button */
@@ -340,8 +340,8 @@
 }
 
 .lib-install-btn:hover:not(:disabled) {
-  background: #00d4f0;
-  box-shadow: 0 0 12px rgba(0, 113, 227, 0.4);
+  background: var(--color-accent-fg);
+  box-shadow: 0 0 12px var(--color-accent-border);
   transform: translateY(-1px);
 }
 

@@ -20,8 +20,13 @@ import {
 } from '../customChips';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { useElectricalStore } from '../../store/useElectricalStore';
+import { normalizeChipPinNames } from '../customChips/chipJson';
 import { clearChipDrives } from '../customChips/chipPinDrives';
+import { isSyntheticChipPin } from '../customChips/syntheticPins';
 import { requestElectricalResolve } from '../spice/electricalResolveHook';
+import { runChipAttachExtensions } from '../customChips/chipAttachExtensions';
+import { createUartBitBanger, type UartBitBanger } from '../customChips/uartBitBang';
+import { setAdcVoltage, analogRailVolts } from './partUtils';
 
 // Physical-key (KeyboardEvent.code) -> Galaksija keyboard matrix offset, from
 // the libretro Galaksija core's keyMap. The chip's set_key takes this offset;
@@ -60,15 +65,10 @@ PartSimulationRegistry.register('custom-chip', {
     let pins: string[] = [];
     let display: { width: number; height: number } | null = null;
     try {
-      const obj = JSON.parse(chipJsonStr);
-      if (Array.isArray(obj.pins)) {
-        // Pin entries may be strings (Wokwi) or {name,x,y} objects.
-        pins = obj.pins.map((p: unknown) => {
-          if (typeof p === 'string') return p;
-          if (p && typeof p === 'object') return String((p as any).name ?? '');
-          return '';
-        });
-      }
+      // An empty chipJson (agent-placed chip before programming) is not an
+      // error — treat it like a pinless chip rather than throwing on ''.
+      const obj = chipJsonStr.trim() ? JSON.parse(chipJsonStr) : {};
+      pins = normalizeChipPinNames(obj.pins);
       if (obj.display && typeof obj.display.width === 'number' && typeof obj.display.height === 'number') {
         display = { width: obj.display.width, height: obj.display.height };
       }
@@ -76,14 +76,20 @@ PartSimulationRegistry.register('custom-chip', {
       console.warn(`[custom-chip] ${componentId} chip.json parse error:`, e);
       return () => {};
     }
+    if (pins.length === 0) {
+      console.warn(`[custom-chip] ${componentId} declares no pins — chip will be inert.`);
+    }
 
-    // Pull saved attribute values from the component's properties.
+    // Pull saved attribute values from the component's properties. Numeric
+    // values feed vx_attr_read; strings feed vx_attr_string_read.
     const attrsObj: Record<string, number> = {};
+    const strAttrsObj: Record<string, string> = {};
     try {
       const raw = (props.attrs ?? {}) as Record<string, unknown>;
       for (const [k, v] of Object.entries(raw)) {
         const n = typeof v === 'number' ? v : parseFloat(String(v));
         if (!Number.isNaN(n)) attrsObj[k] = n;
+        else if (typeof v === 'string') strAttrsObj[k] = v;
       }
     } catch { /* ignore */ }
 
@@ -137,8 +143,15 @@ PartSimulationRegistry.register('custom-chip', {
       } catch (e) {
         console.error(`[custom-chip:${componentId}] failed to register on ESP32 backend:`, e);
       }
-      // Cleanup: the QEMU instance is torn down on stop_esp32 — no client-side state.
-      return () => {};
+      // Overlay extensions (e.g. pro live sensor controls) hook the chip
+      // lifecycle here; pure OSS registers none.
+      const cleanupExtensions = runChipAttachExtensions({
+        kind: 'esp32', componentId, simulator: sim, virtualPin,
+      });
+      // Cleanup: the QEMU instance is torn down on stop_esp32.
+      return () => {
+        cleanupExtensions();
+      };
     }
     // ── End ESP32 path ──────────────────────────────────────────────────────
 
@@ -152,8 +165,9 @@ PartSimulationRegistry.register('custom-chip', {
       }
     }
 
-    // Convert the attribute map into a Map<string, number> for the JS runtime.
+    // Convert the attribute maps into Maps for the JS runtime.
     const attrs = new Map<string, number>(Object.entries(attrsObj));
+    const strAttrs = new Map<string, string>(Object.entries(strAttrsObj));
 
     // Lazily install the per-simulator bridges. Idempotent — safe to call
     // even if other custom chips have already wired them up.
@@ -165,9 +179,11 @@ PartSimulationRegistry.register('custom-chip', {
     // when the user stops the simulation.
     let instance: ChipInstance | null = null;
     let uartListener: ((byte: number) => void) | null = null;
+    let uartBitBanger: UartBitBanger | null = null;
     let rafHandle = 0;
     let disposed = false;
     let keyboardCleanup: (() => void) | undefined;
+    let extensionCleanup: (() => void) | undefined;
 
     (async () => {
       try {
@@ -182,6 +198,7 @@ PartSimulationRegistry.register('custom-chip', {
           spiBus: bridges.spiBus,
           wires,
           attrs,
+          strAttrs,
           display,
           romBytes,
           log: (s) => console.log(`[chip:${componentId}] ${s.replace(/\n$/, '')}`),
@@ -191,14 +208,61 @@ PartSimulationRegistry.register('custom-chip', {
           return;
         }
         instance = inst;
+
+        // Register the board-injection hooks BEFORE start(): chip_setup
+        // fires the initial OUTPUT_HIGH/LOW levels (and may write pins /
+        // the DAC synchronously), and those must reach the board too.
+        inst.onDacWrite((pinName, voltage) => {
+          const boardPin = wires.get(pinName);
+          if (boardPin == null || isSyntheticChipPin(boardPin)) return;
+          const rail = analogRailVolts(sim);
+          setAdcVoltage(sim, boardPin, Math.max(0, Math.min(voltage, rail)));
+        });
+        inst.onDigitalWrite((pinName, value) => {
+          const boardPin = wires.get(pinName);
+          if (boardPin == null || isSyntheticChipPin(boardPin)) return;
+          try {
+            (sim as { setPinState?: (pin: number, state: boolean) => void })
+              .setPinState?.(boardPin, value);
+          } catch { /* board not ready yet */ }
+        });
+
         inst.start();
 
+        // Overlay extensions (e.g. pro live sensor controls) hook the chip
+        // lifecycle here; pure OSS registers none.
+        extensionCleanup = runChipAttachExtensions({
+          kind: 'browser', componentId, simulator: sim, instance: inst, wires,
+        });
+
         // Bridge UART: AVR Serial.write(byte) → chip.feedUart(byte).
-        // Chip's vx_uart_write(byte) → simulator.usart.writeByte (Serial.read).
+        // Chip's vx_uart_write(byte) → the board:
+        //   - TX wired to the hardware RX (pin 0) or unwired → USART inject
+        //     (Serial.read / the monitor), the historical path.
+        //   - TX wired to any other GPIO on an AVR board → bit-banged 8N1 on
+        //     that pin, so SoftwareSerial(rx=that pin) actually receives.
+        //     Before this, GPIO-wired chip streams (the NMEA GPS scenario)
+        //     delivered nothing at all.
         if (inst.hasUart) {
           uartListener = (byte: number) => inst.feedUart(byte);
           bridges.uartListeners.add(uartListener);
-          inst.onUartTx((byte) => avrUartTx(sim, byte));
+          const route = inst.getUartTxRoute();
+          const gpioTarget =
+            detectSimulatorKind(sim) === 'avr' &&
+            route?.txArduinoPin != null &&
+            !isSyntheticChipPin(route.txArduinoPin) &&
+            route.txArduinoPin !== 0;
+          if (gpioTarget && route) {
+            uartBitBanger = createUartBitBanger(
+              sim as never,
+              route.txArduinoPin as number,
+              route.baud,
+              `chip:${componentId}`,
+            );
+            inst.onUartTx((byte) => uartBitBanger?.write(byte));
+          } else {
+            inst.onUartTx((byte) => avrUartTx(sim, byte));
+          }
         }
 
         // Bridge framebuffer → chip's web component canvas (when chip has display).
@@ -288,9 +352,11 @@ PartSimulationRegistry.register('custom-chip', {
 
     return () => {
       disposed = true;
+      if (extensionCleanup) extensionCleanup();
       if (rafHandle) cancelAnimationFrame(rafHandle);
       rafHandle = 0;
       if (uartListener) bridges.uartListeners.delete(uartListener);
+      if (uartBitBanger) { uartBitBanger.dispose(); uartBitBanger = null; }
       if (keyboardCleanup) keyboardCleanup();
       if (instance) instance.dispose();
       instance = null;

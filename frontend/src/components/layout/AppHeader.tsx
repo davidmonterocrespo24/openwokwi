@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ShareModal } from './ShareModal';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { ThemeToggle } from './ThemeToggle';
 import { useLocalizedHref, useCurrentLocale } from '../../i18n/useLocalizedNavigate';
 import { blogUrlFor } from '../../i18n/path';
 import { trackVisitGitHub, trackVisitDiscord } from '../../utils/analytics';
@@ -244,6 +245,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ editorMenu, editorToolbar 
             the single-row layout. */}
         {!editorToolbar && (
         <div className="header-right">
+          {/* Hidden on the marketing pages, which pin themselves to dark
+              (pro DarkSurface) — offering a switch that visibly does nothing
+              would be worse than not offering one. */}
+          <ThemeToggle className="header-theme-toggle" />
           <LanguageSwitcher />
 
           {/* Share button — visible when a project is loaded */}

@@ -247,7 +247,11 @@ const LogLine = React.memo<{ log: CompilationLog }>(({ log }) => (
 LogLine.displayName = 'LogLine';
 
 function statusColor(status: 'error' | 'success' | 'running'): string {
-  return status === 'error' ? '#ef5350' : status === 'success' ? '#66bb6a' : '#9aa0a6';
+  return status === 'error'
+    ? 'var(--color-feedback-error)'
+    : status === 'success'
+      ? 'var(--color-feedback-success)'
+      : 'var(--wb-11)';
 }
 
 function statusGlyph(status: 'error' | 'success' | 'running'): string {
@@ -257,15 +261,15 @@ function statusGlyph(status: 'error' | 'success' | 'running'): string {
 function logColor(type: CompilationLog['type']): string {
   switch (type) {
     case 'error':
-      return '#ef5350';
+      return 'var(--color-feedback-error)';
     case 'warning':
-      return '#ffa726';
+      return 'var(--color-feedback-warning)';
     case 'success':
       return '#66bb6a';
     case 'core-install':
       return '#4fc3f7';
     default:
-      return '#cccccc';
+      return 'var(--wb-12)';
   }
 }
 
@@ -275,8 +279,8 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    background: '#1e1e1e',
-    borderTop: '1px solid #333',
+    background: 'var(--wb-2)',
+    borderTop: '1px solid var(--wb-6)',
     fontSize: 12,
     fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
     overflow: 'hidden',
@@ -287,8 +291,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '4px 10px',
-    background: '#252526',
-    borderBottom: '1px solid #333',
+    background: 'var(--wb-3)',
+    borderBottom: '1px solid var(--wb-6)',
     flexShrink: 0,
     minHeight: 30,
   },
@@ -303,7 +307,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   title: {
-    color: '#cccccc',
+    color: 'var(--wb-12)',
     fontWeight: 600,
     fontSize: 12,
     fontFamily: 'system-ui, sans-serif',
@@ -315,7 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   errorBadge: {
-    color: '#ef5350',
+    color: 'var(--color-feedback-error)',
     background: 'rgba(239, 83, 80, 0.15)',
     padding: '1px 6px',
     borderRadius: 3,
@@ -323,7 +327,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'system-ui, sans-serif',
   },
   warningBadge: {
-    color: '#ffa726',
+    color: 'var(--color-feedback-warning)',
     background: 'rgba(255, 167, 38, 0.15)',
     padding: '1px 6px',
     borderRadius: 3,
@@ -331,9 +335,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'system-ui, sans-serif',
   },
   filterSelect: {
-    background: '#333',
-    color: '#ccc',
-    border: '1px solid #555',
+    background: 'var(--wb-6)',
+    color: 'var(--wb-12)',
+    border: '1px solid var(--wb-8)',
     borderRadius: 3,
     fontSize: 11,
     padding: '2px 4px',
@@ -344,18 +348,18 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 3,
-    color: '#999',
+    color: 'var(--wb-10)',
     fontSize: 11,
     cursor: 'pointer',
     fontFamily: 'system-ui, sans-serif',
   },
   checkbox: {
-    accentColor: '#0e639c',
+    accentColor: 'var(--color-action-primary)',
   },
   iconBtn: {
     background: 'none',
     border: 'none',
-    color: '#999',
+    color: 'var(--wb-10)',
     cursor: 'pointer',
     padding: '3px 4px',
     borderRadius: 3,
@@ -369,14 +373,14 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.6,
   },
   emptyState: {
-    color: '#666',
+    color: 'var(--wb-9)',
     fontStyle: 'italic',
     padding: '12px 0',
     fontFamily: 'system-ui, sans-serif',
   },
   targetGroup: {
     marginTop: 6,
-    borderLeft: '2px solid #3a3a3a',
+    borderLeft: '2px solid var(--wb-6)',
     paddingLeft: 8,
   },
   targetHeader: {
@@ -390,18 +394,18 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   targetLabel: {
-    color: '#e0e0e0',
+    color: 'var(--wb-13)',
     fontWeight: 700,
     fontSize: 11.5,
     fontFamily: 'system-ui, sans-serif',
   },
   targetKind: {
-    color: '#777',
+    color: 'var(--wb-9)',
     fontSize: 9,
     fontFamily: 'system-ui, sans-serif',
     textTransform: 'uppercase' as const,
     letterSpacing: '0.5px',
-    border: '1px solid #3a3a3a',
+    border: '1px solid var(--wb-6)',
     borderRadius: 3,
     padding: '0 4px',
   },
@@ -415,7 +419,7 @@ const styles: Record<string, React.CSSProperties> = {
     wordBreak: 'break-all' as const,
   },
   timestamp: {
-    color: '#555',
+    color: 'var(--wb-8)',
     flexShrink: 0,
     userSelect: 'none' as const,
   },

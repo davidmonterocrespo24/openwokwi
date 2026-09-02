@@ -1,6 +1,6 @@
 .component-palette {
-  background-color: #2d2d2d;
-  border-right: 1px solid #444;
+  background-color: var(--wb-5);
+  border-right: 1px solid var(--wb-7);
   display: flex;
   flex-direction: column;
   width: 200px;
@@ -9,18 +9,18 @@
 
 .palette-header {
   padding: 15px;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--wb-7);
 }
 
 .palette-header h3 {
   margin: 0 0 5px 0;
   font-size: 16px;
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .palette-hint {
   font-size: 12px;
-  color: #888;
+  color: var(--wb-10);
 }
 
 .palette-items {
@@ -33,7 +33,7 @@
 }
 
 .palette-item {
-  background-color: #3d3d3d;
+  background-color: var(--wb-7);
   padding: 12px;
   border-radius: 6px;
   cursor: grab;
@@ -45,7 +45,7 @@
 }
 
 .palette-item:hover {
-  background-color: #4d4d4d;
+  background-color: var(--wb-8);
   border-color: var(--color-action-primary);
 }
 
@@ -62,20 +62,20 @@
 
 .palette-label {
   font-size: 14px;
-  color: #fff;
+  color: var(--wb-13);
   font-weight: 500;
 }
 
 .palette-help {
   padding: 15px;
-  border-top: 1px solid #444;
-  background-color: #252525;
+  border-top: 1px solid var(--wb-7);
+  background-color: var(--wb-3);
 }
 
 .palette-help p {
   margin: 5px 0;
   font-size: 11px;
-  color: #888;
+  color: var(--wb-10);
   line-height: 1.4;
 }
 
@@ -85,14 +85,14 @@
 }
 
 .palette-items::-webkit-scrollbar-track {
-  background: #2d2d2d;
+  background: var(--wb-5);
 }
 
 .palette-items::-webkit-scrollbar-thumb {
-  background: #555;
+  background: var(--wb-8);
   border-radius: 3px;
 }
 
 .palette-items::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--wb-9);
 }

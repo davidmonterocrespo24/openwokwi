@@ -35,13 +35,16 @@
       "exportBom": "Export Bill of Materials (CSV — Pro)",
       "exportScreenshot": "Export schematic as image (PNG — Pro)",
       "importLabel": "Import project",
+      "exportVlxLabel": "Export project (.vlx)",
       "exportLabel": "Export project (.zip)",
       "exportBomLabel": "Bill of Materials (CSV)",
       "exportScreenshotLabel": "Schematic image (PNG)",
       "shareLabel": "Share / Embed",
       "githubSyncLabel": "Sync to GitHub",
       "uploadFirmwareLabel": "Upload firmware",
-      "recordLabel": "Record simulation"
+      "recordLabel": "Record simulation",
+      "themeToLight": "Switch to light theme",
+      "themeToDark": "Switch to dark theme"
     },
     "fileExplorer": {
       "workspace": "WORKSPACE",
@@ -178,7 +181,11 @@
         "mpyUnavailable": "MicroPython projects cannot be flashed from here — Arduino sketches only",
         "ready": "Flash the compiled sketch to a real USB-attached board",
         "willCompile": "Compile the sketch and flash it to a real USB-attached board"
-      }
+      },
+      "wifiPanel": "WiFi panel",
+      "addNodeHere": "Add node here",
+      "probeWire": "Add to scope",
+      "probeNothing": "This wire carries no signal the scope can read yet. Connect it to a board pin, or run the circuit so the solver reports a voltage for it."
     },
     "componentPicker": {
       "title": "Add Component",
@@ -295,6 +302,26 @@
       "close": "Close",
       "empty": "No compilation output yet. Click Compile to start."
     },
+    "compileProgress": {
+      "compiling": "Compiling {{board}}...",
+      "compilingBoards_one": "Compiling {{count}} board...",
+      "compilingBoards_other": "Compiling {{count}} boards...",
+      "queued": "Waiting for a build slot...",
+      "queuedHint": "Your build is in the queue. It starts automatically and is never cancelled.",
+      "preparing": "Preparing the build...",
+      "done": "Compiled successfully",
+      "failed": "Build failed",
+      "serverLoad": "Build server load",
+      "load": {
+        "low": "Quiet",
+        "moderate": "Moderate",
+        "high": "Busy",
+        "peak": "Very busy"
+      },
+      "priority": "Priority build",
+      "showOutput": "Show output",
+      "hide": "Hide (the build keeps running)"
+    },
     "newProject": {
       "title": "Start a new project",
       "subtitle": "Pick a blank workspace or a board with a ready-to-run Blink example. This replaces everything in the current workspace.",
@@ -407,13 +434,18 @@
       "compile": "Compile",
       "run": "Run",
       "hideExplorer": "Hide file explorer",
-      "showExplorer": "Show file explorer"
+      "showExplorer": "Show file explorer",
+      "appearance": "Appearance",
+      "themeDark": "Dark",
+      "themeLight": "Light",
+      "themeSystem": "Match system"
     },
     "inspector": {
       "propertiesTab": "Properties",
       "datasheetTab": "Datasheet",
       "examplesTitle": "Example projects",
-      "productPage": "Product page"
+      "productPage": "Product page",
+      "datasheetPage": "Specifications"
     },
     "flash": {
       "title": "Flash {{board}}",

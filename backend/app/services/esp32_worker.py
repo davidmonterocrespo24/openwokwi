@@ -407,22 +407,42 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
         os._exit(1)
     lib.qemu_picsimlab_get_internals.restype = ctypes.c_void_p
 
-    # qemu_picsimlab_uart_receive() injects a UART-RX interrupt into the guest CPU.
-    # QEMU asserts qemu_mutex_iothread_locked() at that point, so the caller MUST
-    # hold the IO-thread lock.  Acquire it before every uart_receive call and
-    # release immediately after.  The functions are exported as:
-    #   qemu_mutex_lock_iothread_impl(const char *file, int line)
-    #   qemu_mutex_unlock_iothread()
-    try:
-        _lock_iothread   = lib.qemu_mutex_lock_iothread_impl
-        _lock_iothread.restype  = None
-        _lock_iothread.argtypes = [ctypes.c_char_p, ctypes.c_int]
-        _unlock_iothread = lib.qemu_mutex_unlock_iothread
-        _unlock_iothread.restype  = None
-        _unlock_iothread.argtypes = []
-    except AttributeError:
-        _lock_iothread   = None
-        _unlock_iothread = None
+    # Host threads must hold the Big QEMU Lock around anything that can raise
+    # a guest interrupt (uart_receive, set_pin with an armed GPIO ISR, camera
+    # frames): TCG aborts the whole process otherwise — `tcg_handle_interrupt:
+    # assertion failed: (bql_locked())`, issue #273.
+    #
+    # QEMU renamed the lock across the 8.2/9.x line: the legacy
+    # qemu_mutex_lock_iothread_impl/qemu_mutex_unlock_iothread became
+    # bql_lock_impl/bql_unlock (same signatures). This resolution only ever
+    # tried the LEGACY names, so against the current fork it silently resolved
+    # to None and every "locked" path — uart_send included — has been running
+    # unlocked since the QEMU base moved. The crash a rotary-encoder ISR
+    # produced (#273) was the first path noisy enough to expose it. Try the
+    # modern names first, keep the legacy pair as fallback for old prebuilts.
+    _lock_iothread = None
+    _unlock_iothread = None
+    for lock_name, unlock_name in (
+        ('bql_lock_impl', 'bql_unlock'),
+        ('qemu_mutex_lock_iothread_impl', 'qemu_mutex_unlock_iothread'),
+    ):
+        try:
+            _lock_iothread = getattr(lib, lock_name)
+            _lock_iothread.restype = None
+            _lock_iothread.argtypes = [ctypes.c_char_p, ctypes.c_int]
+            _unlock_iothread = getattr(lib, unlock_name)
+            _unlock_iothread.restype = None
+            _unlock_iothread.argtypes = []
+            break
+        except AttributeError:
+            _lock_iothread = None
+            _unlock_iothread = None
+    if _lock_iothread is None:
+        # Without the lock every injection is a coin-flip abort; say so once
+        # instead of letting the next encoder click read as a random crash.
+        _log('BQL lock symbols not found in libqemu — host-injected '
+             'interrupts (GPIO ISRs, UART RX) may abort QEMU; rebuild the '
+             'fork with bql_lock_impl/bql_unlock exported.')
 
     # Predicate: is the iothread lock currently held by this thread?
     # Used to avoid re-acquiring when we're already inside a QEMU callback
@@ -1962,8 +1982,23 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
             # Keypad-owned columns are driven synchronously by
             # _keypad_recompute; a stale async gpio_in from the browser's
             # generic matrix simulation must not clobber them.
+            #
+            # Must hold the QEMU IO-thread lock, same as uart_send below: with
+            # attachInterrupt() armed on this pin, the injected edge raises the
+            # GPIO interrupt into the guest CPU from THIS thread, and QEMU
+            # aborts the whole process on it — `tcg_handle_interrupt: assertion
+            # failed: (bql_locked())`, issue #273. A pin without an armed
+            # interrupt never walked that path, which is why every ordinary
+            # button and sensor worked while a rotary encoder ISR died on the
+            # first real edge.
             if int(cmd['pin']) not in _keypad_cols_owned:
-                lib.qemu_picsimlab_set_pin(int(cmd['pin']) + 1, int(cmd['value']))
+                if _lock_iothread:
+                    _lock_iothread(b'esp32_worker.py:set_pin', 0)
+                try:
+                    lib.qemu_picsimlab_set_pin(int(cmd['pin']) + 1, int(cmd['value']))
+                finally:
+                    if _unlock_iothread:
+                        _unlock_iothread()
 
         elif c == 'set_adc':
             raw_v = int(int(cmd['millivolts']) * 4095 / 3300)
@@ -2173,7 +2208,20 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
                                 (int(rc[0]), int(rc[1]))
                                 for rc in (cmd.get('pressed') or [])
                             }
-                            _keypad_recompute(kp)
+                            # Same rule as set_pin above: this runs on the
+                            # command thread and drives column pins a sketch
+                            # may have interrupts on. The recompute calls from
+                            # QEMU callbacks (pin write/dir sync) must NOT
+                            # take the lock — they already hold it and the BQL
+                            # is not recursive — so the lock lives at the
+                            # THREAD boundary, not inside _keypad_recompute.
+                            if _lock_iothread:
+                                _lock_iothread(b'esp32_worker.py:keypad', 0)
+                            try:
+                                _keypad_recompute(kp)
+                            finally:
+                                if _unlock_iothread:
+                                    _unlock_iothread()
                     elif stype == 'mpu6050' and slave is not None:
                         slave.update(
                             accel_x=float(sensor.get('accelX', 0)),
@@ -2191,6 +2239,20 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
                         )
                     elif stype == 'ds3231' and slave is not None:
                         slave.temperatureC = float(sensor.get('temperature', 25.0))
+                    elif stype == 'custom-chip':
+                        # Live control values (chip.json `controls`) land on
+                        # the chip runtime's attr store; the running WASM
+                        # re-reads them on every vx_attr_read.
+                        rt = sensor.get('runtime')
+                        new_attrs = cmd.get('attrs')
+                        if rt is not None and isinstance(new_attrs, dict):
+                            try:
+                                rt.update_attrs({
+                                    str(k): float(v) for k, v in new_attrs.items()
+                                    if isinstance(v, (int, float))
+                                })
+                            except Exception as e:
+                                _log(f'[custom-chip] attr update failed: {e!r}')
 
         elif c == 'sensor_detach':
             gpio = int(cmd['pin'])

@@ -83,6 +83,31 @@ function withBuyOverride(id: string, doc: ComponentDoc | null): ComponentDoc | n
 }
 
 /**
+ * Which label the datasheet's outbound link should carry.
+ *
+ * Most of the catalog's `buy:` URLs really are shop or product pages, so
+ * "Product page" is right for them. A few point at the vendor's user guide
+ * instead -- for the Espressif dev kits, because the product pages
+ * themselves render broken or 404 (see boards/espressif/register.ts) -- and
+ * calling a specifications document a product page sends the reader
+ * somewhere other than where the button says.
+ *
+ * Keyed on the DESTINATION rather than on a per-component flag: a docs host
+ * is a documentation link whoever set it and however it got there,
+ * including links set from /admin.
+ */
+export function productLinkKind(url: string): 'product' | 'docs' {
+  try {
+    const h = new URL(url).hostname;
+    return h === 'docs.espressif.com' || h === 'github.com' || h.endsWith('.readthedocs.io')
+      ? 'docs'
+      : 'product';
+  } catch {
+    return 'product';
+  }
+}
+
+/**
  * Decorate a datasheet Buy/Product-page URL with UTM attribution so the
  * vendor sees the referral came from Velxio. `componentId` lands in
  * utm_content so partner dashboards can tell WHICH part drove the visit.

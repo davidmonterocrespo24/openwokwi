@@ -30,9 +30,14 @@ BoardAccessGate = Callable[[object, str], Awaitable[bool]]
 
 _gate: Optional[BoardAccessGate] = None
 
+# Deliberately names the families, not one board: the QEMU-Linux lane also
+# carries boards that are not Raspberry Pis (the UNIHIKER M10 boots through
+# the same bridge), and telling their user that "Raspberry Pi emulation" is
+# gated is a message about a board they did not place.
 PRO_BOARD_MESSAGE = (
-    'STM32 and Raspberry Pi emulation are Velxio Pro features. '
-    'Use them on velxio.dev with a paid plan, or install Velxio Desktop.'
+    'STM32 and QEMU-emulated Linux boards (Raspberry Pi, UNIHIKER) are '
+    'Velxio Pro features. Use them on velxio.dev with a paid plan, or '
+    'install Velxio Desktop.'
 )
 
 

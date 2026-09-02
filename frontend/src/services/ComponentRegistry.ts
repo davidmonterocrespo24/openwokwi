@@ -158,7 +158,7 @@ export class ComponentRegistry {
         description:
           'SPICE probe — displays the voltage between V+ and V-. Used in electrical-mode circuits.',
         thumbnail:
-          '<svg width="64" height="64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="6" fill="#1f1f1f" stroke="#ffa500" stroke-width="2"/><text x="50%" y="42%" text-anchor="middle" font-family="monospace" font-size="9" fill="#ffa500">V METER</text><text x="50%" y="68%" text-anchor="middle" font-family="monospace" font-size="11" fill="#ffa500" font-weight="bold">3.30 V</text></svg>',
+          '<svg width="64" height="64" viewBox="0 0 64 52" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="16" width="5" height="9" rx="1.5" fill="#c0392b" stroke="#14181c"/><rect x="0.5" y="28" width="5" height="9" rx="1.5" fill="#4b5158" stroke="#14181c"/><rect x="4.5" y="6.5" width="55" height="39" rx="5" fill="#24282e" stroke="#3b424a"/><text x="9" y="16" font-family="monospace" font-size="6" letter-spacing="1" fill="#8d959d">DC V</text><circle cx="55" cy="13.5" r="2.2" fill="#ffa726"/><rect x="8" y="20" width="48" height="19" rx="3" fill="#0c1013" stroke="#2a3138"/><text x="32" y="33" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#ffa726">3.30 V</text></svg>',
         properties: [],
         defaultValues: {},
         pinCount: 2,
@@ -172,7 +172,7 @@ export class ComponentRegistry {
         description:
           'SPICE probe — measures the current through its body (connect in series). Used in electrical-mode circuits.',
         thumbnail:
-          '<svg width="64" height="64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="6" fill="#1f1f1f" stroke="#4dd0e1" stroke-width="2"/><text x="50%" y="42%" text-anchor="middle" font-family="monospace" font-size="9" fill="#4dd0e1">A METER</text><text x="50%" y="68%" text-anchor="middle" font-family="monospace" font-size="11" fill="#4dd0e1" font-weight="bold">12.4 mA</text></svg>',
+          '<svg width="64" height="64" viewBox="0 0 64 52" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="21.5" width="5" height="9" rx="1.5" fill="#c0392b" stroke="#14181c"/><rect x="58.5" y="21.5" width="5" height="9" rx="1.5" fill="#4b5158" stroke="#14181c"/><rect x="4.5" y="6.5" width="55" height="39" rx="5" fill="#24282e" stroke="#3b424a"/><text x="9" y="16" font-family="monospace" font-size="6" letter-spacing="1" fill="#8d959d">DC A</text><circle cx="55" cy="13.5" r="2.2" fill="#4dd0e1"/><rect x="8" y="20" width="48" height="19" rx="3" fill="#0c1013" stroke="#2a3138"/><text x="32" y="33" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#4dd0e1">12.4 mA</text></svg>',
         properties: [],
         defaultValues: {},
         pinCount: 2,
@@ -202,6 +202,9 @@ export class ComponentRegistry {
           { name: 'romBytes',    type: 'string', defaultValue: '' },
           { name: 'programFile', type: 'string', defaultValue: '' },
           { name: 'programTarget', type: 'string', defaultValue: '' },
+          // Optional face image (a data: URL). Projected into the chip's
+          // file section as chip.png / chip.jpg / chip.svg by chipFiles.ts.
+          { name: 'image', type: 'string', defaultValue: '' },
         ],
         defaultValues: {
           chipName: 'My Chip',
@@ -211,6 +214,7 @@ export class ComponentRegistry {
           romBytes: '',
           programFile: '',
           programTarget: '',
+          image: '',
         },
         pinCount: 0,
         tags: ['custom', 'chip', 'wasm', 'c', 'wokwi', 'eeprom', 'rtc', 'logic', 'cpu', '8080', 'z80'],
@@ -275,6 +279,22 @@ export class ComponentRegistry {
     this.processMetadata(Array.from(byId.values()));
     // The overlay merges AFTER its dynamic import lands - notify subscribers so
     // an already-open picker recomputes (ONLINE ad cards vs real components).
+    this._version++;
+    for (const l of this._changeListeners) l();
+  }
+
+  /**
+   * Remove previously merged components by id. Counterpart of
+   * mergeComponents for sources whose entries can disappear at runtime
+   * (e.g. an overlay library the user deletes from). Ids not present are
+   * ignored; no-op calls don't bump the version.
+   */
+  removeComponents(ids: string[]): void {
+    if (!ids || ids.length === 0) return;
+    const drop = new Set(ids);
+    const kept = this.allComponents.filter((c) => !drop.has(c.id));
+    if (kept.length === this.allComponents.length) return;
+    this.processMetadata(kept);
     this._version++;
     for (const l of this._changeListeners) l();
   }
@@ -366,6 +386,7 @@ export class ComponentRegistry {
       output: 'Output',
       motors: 'Motors',
       communication: 'Communication',
+      connectivity: 'Connectivity',
       passive: 'Passive',
       logic: 'Logic Gates',
       analog: 'Analog',

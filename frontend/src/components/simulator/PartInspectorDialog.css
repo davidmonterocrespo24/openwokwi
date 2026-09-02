@@ -6,8 +6,8 @@
 
 .part-inspector-dialog {
   position: fixed;
-  background-color: #2d2d2d;
-  border: 1px solid #555;
+  background-color: var(--wb-5);
+  border: 1px solid var(--wb-8);
   border-radius: 10px;
   /* Wide enough that a pinout table in a datasheet fits without sideways
      scrolling, and clamped so the dialog can never run off the right edge. */
@@ -16,14 +16,14 @@
   max-height: calc(100vh - 24px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-3);
   /* Above every canvas overlay (wire menus ~1001) AND above the pro agent
      chat panel (8000/8001), which docks over the canvas — the dialog opens
      from a right-click on the very thing the chat covers, so it has to win.
      Still below the component picker (9000+), which is never open with it. */
   z-index: 8500;
   pointer-events: all;
-  color: #fff;
+  color: var(--wb-13);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   font-size: 13px;
 }
@@ -35,7 +35,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--wb-7);
   flex: 0 0 auto;
 }
 
@@ -81,8 +81,8 @@
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 8px;
-  background: #3d3d3d;
-  color: #bbb;
+  background: var(--wb-7);
+  color: var(--wb-12);
 }
 
 .pid-pro {
@@ -90,19 +90,19 @@
   padding: 1px 6px;
   border-radius: 8px;
   background: #7c5cff;
-  color: #fff;
+  color: var(--color-fg-on-action);
   font-weight: 700;
 }
 
 .pid-brand {
   font-size: 11px;
-  color: #999;
+  color: var(--wb-10);
 }
 
 .pid-close {
   background: none;
   border: none;
-  color: #aaa;
+  color: var(--wb-11);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
@@ -111,7 +111,7 @@
 }
 
 .pid-close:hover {
-  color: #fff;
+  color: var(--wb-13);
 }
 
 /* ── Two columns ─────────────────────────────────────────────────────── */
@@ -129,7 +129,7 @@
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border-right: 1px solid #444;
+  border-right: 1px solid var(--wb-7);
   max-width: 60%;
   overflow: auto;
 }
@@ -175,14 +175,14 @@
 /* Stand-in for the part's body while the art is hidden (pin mode). */
 .pid-body-outline {
   position: absolute;
-  border: 1px dashed #5a5a5a;
+  border: 1px dashed var(--wb-8);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-border-subtle);
   pointer-events: none;
 }
 
 .pid-preview-missing {
-  color: #666;
+  color: var(--wb-9);
   font-size: 22px;
 }
 
@@ -201,7 +201,7 @@
 }
 
 .pid-pin-leader line {
-  stroke: #777;
+  stroke: var(--wb-9);
   stroke-width: 1;
   stroke-dasharray: 2 2;
   transition: stroke 0.1s;
@@ -209,7 +209,7 @@
 
 /* Tracing a name back to its pad: the whole run lights at once. */
 .pid-pin-leader--lit line {
-  stroke: #4dd0e1;
+  stroke: var(--color-accent-fg);
   stroke-width: 1.6;
   stroke-dasharray: none;
 }
@@ -220,8 +220,8 @@
   height: 9px;
   margin: -5px 0 0 -5px; /* centre on the pin coordinate */
   border-radius: 50%;
-  border: 1px solid #111;
-  background: #9aa0a6;
+  border: 1px solid var(--wb-0);
+  background: var(--wb-11);
   padding: 0;
   cursor: pointer;
   z-index: 2;
@@ -234,8 +234,8 @@
 .pid-pin-dot:hover:not(:disabled),
 .pid-pin-dot--lit {
   transform: scale(1.6);
-  background: #4dd0e1;
-  box-shadow: 0 0 6px rgba(77, 208, 225, 0.9);
+  background: var(--color-accent-fg);
+  box-shadow: 0 0 6px var(--color-accent-fg);
 }
 
 /* Signal tinting — the same data the wire classifier reads. */
@@ -243,7 +243,7 @@
 .pid-sig-power-vcc { background: #e57373; }
 .pid-sig-i2c { background: #64b5f6; }
 .pid-sig-spi { background: #81c784; }
-.pid-sig-usart { background: #ffb74d; }
+.pid-sig-usart { background: var(--color-feedback-warning); }
 .pid-sig-pwm { background: #ba68c8; }
 .pid-sig-analog { background: #4db6ac; }
 
@@ -252,7 +252,7 @@
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #ddd;
+  color: var(--wb-13);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 1;
@@ -268,7 +268,7 @@
 
 .pid-pin-label:hover:not(:disabled),
 .pid-pin-label--lit {
-  color: #4dd0e1;
+  color: var(--color-accent-fg);
   font-weight: 700;
 }
 
@@ -294,7 +294,7 @@
 
 .pid-pin-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--wb-10);
   text-align: center;
 }
 
@@ -309,7 +309,7 @@
   align-items: center;
   flex-wrap: wrap;
   padding: 10px 12px;
-  border-top: 1px solid #444;
+  border-top: 1px solid var(--wb-7);
   flex: 0 0 auto;
 }
 
@@ -321,10 +321,10 @@
 }
 
 /* Solid fills, per the brand kit: interactive surfaces are the accent blue
-   (--blue-600 #0071e3), destructive ones the danger red (--red-500 #ff453a),
+   (--blue-600 var(--color-action-primary)), destructive ones the danger red (--red-500 var(--color-feedback-error)),
    both with white text. Velxio does not use outline buttons. */
 .pid-action-button {
-  background: var(--color-action-primary, #0071e3);
+  background: var(--color-action-primary, var(--color-action-primary));
   border: none;
   border-radius: 6px;
   color: var(--color-action-primary-fg, #fff);
@@ -336,7 +336,7 @@
 }
 
 .pid-action-button:hover:not(:disabled) {
-  background: var(--color-action-primary-hover, #0a84ff);
+  background: var(--color-action-primary-hover, var(--color-action-primary-hover));
 }
 
 .pid-action-button:disabled {
@@ -345,12 +345,12 @@
 }
 
 .pid-action-delete {
-  background: var(--color-feedback-error, #ff453a);
-  color: #fff;
+  background: var(--color-feedback-error, var(--color-feedback-error));
+  color: var(--color-fg-on-action);
 }
 
 .pid-action-delete:hover:not(:disabled) {
-  background: #d70015; /* --red-600 */
+  background: var(--color-feedback-error); /* --red-600 */
 }
 
 /* Buy in the action bar: solid brand blue (Velxio buttons are solid, and
@@ -359,10 +359,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #0071e3;
-  border: 1px solid #0071e3;
+  background: var(--color-action-primary);
+  border: 1px solid var(--color-action-primary);
   border-radius: 6px;
-  color: #fff;
+  color: var(--color-fg-on-action);
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 500;
@@ -371,15 +371,15 @@
 }
 
 .pid-buy-button:hover {
-  background: #005a9e;
-  border-color: #005a9e;
+  background: var(--color-action-primary-hover);
+  border-color: var(--color-action-primary-hover);
 }
 
 /* ── Tabs ────────────────────────────────────────────────────────────── */
 
 .pid-tabs {
   display: flex;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--wb-7);
   flex: 0 0 auto;
 }
 
@@ -387,15 +387,15 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #aaa;
+  color: var(--wb-11);
   padding: 8px 14px;
   font-size: 13px;
   cursor: pointer;
 }
 
 .pid-tab--active {
-  color: #fff;
-  border-bottom-color: #4dd0e1;
+  color: var(--wb-13);
+  border-bottom-color: var(--color-accent-fg);
 }
 
 /* ONE height for both tabs. Sizing each tab to its own content made the whole
@@ -454,7 +454,7 @@
 }
 
 .pid-row-label {
-  color: #bbb;
+  color: var(--wb-12);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -462,22 +462,22 @@
 }
 
 .pid-row-value {
-  color: #eee;
+  color: var(--wb-13);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
 
 .pid-row--dim .pid-row-label,
 .pid-row--dim .pid-row-value {
-  color: #888;
+  color: var(--wb-10);
 }
 
 .pid-select,
 .pid-input {
-  background: #1f1f1f;
-  border: 1px solid #555;
+  background: var(--wb-2);
+  border: 1px solid var(--wb-8);
   border-radius: 4px;
-  color: #eee;
+  color: var(--wb-13);
   padding: 4px 6px;
   font-size: 12px;
   max-width: 150px;
@@ -485,7 +485,7 @@
 
 .pid-defaults {
   margin-top: 8px;
-  border-top: 1px dashed #444;
+  border-top: 1px dashed var(--wb-7);
   padding-top: 6px;
 }
 
@@ -493,7 +493,7 @@
 
 .pid-examples {
   margin-top: 10px;
-  border-top: 1px dashed #444;
+  border-top: 1px dashed var(--wb-7);
   padding-top: 8px;
   display: flex;
   flex-direction: column;
@@ -501,7 +501,7 @@
 }
 
 .pid-examples-title {
-  color: #999;
+  color: var(--wb-10);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -512,7 +512,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #7ab8f5;
+  color: var(--color-accent-fg);
   font-size: 12px;
   text-decoration: none;
   line-height: 1.5;
@@ -524,7 +524,7 @@
 }
 
 .pid-example-link:hover {
-  color: #a5d0ff;
+  color: var(--color-accent-fg);
   text-decoration: underline;
 }
 
@@ -547,7 +547,7 @@
 
   .pid-left {
     border-right: none;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid var(--wb-7);
     max-width: none;
   }
 

@@ -92,12 +92,16 @@ void chip_setup(void) {
 ### Try it in the editor
 
 1. Open Velxio. Click **Add Component** → search "Custom Chip" → select.
-2. The Custom Chip Designer opens. Switch to the **Examples** tab.
-3. Click **Inverter** — code loads in the editor.
-4. Click **Compile** → "✓ Compiled — 61.8 KB".
-5. Click **Save & Place** — the chip appears on the canvas.
-6. Wire `IN` to your Arduino's pin 13 and `OUT` to a LED.
-7. Run the blink sketch → the LED toggles inverse to the built-in LED.
+2. The examples gallery opens. Click **Inverter**.
+3. You land in the common editor: the chip owns its own section in the
+   file explorer with `chip.c` and `chip.json` — edit them like any board
+   file (chip.json is schema-validated as you type).
+4. Wire `IN` to your Arduino's pin 13 and `OUT` to a LED.
+5. Click **Run** — the chip compiles automatically (or use the hammer
+   button in the chip's file-explorer section to compile on its own).
+6. The LED toggles inverse to the built-in LED. Edit `chip.c` and Run
+   again — the chip recompiles whenever its source changed.
+
 
 ---
 

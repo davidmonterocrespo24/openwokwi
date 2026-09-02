@@ -47,6 +47,9 @@ import {
   type OnlineOnlyBoardAd,
   type OnlineOnlyComponentAd,
 } from '../lib/onlineOnlyBoards';
+import raspberryPiZeroSvg from '../assets/Raspberry_Pi_Zero_illustration.svg';
+import raspberryPi1Svg from '../assets/Raspberry_Pi_1_illustration.svg';
+import raspberryPi2Svg from '../assets/Raspberry_Pi_2_illustration.svg';
 import raspberryPi3Svg from '../assets/Raspberry_Pi_3_illustration.svg';
 import raspberryPi4Png from '../assets/raspberry-pi-4-board.png';
 import raspberryPi5Png from '../assets/raspberry-pi-5-board.png';
@@ -111,6 +114,15 @@ const BOARD_DESCRIPTIONS: Record<BoardKind, string> = {
  * already contain one still need the element to render.
  */
 const UNSIMULATED_BOARD_SHELLS = new Set(['nano-rp2040-connect']);
+
+/**
+ * Parts created only by canvas gestures, never placed from the picker. The
+ * junction node is minted by dropping a wire-end onto a wire (or the node
+ * tool); a bare junction on empty canvas connects nothing, so offering it
+ * here would only confuse. Metadata registration stays mandatory — the
+ * canvas renders null for unknown metadataIds — hiding happens HERE only.
+ */
+const GESTURE_ONLY_COMPONENTS = new Set(['junction']);
 
 /**
  * Maker-first category order for the picker grid and the category filter.
@@ -280,6 +292,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
     // support we don't have. Filtered here rather than removed from the
     // metadata: saved projects that already placed one must keep rendering.
     components = components.filter((c) => !UNSIMULATED_BOARD_SHELLS.has(c.id));
+    components = components.filter((c) => !GESTURE_ONLY_COMPONENTS.has(c.id));
 
     // Maker-first ordering: most users reach for a sensor, an LED or a
     // display far more often than a bare transistor or a 74HC gate, so
@@ -440,7 +453,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
               {selectedCategory === 'all' && onSelectBoard && (
                 <div
                   className="components-grid components-grid--inline"
-                  style={{ borderBottom: '1px solid #333', paddingBottom: 8, marginBottom: 4 }}
+                  style={{ borderBottom: '1px solid var(--wb-6)', paddingBottom: 8, marginBottom: 4 }}
                 >
                   {allBoards.filter(
                     (k) =>
@@ -617,12 +630,38 @@ const ProBadge: React.FC = () => (
       fontSize: 11,
       fontWeight: 700,
       letterSpacing: 0.6,
+      // Ink and fill both fixed: a gold PRO pill is gold on either theme,
+      // and --color-feedback-warning is a red-orange in light mode, which
+      // this gradient is not meant to be.
       color: '#1a1205',
       background: 'linear-gradient(180deg,#ffd566,#f5a623)',
       boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
     }}
   >
     PRO
+  </span>
+);
+
+/** Violet CUSTOM pill: a chip from the user's own My Chips library. */
+const CustomBadge: React.FC = () => (
+  <span
+    title="Your saved custom chip — only you see this part"
+    style={{
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      zIndex: 1,
+      padding: '3px 10px',
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      color: 'var(--wb-13)',
+      background: 'linear-gradient(180deg,#8b5cf6,#6d28d9)',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+    }}
+  >
+    CUSTOM
   </span>
 );
 
@@ -639,14 +678,24 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect, hove
       tags: component.tags,
       thumbnail: component.thumbnail,
       pro_only: component.pro_only,
+      custom: component.custom,
     }),
     hoverApi,
   );
-  // Passives short-circuit to their preset SVG (value-encoded look).
+  // Two reasons to render the metadata SVG instead of a live element:
+  //   1. Passives (resistor / capacitor / inductor) — their preset SVG encodes
+  //      the value (color bands, printed label) and the live element doesn't.
+  //   2. The tag is not a registered custom element. `document.createElement`
+  //      on an unknown tag yields an inert HTMLUnknownElement, so the card
+  //      preview came up blank — which is what happened to every part drawn in
+  //      React rather than as a web component (the SPICE probes, tagged
+  //      `velxio-instr-voltmeter` / `velxio-instr-ammeter`).
+  const hasSvgThumbnail =
+    typeof component.thumbnail === 'string' && component.thumbnail.trim().startsWith('<svg');
+  const tagIsRegistered =
+    typeof customElements !== 'undefined' && customElements.get(component.tagName) !== undefined;
   const usePresetSvg =
-    PASSIVE_TAGS.has(component.tagName) &&
-    typeof component.thumbnail === 'string' &&
-    component.thumbnail.trim().startsWith('<svg');
+    hasSvgThumbnail && (PASSIVE_TAGS.has(component.tagName) || !tagIsRegistered);
   const boardArt = PI_BOARD_ART[component.tagName];
 
   // Render actual web component as thumbnail
@@ -708,7 +757,7 @@ const ComponentCard: React.FC<ComponentCardProps> = ({ component, onSelect, hove
 
   return (
     <button className="component-card" onClick={onSelect} style={{ position: 'relative' }} {...hover}>
-      {isProBoardKind(component.id) && <ProBadge />}
+      {component.custom ? <CustomBadge /> : isProBoardKind(component.id) && <ProBadge />}
       <div className="card-thumbnail">
         {boardArt ? (
           <img
@@ -821,15 +870,18 @@ const BoardCard: React.FC<BoardCardProps> = ({ kind, onSelect, hoverApi }) => {
     };
   }, [kind]);
 
-  const reactThumbnail =
-    // Zero/1/2 render on canvas through the Pi-3 element (same 40-pin art),
-    // so their cards reuse the same illustration.
-    kind === 'raspberry-pi-3' ||
-    kind === 'raspberry-pi-zero' ||
-    kind === 'raspberry-pi-1' ||
-    kind === 'raspberry-pi-2' ? (
+  // Every Pi shows its own board. The cards used to share the Pi 3's picture,
+  // which made the picker claim a Zero looks like a Pi 3.
+  const piArt: Partial<Record<string, string>> = {
+    'raspberry-pi-zero': raspberryPiZeroSvg,
+    'raspberry-pi-1': raspberryPi1Svg,
+    'raspberry-pi-2': raspberryPi2Svg,
+    'raspberry-pi-3': raspberryPi3Svg,
+  };
+
+  const reactThumbnail = piArt[kind] ? (
       <img
-        src={raspberryPi3Svg}
+        src={piArt[kind]}
         alt={BOARD_KIND_LABELS[kind]}
         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
       />
@@ -894,8 +946,8 @@ const OnlineBadge: React.FC = () => (
       fontSize: 11,
       fontWeight: 700,
       letterSpacing: 0.6,
-      color: '#04211c',
-      background: 'linear-gradient(180deg,#5eead4,#14b8a6)',
+      color: '#04241a',
+      background: 'linear-gradient(180deg,#4ade80,#14b8a6)',
       boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
     }}
   >

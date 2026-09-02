@@ -246,6 +246,26 @@ class TestHttpServerDetection(unittest.TestCase):
 class TestIoTGatewayUrl(unittest.TestCase):
     """Test IoT Gateway URL construction for the WebServer sketch."""
 
+    def test_unreachable_message_names_softap_instead_of_blaming_the_sketch(self):
+        """The 404 a captive-portal sketch hits must explain WHY, not accuse.
+
+        A sketch that calls WiFi.softAP() is the access point: it never gets a
+        DHCP lease, never reaches 'got_ip', and so never registers the bridge
+        the proxy looks up. The old copy said "make sure your sketch connected
+        to WiFi", which is exactly what such a sketch deliberately did not do.
+        """
+        import re
+        from pathlib import Path
+
+        route = Path(__file__).resolve().parents[3] / 'backend/app/api/routes/iot_gateway.py'
+        src = route.read_text(encoding='utf-8')
+        # The accusatory sentence must be gone...
+        self.assertNotIn('Make sure your sketch connected to WiFi and started', src)
+        # ...and the replacement must name softAP and point at a real network.
+        tail = src[src.index('no_reachable_board'):]
+        self.assertIn('WiFi.softAP()', tail)
+        self.assertIn('Velxio-GUEST', tail)
+
     def test_root_gateway_url(self):
         client_id = 'board-1'
         url = f'http://localhost:8001/api/gateway/{client_id}/'

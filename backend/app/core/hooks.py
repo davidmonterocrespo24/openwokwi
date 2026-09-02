@@ -365,3 +365,40 @@ async def dispatch_gateway_proxy(
     except Exception:
         logger.exception("gateway_proxy hook failed")
         return None
+
+
+# ── compile_priority ──────────────────────────────────────────────────────────
+# Where a user's compile sits in the build queue. OSS is single-user and has no
+# plans, so with no overlay every build is ordinary and the queue is plain FIFO.
+# The overlay maps the signed-in user's plan onto the ladder in
+# `app.services.build_queue` (PRIORITY_HIGH / MEDIUM / STANDARD) so paid builds
+# are admitted first.
+#
+# Returns {'priority': int, 'tier': str} or None. `tier` is a DISPLAY label the
+# compile-status endpoint echoes back so the frontend can say "priority build"
+# vs. offer an upgrade — it is not used for any access decision. Never return
+# queue depth or position from here: those stay server-side (see build_queue).
+
+CompilePriorityHook = Callable[[Optional[str]], Awaitable[Optional[dict]]]
+
+_compile_priority_hook: Optional[CompilePriorityHook] = None
+
+
+def register_compile_priority(hook: CompilePriorityHook) -> None:
+    """Install the plan-aware queue-priority resolver. Called in register_pro."""
+    global _compile_priority_hook
+    _compile_priority_hook = hook
+
+
+async def compile_priority(user_id: Optional[str]) -> Optional[dict]:
+    """Resolve queue priority for a compile. None (the OSS default) means
+    'ordinary priority, no plan vocabulary' — the caller supplies it."""
+    if _compile_priority_hook is None:
+        return None
+    try:
+        return await _compile_priority_hook(user_id)
+    except Exception:
+        # A priority lookup must never cost someone their build. Falling back
+        # to ordinary priority just means they queue like everyone else.
+        logger.exception("compile_priority hook failed (treating as standard)")
+        return None

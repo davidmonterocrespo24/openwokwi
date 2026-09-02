@@ -6,6 +6,7 @@
 import React from 'react';
 import type { WireInProgress } from '../../types/wire';
 import { generatePreviewPath, generateOrthogonalPath } from '../../utils/wireUtils';
+import { cssVar } from '../../lib/theme';
 
 interface Props {
   wireInProgress: WireInProgress;
@@ -36,7 +37,7 @@ export const WireInProgressRenderer: React.FC<Props> = ({ wireInProgress }) => {
   return (
     <g className="wire-in-progress" style={{ pointerEvents: 'none' }}>
       {/* Dark outline */}
-      <path d={path} stroke="#1a1a1a" strokeWidth="5" fill="none" />
+      <path d={path} stroke={cssVar('--color-wire-outline')} strokeWidth="5" fill="none" />
 
       {/* Colored wire */}
       <path d={path} stroke={color} strokeWidth="2" fill="none" />
@@ -44,7 +45,7 @@ export const WireInProgressRenderer: React.FC<Props> = ({ wireInProgress }) => {
       {/* Dashed overlay to indicate "in progress" */}
       <path
         d={path}
-        stroke="#ffffff"
+        stroke={cssVar('--color-wire-marker')}
         strokeWidth="1.5"
         fill="none"
         strokeDasharray="6,4"
@@ -57,13 +58,13 @@ export const WireInProgressRenderer: React.FC<Props> = ({ wireInProgress }) => {
         cy={startEndpoint.y}
         r="4"
         fill={color}
-        stroke="white"
+        stroke={cssVar('--color-wire-marker')}
         strokeWidth="1.5"
       />
 
       {/* Waypoint markers (locked-in corners) */}
       {waypoints.map((wp, i) => (
-        <circle key={i} cx={wp.x} cy={wp.y} r="3" fill={color} stroke="white" strokeWidth="1" />
+        <circle key={i} cx={wp.x} cy={wp.y} r="3" fill={color} stroke={cssVar('--color-wire-marker')} strokeWidth="1" />
       ))}
 
       {/* Cursor marker */}
@@ -72,7 +73,7 @@ export const WireInProgressRenderer: React.FC<Props> = ({ wireInProgress }) => {
         cy={currentY}
         r="4"
         fill={color}
-        stroke="white"
+        stroke={cssVar('--color-wire-marker')}
         strokeWidth="1.5"
         opacity="0.7"
       />

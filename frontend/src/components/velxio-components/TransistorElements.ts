@@ -23,12 +23,19 @@
  */
 
 // ─── Shared colours ───────────────────────────────────────────────────────────
-// Tuned for the dark (#1a1a1a) simulator canvas — symbols must read as
-// light schematic strokes, not dark-on-dark.
-const STROKE = '#e6e6e6'; // primary symbol strokes (base bar, channel)
-const LEAD = '#b8b8b8'; // pin leads
-const LABEL = '#d0d0d0'; // pin letters / part number
-const BODY = '#7a7a7a'; // optional body-circle outline
+// These symbols have no body of their own — they are bare strokes on the
+// canvas — so their ink is DRAWING ink and has to invert with the theme the
+// way text does. (A board or an LED does not: those are photographic and
+// keep their colours.) Tuned light for the dark canvas, the whole BJT and
+// MOSFET family was invisible on the light one.
+//
+// Custom properties inherit THROUGH the shadow boundary, so reading them
+// from the SVG needs no JavaScript and no re-render: flipping the theme
+// repaints these elements on its own. Values live in tokens/colors.css.
+const STROKE = 'var(--color-symbol-ink)'; // primary symbol strokes (base bar, channel)
+const LEAD = 'var(--color-symbol-lead)'; // pin leads
+const LABEL = 'var(--color-symbol-label)'; // pin letters / part number
+const BODY = 'var(--color-symbol-body)'; // optional body-circle outline
 const STYLE = ':host{display:inline-block;line-height:0}';
 
 function threePinInfo(pins: Array<{ name: string; x: number; y: number; number: number }>) {

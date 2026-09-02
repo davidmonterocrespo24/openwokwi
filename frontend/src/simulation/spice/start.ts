@@ -34,6 +34,7 @@ import { connectDigitalInputsToMcu } from './connectDigitalInputsToMcu';
 import { connectChipInputsToSolve } from './connectChipInputsToSolve';
 import { connectMcuEdgesToService } from './connectMcuEdgesToService';
 import { setElectricalResolveHook } from './electricalResolveHook';
+import { startAnalogScopeFeed } from './analogScopeFeed';
 import { collectPinStates } from './collectPinStates';
 
 /** Adapt useElectricalStore to the ElectricalStorePort. */
@@ -87,6 +88,10 @@ export function startSimulation(): () => void {
   const unsubDigitalIn = connectDigitalInputsToMcu();
   const unsubChipIn = connectChipInputsToSolve();
   const unsubEdges = connectMcuEdgesToService(service);
+  // Bridge transient captures into the oscilloscope's analog channels. Costs
+  // nothing until the user actually probes a wire: with no analog channel it
+  // forces no transient and runs no timer.
+  const unsubAnalogScope = startAnalogScopeFeed();
 
   // Let custom chips / WS boards request a re-solve when they toggle an
   // output pin. Trailing-throttled: callers of this hook are PER-EDGE sites
@@ -157,6 +162,7 @@ export function startSimulation(): () => void {
 
   return () => {
     setElectricalResolveHook(null);
+    unsubAnalogScope();
     if (trailingResolve !== null) {
       clearTimeout(trailingResolve);
       trailingResolve = null;

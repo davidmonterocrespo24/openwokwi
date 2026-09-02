@@ -23,6 +23,7 @@
 
 import type { BoardKind } from '../types/board';
 import { isPiBoardKind, isStm32BoardKind } from '../types/board';
+import { getProBoard } from './proBoardRegistry';
 
 export type BoardGateDecision = 'allow' | 'block';
 
@@ -82,8 +83,18 @@ export function triggerProUpgradePrompt(featureName: string): void {
   );
 }
 
-/** Human label for the upgrade prompt, per board family. */
+/**
+ * Human label for the upgrade prompt.
+ *
+ * An overlay board is named by its own label, not by the family whose run
+ * path it borrows: `piFamily` routes the UNIHIKER M10 through the Raspberry
+ * Pi bridge, and the prompt told its user that "Raspberry Pi emulation is a
+ * Pro feature" about a board that is not a Raspberry Pi. The OSS families
+ * keep their family names — every kind in them really is one.
+ */
 export function proBoardFeatureName(kind: BoardKind | string): string {
+  const def = typeof kind === 'string' ? getProBoard(kind) : undefined;
+  if (def) return `${def.label} emulation`;
   if (isStm32BoardKind(kind)) return 'STM32 emulation';
   if (isPiBoardKind(kind)) return 'Raspberry Pi emulation';
   return 'this board';

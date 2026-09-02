@@ -178,8 +178,10 @@ mode where the chip should ignore inputs (e.g. powered-down state).
 
 ## Attributes
 
-User-editable parameters that show up in the Custom Chip designer's
-Attributes panel as sliders or number inputs.
+User-editable parameters. Design-time defaults live in the part inspector
+(right-click the chip). On velxio.dev (Pro) a chip's attributes can also be
+driven by live controls while the simulation runs; the OSS build reads the
+values saved on the component.
 
 ### Schema in `chip.json`
 

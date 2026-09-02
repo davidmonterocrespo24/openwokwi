@@ -111,6 +111,18 @@ export interface ServiceOptions {
 }
 
 export class CircuitSimulationService {
+  /**
+   * The last REAL transient capture published, kept so a DC re-solve on a
+   * tran-loaded circuit does not wipe it.
+   *
+   * `onMcuPinChange` alters a source and resolves DC — no time axis comes
+   * back, but `loadedContext.analysisKind` is still 'tran'. Publishing the
+   * undefined straight through meant every GPIO edge blanked the waveform
+   * until the next full tick, which the oscilloscope's analog channels read
+   * as the trace vanishing several times a second.
+   */
+  private lastTimeWaveforms: TimeWaveforms | undefined;
+
   private inFlight = false;
   private pending = false;
   // Per-pin pending edge buffer. Keyed by `${boardId}|${pinName}`. A single
@@ -445,6 +457,17 @@ export class CircuitSimulationService {
         if (vec && vec.real.length > 0) branches.set(vs.toLowerCase(), Array.from(vec.real));
       }
       timeWaveforms = { time: Array.from(result.timeAxis), nodes, branches };
+      this.lastTimeWaveforms = timeWaveforms;
+    } else if (ctx.analysisKind === 'tran') {
+      // A DC re-solve inside a transient circuit (an MCU edge altering a
+      // source). The voltages above are fresh and correct; the waveform is
+      // simply not part of this answer, so carry the last real one rather
+      // than blanking it.
+      timeWaveforms = this.lastTimeWaveforms;
+    } else {
+      // The circuit genuinely is not transient any more — drop the stale
+      // capture so a later switch back to tran cannot serve someone else's.
+      this.lastTimeWaveforms = undefined;
     }
 
     this.electricalStore.publish({

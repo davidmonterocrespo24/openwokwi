@@ -1,0 +1,290 @@
+/* Compile progress card — the panel that reports a build over the canvas.
+ *
+ * Sits over the simulator surface while a compile runs. Before it existed the
+ * only feedback was a spinning icon on the toolbar button: a cold ESP-IDF
+ * build looked exactly like a hung one for four minutes, and a build waiting
+ * behind other people's builds looked like nothing at all.
+ */
+
+.compile-card {
+  position: absolute;
+  top: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-overlay);
+
+  width: min(380px, calc(100% - var(--space-8)));
+  box-sizing: border-box;
+  padding: var(--space-5) var(--space-6);
+
+  background: var(--color-bg-surface-1);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-4);
+
+  font-size: 12px;
+  color: var(--color-fg-default);
+
+  animation: compile-card-in var(--duration-slow) var(--ease-out);
+}
+
+/* On a phone the canvas header is NOT portaled into the unified toolbar (see
+   SimulatorCanvas's `headerSlot`), so it renders inside this wrapper and the
+   card would sit on top of the board selector. Clear its 42px. */
+@media (max-width: 768px) {
+  .compile-card {
+    top: calc(42px + var(--space-4));
+    width: calc(100% - var(--space-6));
+    padding: var(--space-5);
+  }
+  /* No canvas header over the editor pane — nothing to clear. */
+  .compile-card--in-editor {
+    top: var(--space-4);
+  }
+}
+
+@keyframes compile-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Screen-reader-only live region: the title, and nothing that ticks. */
+.compile-card__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.compile-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.compile-card__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tabular figures so the timer doesn't jitter as digits change width. */
+.compile-card__timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-fg-muted);
+}
+
+.compile-card__spinner {
+  flex-shrink: 0;
+  color: var(--color-action-primary);
+  animation: compile-card-spin 1s linear infinite;
+}
+
+@keyframes compile-card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.compile-card__dismiss {
+  flex-shrink: 0;
+  display: flex;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+  transition: var(--transition-color);
+}
+
+.compile-card__dismiss:hover {
+  background: var(--color-action-secondary);
+  color: var(--color-fg-default);
+}
+
+/* ── Progress bar ───────────────────────────────────────────────────── */
+
+.compile-card__bar {
+  position: relative;
+  height: 6px;
+  margin-top: var(--space-5);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface-3);
+}
+
+.compile-card__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-action-primary);
+  /* Slow easing: the fraction arrives in 2s poll steps, and an instant jump
+     from 12% to 47% reads as a glitch rather than as progress. */
+  transition: width 600ms var(--ease-out), background-color var(--duration-base) var(--ease-out);
+}
+
+.compile-card__fill--success {
+  background: var(--color-feedback-success);
+}
+
+.compile-card__fill--error {
+  background: var(--color-feedback-error);
+}
+
+/* Queued: there is no fraction to show, so the bar reports "alive" instead of
+   faking a position. A travelling sliver, not a filling bar — a bar that grows
+   without a real number behind it is a lie the user can catch. */
+.compile-card__bar--indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: var(--radius-pill);
+  background: var(--color-action-primary);
+  opacity: 0.7;
+  animation: compile-card-slide 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes compile-card-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(calc(100% / 0.35));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compile-card,
+  .compile-card__spinner,
+  .compile-card__bar--indeterminate::after {
+    animation: none;
+  }
+  .compile-card__bar--indeterminate::after {
+    width: 100%;
+    opacity: 0.35;
+  }
+}
+
+/* ── Status line ────────────────────────────────────────────────────── */
+
+.compile-card__status {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  color: var(--color-fg-muted);
+}
+
+.compile-card__stage {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* Build output is compiler text; a proportional font makes paths unreadable. */
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.compile-card__percent {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* ── Footer: server load, tier badge, the pro upsell slot ───────────── */
+
+.compile-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-default);
+  font-size: 11px;
+  color: var(--color-fg-subtle);
+}
+
+.compile-card__load {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.compile-card__meter {
+  display: flex;
+  gap: 2px;
+}
+
+.compile-card__seg {
+  width: 5px;
+  height: 9px;
+  border-radius: 1px;
+  background: var(--color-bg-surface-3);
+  transition: background-color var(--duration-base) var(--ease-out);
+}
+
+.compile-card__seg--on {
+  background: var(--color-fg-muted);
+}
+
+.compile-card__seg--busy {
+  background: var(--color-feedback-warning);
+}
+
+.compile-card__badge {
+  margin-left: auto;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-action-primary);
+  color: var(--color-action-primary-fg);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.compile-card__details {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.compile-card__details:hover {
+  color: var(--color-fg-default);
+}
+
+/* The pro overlay mounts the "skip the queue" upgrade line here. Empty (and
+   zero-height) in the OSS image, where there are no plans to upgrade to. */
+.compile-card__upsell:empty {
+  display: none;
+}
+
+.compile-card__upsell {
+  margin-top: var(--space-4);
+}

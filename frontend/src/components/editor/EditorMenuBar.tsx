@@ -24,6 +24,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
 import { useOscilloscopeStore } from '../../store/useOscilloscopeStore';
 import { useEditorStore, type EditorViewMode } from '../../store/useEditorStore';
+import { useThemeMode } from '../../hooks/useTheme';
+import type { ThemeMode } from '../../lib/theme';
 import { LOCALES, LOCALE_META, type Locale } from '../../i18n/config';
 import { getLocaleFromPath, switchLocale } from '../../i18n/path';
 import {
@@ -86,6 +88,7 @@ export const EditorMenuBar: React.FC = () => {
   const toggleExplorer = useEditorStore((s) => s.toggleExplorer);
   const viewMode = useEditorStore((s) => s.viewMode);
   const setViewMode = useEditorStore((s) => s.setViewMode);
+  const [themeMode, setThemeMode] = useThemeMode();
   const undo = useSimulatorStore((s) => s.undo);
   const redo = useSimulatorStore((s) => s.redo);
   const history = useSimulatorStore((s) => s.history);
@@ -129,6 +132,7 @@ export const EditorMenuBar: React.FC = () => {
     },
     { kind: 'separator' },
     { kind: 'command', id: 'project.import', label: t('editor.toolbar.importLabel', 'Import project') },
+    { kind: 'command', id: 'project.exportVlx', label: t('editor.toolbar.exportVlxLabel', 'Export project (.vlx)') },
     { kind: 'command', id: 'project.export', label: t('editor.toolbar.exportLabel', 'Export project (.zip)') },
     { kind: 'command', id: 'project.exportBom', label: t('editor.toolbar.exportBomLabel', 'Bill of Materials (CSV)'), pro: true },
     {
@@ -142,6 +146,15 @@ export const EditorMenuBar: React.FC = () => {
     // pills, one button fewer in the strip.
     { kind: 'command', id: 'project.share', label: t('editor.toolbar.shareLabel', 'Share / Embed') },
     { kind: 'command', id: 'project.githubSync', label: t('editor.toolbar.githubSyncLabel', 'Sync to GitHub'), pro: true },
+    {
+      kind: 'command',
+      id: 'project.connectAgent',
+      label: t('editor.toolbar.connectAgentLabel', 'Connect AI agent (Claude/Codex)'),
+      pro: true,
+      // Only the pro overlay registers a handler; hide (not grey out) the
+      // row in builds where connecting an external agent cannot exist.
+      optional: true,
+    },
     { kind: 'command', id: 'firmware.upload', label: t('editor.toolbar.uploadFirmwareLabel', 'Upload firmware') },
     { kind: 'command', id: 'sim.record', label: t('editor.toolbar.recordLabel', 'Record simulation'), pro: true },
   ];
@@ -203,6 +216,12 @@ export const EditorMenuBar: React.FC = () => {
     { kind: 'command', id: 'view.reset', label: t('editor.menu.centerView', 'Center canvas view') },
     { kind: 'command', id: 'view.zoomIn', label: t('editor.canvas.zoomIn', 'Zoom in') },
     { kind: 'command', id: 'view.zoomOut', label: t('editor.canvas.zoomOut', 'Zoom out') },
+  ];
+
+  const themeModes: { key: ThemeMode; label: string }[] = [
+    { key: 'dark', label: t('editor.menu.themeDark', 'Dark') },
+    { key: 'light', label: t('editor.menu.themeLight', 'Light') },
+    { key: 'system', label: t('editor.menu.themeSystem', 'Match system') },
   ];
 
   const layoutModes: { key: EditorViewMode; label: string }[] = [
@@ -313,6 +332,29 @@ export const EditorMenuBar: React.FC = () => {
                 >
                   <span>{m.label}</span>
                   <span className="emb-shortcut">{viewMode === m.key ? '✓' : ''}</span>
+                </button>
+              ))}
+              <div className="emb-separator" />
+              {/* Appearance. Not an editor setting — the choice is stored per
+                  origin and the blog and docs portal read the same key, so
+                  flipping it here flips velxio.dev. "System" is opt-in, never
+                  the default: an unset preference is dark. */}
+              <div className="emb-section-label">
+                {t('editor.menu.appearance', 'Appearance')}
+              </div>
+              {themeModes.map((m) => (
+                <button
+                  key={m.key}
+                  role="menuitemradio"
+                  aria-checked={themeMode === m.key}
+                  className="emb-item"
+                  onClick={() => {
+                    setOpen(null);
+                    setThemeMode(m.key);
+                  }}
+                >
+                  <span>{m.label}</span>
+                  <span className="emb-shortcut">{themeMode === m.key ? '✓' : ''}</span>
                 </button>
               ))}
               <div className="emb-separator" />

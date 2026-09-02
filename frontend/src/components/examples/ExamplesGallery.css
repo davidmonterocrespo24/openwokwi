@@ -95,8 +95,8 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 12px;
-  background: color-mix(in srgb, var(--accent, #007acc) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent, #007acc) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, var(--color-action-primary)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, var(--color-action-primary)) 45%, transparent);
   color: var(--text);
   border-radius: var(--radius-pill);
   font-size: 12px;
@@ -110,7 +110,7 @@
   width: 16px;
   height: 16px;
   border: none;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-wash-active);
   color: var(--text);
   border-radius: 50%;
   font-size: 14px;
@@ -172,7 +172,7 @@
 
 .board-tab.active {
   font-weight: 600;
-  color: #fff;
+  color: var(--wb-13);
 }
 
 .board-tab-count {
@@ -241,7 +241,7 @@
 
 .filter-button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--wb-13);
   font-weight: 500;
 }
 
@@ -269,13 +269,13 @@
 
 .example-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-3);
 }
 
 .example-thumbnail {
   width: 100%;
   aspect-ratio: 5 / 3;
-  background: var(--bg-elevated, #17171a);
+  background: var(--bg-elevated, var(--wb-1));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -292,7 +292,7 @@
 }
 
 .example-preview-image {
-  background: #0a0a0c;
+  background: var(--color-bg-canvas);
 }
 
 .example-placeholder-new {
@@ -303,7 +303,7 @@
   gap: 14px;
   width: 100%;
   height: 100%;
-  background: #0a0a0c;
+  background: var(--color-bg-canvas);
 }
 
 .placeholder-icon {
@@ -386,7 +386,7 @@
   border-radius: 4px;
   padding: 3px 5px;
   cursor: pointer;
-  color: #888;
+  color: var(--wb-10);
   display: flex;
   align-items: center;
   transition:
