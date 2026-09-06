@@ -2698,5 +2698,37 @@
       "input"
     ],
     "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" fill=\"#1a2332\" rx=\"4\"/>\n    <rect x=\"12\" y=\"38\" width=\"40\" height=\"18\" rx=\"2\" fill=\"#1f6f43\" stroke=\"#2d8f5a\" stroke-width=\"0.6\"/>\n    <rect x=\"17\" y=\"54\" width=\"2.5\" height=\"6\" fill=\"#d8b24a\"/>\n    <rect x=\"24\" y=\"54\" width=\"2.5\" height=\"6\" fill=\"#d8b24a\"/>\n    <rect x=\"31\" y=\"54\" width=\"2.5\" height=\"6\" fill=\"#d8b24a\"/>\n    <rect x=\"38\" y=\"54\" width=\"2.5\" height=\"6\" fill=\"#d8b24a\"/>\n    <rect x=\"45\" y=\"54\" width=\"2.5\" height=\"6\" fill=\"#d8b24a\"/>\n    <circle cx=\"32\" cy=\"24\" r=\"15\" fill=\"#9aa3ad\" stroke=\"#6b7280\" stroke-width=\"1\"/>\n    <circle cx=\"32\" cy=\"24\" r=\"10\" fill=\"#c7cdd4\"/>\n    <rect x=\"31\" y=\"11\" width=\"2\" height=\"8\" rx=\"1\" fill=\"#475569\"/>\n    <path d=\"M 45 14 A 16 16 0 0 1 49 27\" fill=\"none\" stroke=\"#4ade80\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n    <path d=\"M 49 27 l -4 -1 l 2 -4 z\" fill=\"#4ade80\"/></svg>"
+  },
+  "heart-beat-sensor": {
+    "properties": {
+      "bpm": {
+        "name": "bpm",
+        "type": "number",
+        "defaultValue": 72,
+        "control": "number",
+        "min": 30,
+        "max": 220,
+        "description": "Simulated heart rate in beats per minute"
+      }
+    },
+    "defaultValues": {
+      "bpm": 72
+    },
+    "name": "Heart Beat Sensor",
+    "category": "sensors",
+    "description": "Optical heart-rate (pulse) sensor module. OUT carries a photoplethysmogram: read it with analogRead for the waveform, or with digitalRead for one pulse per beat. Set the rate with the bpm property or the sensor panel.",
+    "tags": [
+      "heart-beat-sensor",
+      "heart rate",
+      "heart",
+      "beat",
+      "pulse",
+      "bpm",
+      "ppg",
+      "ky-039",
+      "pulse sensor",
+      "sensor"
+    ],
+    "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" rx=\"4\" fill=\"#101820\"/><rect x=\"8\" y=\"12\" width=\"48\" height=\"40\" rx=\"3\" fill=\"#1c5aa8\" stroke=\"#2f7fd6\" stroke-width=\"0.8\"/><circle cx=\"21\" cy=\"26\" r=\"6\" fill=\"#0d2b52\" stroke=\"#6fa8dc\" stroke-width=\"0.8\"/><circle cx=\"21\" cy=\"26\" r=\"2.6\" fill=\"#e04b5a\"/><rect x=\"33\" y=\"20\" width=\"9\" height=\"12\" rx=\"1.5\" fill=\"#0b1c33\" stroke=\"#6fa8dc\" stroke-width=\"0.7\"/><path d=\"M11 43h7l3-7 4 13 4-9 3 3h21\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><g fill=\"#d4af37\"><rect x=\"46\" y=\"14\" width=\"4\" height=\"1.8\"/><rect x=\"46\" y=\"18\" width=\"4\" height=\"1.8\"/><rect x=\"46\" y=\"22\" width=\"4\" height=\"1.8\"/></g></svg>"
   }
 }

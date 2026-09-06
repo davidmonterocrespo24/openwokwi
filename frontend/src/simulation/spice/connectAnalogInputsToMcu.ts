@@ -19,6 +19,15 @@
  *   • AC (.tran), ESP32: push the entire waveform to the QEMU MMIO
  *     via `setAdcWaveform` — QEMU does its own interpolation.
  *
+ * A part that models its OWN analog output (a pulse sensor's PPG waveform, a
+ * sensor module with no SPICE model that writes its channel directly) owns
+ * that pin, exactly as on the digital side — see `partPinOwnership`. All three
+ * paths below skip an owned pin. The older `sourcedNets` gate cannot stand in
+ * for that: the moment the user draws the wires the part needs, the net is
+ * component-backed and solves at whatever the passives say, which for an
+ * unmodelled sensor output is a phantom 0 V that stomps the part on every
+ * solve.
+ *
  * Extracted from the legacy `subscribeToStore.ts::wireElectricalSolver`
  * during Phase 1c step C of the mixed-mode migration.
  */
@@ -28,6 +37,7 @@ import {
 } from '../../store/useSimulatorStore';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { setAdcVoltage } from '../parts/partUtils';
+import { isPartOwnedPin } from '../partPinOwnership';
 import type { BoardKind } from '../../types/board';
 import { interpolateAt } from './waveformStats';
 import { boardPinToNumber } from '../../utils/boardPinMapping';
@@ -195,7 +205,10 @@ export function connectAnalogInputsToMcu(): () => void {
         if (v == null) continue;
         const clamped = Math.max(0, Math.min(vMax, v));
         const gpioPin = gpioForBoardPin(board.boardKind, pinName, channel);
-        if (gpioPin >= 0) setAdcVoltage(sim, gpioPin, clamped);
+        if (gpioPin < 0) continue;
+        // A part drives this channel itself — leave it alone (see above).
+        if (isPartOwnedPin(board.id, gpioPin)) continue;
+        setAdcVoltage(sim, gpioPin, clamped);
       }
     }
   }
@@ -262,6 +275,7 @@ export function connectAnalogInputsToMcu(): () => void {
             }
             const gpioPin = gpioFn(pinName, channel);
             if (gpioPin < 0) continue;
+            if (isPartOwnedPin(boardId, gpioPin)) continue;
             shim.setAdcWaveform(gpioPin, u12, periodNs);
             qemuWaveformChannels.add(`${boardId}:${channel}`);
             seen.add(channel);

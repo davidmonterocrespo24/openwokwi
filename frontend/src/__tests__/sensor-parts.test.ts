@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PartSimulationRegistry } from '../simulation/parts/PartSimulationRegistry';
+import { dispatchSensorUpdate } from '../simulation/SensorUpdateRegistry';
 
 // Side-effect imports — register all parts (including SensorParts)
 import '../simulation/parts/BasicParts';
@@ -262,6 +263,54 @@ describe('flame-sensor — attachEvents', () => {
 
 // ─── Heart Beat Sensor ───────────────────────────────────────────────────────
 
+/**
+ * Drive the pulse sensor with a controllable clock.
+ *
+ * `setInterval` is stubbed in this file's beforeEach, so the part's tick never
+ * runs on its own — we pull it out of the mock and call it ourselves, stepping
+ * a fake `performance.now()` so the waveform is a pure function of test time.
+ */
+function driveHeartBeat(
+  props: Record<string, unknown> = {},
+  pins: Record<string, number> = { OUT: 34 },
+) {
+  const logic = PartSimulationRegistry.get('heart-beat-sensor')!;
+  const injected: Array<{ pin: number; volts: number }> = [];
+  const sim = {
+    ...makeSimulator(makeADC()),
+    setAdcVoltage: (pin: number, volts: number) => {
+      injected.push({ pin, volts });
+      return true;
+    },
+  };
+  let now = 0;
+  vi.stubGlobal('performance', { now: () => now });
+  const element = makeElement(props);
+  const cleanup = logic.attachEvents!(element, sim as any, pinMap(pins), 'hb-1');
+  const tick = (setInterval as unknown as { mock: { calls: Array<[() => void, number]> } }).mock
+    .calls[0][0];
+  const stepMs = (setInterval as unknown as { mock: { calls: Array<[() => void, number]> } }).mock
+    .calls[0][1];
+  return {
+    sim,
+    element,
+    injected,
+    cleanup,
+    stepMs,
+    /** Run the part's timer for `ms` of simulated wall clock. */
+    advance(ms: number) {
+      const steps = Math.round(ms / stepMs);
+      for (let i = 0; i < steps; i++) {
+        now += stepMs;
+        tick();
+      }
+    },
+  };
+}
+
+/** 12-bit ADC codes an ESP32 sketch would read back from the injected volts. */
+const raw12 = (volts: number) => Math.round((volts / 3.3) * 4095);
+
 describe('heart-beat-sensor — attachEvents', () => {
   it('starts OUT pin LOW and sets up an interval for pulse generation', () => {
     const logic = PartSimulationRegistry.get('heart-beat-sensor')!;
@@ -294,6 +343,193 @@ describe('heart-beat-sensor — attachEvents', () => {
 
     logic.attachEvents!(element, sim as any, noPins);
     expect(setInterval).not.toHaveBeenCalled();
+  });
+
+  // The regression this whole part was rewritten for: the module only ever
+  // pulsed the digital pin, so analogRead / ADC.read() — how a pulse sensor is
+  // normally read — returned a flat 0 and every sketch computed 0 BPM.
+  it('seeds the ADC channel at the resting level before the first tick', () => {
+    const { injected } = driveHeartBeat();
+
+    expect(injected.length).toBeGreaterThan(0);
+    expect(injected[0].pin).toBe(34);
+    expect(injected[0].volts).toBeGreaterThan(0.4);
+    expect(injected[0].volts).toBeLessThan(1.0);
+  });
+
+  it('drives a pulse waveform on the ADC, not a constant', () => {
+    const { injected, advance } = driveHeartBeat({ bpm: 60 });
+    advance(1000); // exactly one beat at 60 BPM
+
+    const volts = injected.map((i) => i.volts);
+    const min = Math.min(...volts);
+    const max = Math.max(...volts);
+
+    expect(max).toBeGreaterThan(3.0); // systolic peak, near the 3.3 V rail
+    expect(min).toBeLessThan(0.8); // diastolic floor
+    expect(new Set(volts.map((v) => v.toFixed(2))).size).toBeGreaterThan(10);
+  });
+
+  it('still emits one short digital pulse per beat', () => {
+    const { sim, advance } = driveHeartBeat({ bpm: 60 });
+    advance(3000); // three beats
+
+    const edges = sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true);
+    expect(edges).toHaveLength(3);
+
+    // and the pulse is a small part of the cycle, like the comparator output
+    // of a real module (this used to be a hard-coded 100 ms in a 1000 ms beat)
+    const highSamples = sim.setPinState.mock.calls.length;
+    expect(highSamples).toBeGreaterThan(0);
+  });
+
+  it('follows the bpm property', () => {
+    const { sim, advance } = driveHeartBeat({ bpm: 120 });
+    advance(3000); // 120 BPM = 6 beats in 3 s
+
+    const edges = sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true);
+    expect(edges).toHaveLength(6);
+  });
+
+  it('accepts a bpm that arrives as a string, and clamps out-of-range values', () => {
+    const asString = driveHeartBeat({ bpm: '120' });
+    asString.advance(3000);
+    expect(
+      asString.sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true),
+    ).toHaveLength(6);
+
+    // 6000 BPM is not a heart rate; it must clamp rather than alias the timer
+    const absurd = driveHeartBeat({ bpm: 6000 });
+    absurd.advance(1000);
+    const edges = absurd.sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true);
+    expect(edges.length).toBeLessThanOrEqual(4); // 220 BPM ceiling
+  });
+
+  it('re-rates from the sensor control panel', () => {
+    const { sim, advance } = driveHeartBeat({ bpm: 60 });
+    advance(1000);
+    const afterFirst = sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true).length;
+
+    dispatchSensorUpdate('hb-1', { bpm: 180 });
+    advance(1000); // 180 BPM = 3 beats in the next second
+
+    const total = sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true).length;
+    expect(afterFirst).toBe(1);
+    expect(total - afterFirst).toBe(3);
+  });
+
+  // The dicrotic notch is a real feature of a PPG, but a naive peak counter
+  // (`value > THRESHOLD` with a refractory window — what the pulse-monitor
+  // example does) must not count it as a second beat.
+  it('keeps the dicrotic notch below a typical detection threshold', () => {
+    const { injected, advance } = driveHeartBeat({ bpm: 60 });
+    advance(2000);
+
+    const THRESHOLD = 2500; // the value the 100-days pulse monitor uses
+    const MIN_PEAK_INTERVAL_MS = 300;
+    const codes = injected.map((i) => raw12(i.volts));
+
+    let peaks = 0;
+    let lastPeakMs = -Infinity;
+    codes.forEach((code, i) => {
+      const tMs = i * 20;
+      if (code > THRESHOLD && tMs - lastPeakMs > MIN_PEAK_INTERVAL_MS) {
+        peaks++;
+        lastPeakMs = tMs;
+      }
+    });
+
+    expect(peaks).toBe(2); // one per beat over two seconds at 60 BPM
+    expect(Math.max(...codes)).toBeGreaterThan(THRESHOLD);
+  });
+
+  // An emulated board runs slower than real time. Beating on the browser clock
+  // made the sketch alias the waveform: at ~1 redraw per real second it sampled
+  // a 72 BPM wave about once per cycle and the 100-days pulse monitor reported
+  // 8 BPM. On the guest clock the sketch gets the same samples per beat it
+  // would on hardware, however slowly the engine is running.
+  it('beats on the guest clock when the simulator exposes one', () => {
+    const logic = PartSimulationRegistry.get('heart-beat-sensor')!;
+    let guestUs = 0;
+    let wall = 0;
+    vi.stubGlobal('performance', { now: () => wall });
+    const sim = {
+      ...makeSimulator(makeADC()),
+      setAdcVoltage: () => true,
+      getGuestMicros: () => guestUs,
+    };
+    logic.attachEvents!(makeElement({ bpm: 60 }), sim as any, pinMap({ OUT: 34 }), 'hb-3');
+    const tick = (setInterval as unknown as { mock: { calls: Array<[() => void, number]> } }).mock
+      .calls[0][0];
+
+    // Ten real seconds of browser time, but only one second of guest time:
+    // exactly one beat, because the sketch's own clock only advanced by one.
+    for (let i = 0; i < 500; i++) {
+      wall += 20;
+      guestUs += 2000; // guest runs 10x slower than the wall clock
+      tick();
+    }
+
+    const edges = sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true);
+    expect(edges).toHaveLength(1);
+  });
+
+  it('falls back to wall time when the guest clock is unreadable', () => {
+    const logic = PartSimulationRegistry.get('heart-beat-sensor')!;
+    let wall = 0;
+    vi.stubGlobal('performance', { now: () => wall });
+    const sim = {
+      ...makeSimulator(makeADC()),
+      setAdcVoltage: () => true,
+      getGuestMicros: () => -1, // backend QEMU: clock lives in another process
+    };
+    logic.attachEvents!(makeElement({ bpm: 60 }), sim as any, pinMap({ OUT: 34 }), 'hb-4');
+    const tick = (setInterval as unknown as { mock: { calls: Array<[() => void, number]> } }).mock
+      .calls[0][0];
+    for (let i = 0; i < 150; i++) {
+      wall += 20;
+      tick();
+    }
+
+    const edges = sim.setPinState.mock.calls.filter((c: unknown[]) => c[1] === true);
+    expect(edges).toHaveLength(3); // 3 s of wall time at 60 BPM
+  });
+
+  it('stops writing the ADC when OUT is not an ADC-capable pad', () => {
+    const logic = PartSimulationRegistry.get('heart-beat-sensor')!;
+    let attempts = 0;
+    const sim = {
+      ...makeSimulator(makeADC()),
+      setAdcVoltage: () => {
+        attempts++;
+        return false; // not an ADC pin
+      },
+    };
+    let now = 0;
+    vi.stubGlobal('performance', { now: () => now });
+    logic.attachEvents!(makeElement(), sim as any, pinMap({ OUT: 5 }), 'hb-2');
+    const tick = (setInterval as unknown as { mock: { calls: Array<[() => void, number]> } }).mock
+      .calls[0][0];
+    for (let i = 0; i < 200; i++) {
+      now += 20;
+      tick();
+    }
+
+    // A handful of retries covers a simulator that is not up yet; after that it
+    // gives up instead of warning 50 times a second for the whole run.
+    expect(attempts).toBeLessThanOrEqual(20);
+    // the digital pulse still works on a plain GPIO
+    expect(sim.setPinState).toHaveBeenCalledWith(5, true);
+  });
+
+  it('releases the pin and the panel subscription on cleanup', () => {
+    const { sim, cleanup, advance } = driveHeartBeat({ bpm: 60 });
+    advance(200);
+    sim.setPinState.mockClear();
+    cleanup();
+
+    expect(clearInterval).toHaveBeenCalledWith(42);
+    expect(sim.setPinState).toHaveBeenCalledWith(34, false);
   });
 });
 

@@ -37,6 +37,50 @@ export function getADC(avrSimulator: AnySimulator): any | null {
 }
 
 /**
+ * Elapsed GUEST time in milliseconds, or null when this simulator cannot say.
+ *
+ * A part that generates a time-varying signal (a pulse waveform, a tone, any
+ * periodic source) must advance it on the clock the SKETCH sees, not on the
+ * browser's. The two are not the same rate: an emulated board runs slower than
+ * real time under load, so a signal stepped by `performance.now()` sweeps past
+ * a guest that is only managing a couple of loop iterations a second. The
+ * sketch then aliases it — samples land at effectively random phases and a
+ * beat / period measured from `millis()` comes out nowhere near what the part
+ * was asked to produce.
+ *
+ * Sources, in order:
+ *  - `getGuestMicros()` — engines that carry their own virtual clock but no
+ *    CPU cycle counter the host can read (the in-browser ESP32 engines).
+ *  - `getCurrentCycles()` + `getClockHz()` — AVR and RP2040.
+ *
+ * NOTE the cycle path is deliberately NOT reached through a "does this board
+ * have cycles?" test: several parts use `getCurrentCycles() >= 0` to tell an
+ * AVR from an ESP32 bridge, so that predicate must keep meaning what it does.
+ *
+ * Returns null for a backend-QEMU board, whose clock lives in another process;
+ * callers fall back to wall time.
+ */
+export function guestMillis(simulator: AnySimulator): number | null {
+  const sim = simulator as unknown as {
+    getGuestMicros?: () => number;
+    getCurrentCycles?: () => number;
+    getClockHz?: () => number;
+  };
+  if (typeof sim.getGuestMicros === 'function') {
+    const us = sim.getGuestMicros();
+    if (Number.isFinite(us) && us >= 0) return us / 1000;
+  }
+  if (typeof sim.getCurrentCycles === 'function' && typeof sim.getClockHz === 'function') {
+    const cycles = sim.getCurrentCycles();
+    const hz = sim.getClockHz();
+    if (Number.isFinite(cycles) && cycles >= 0 && Number.isFinite(hz) && hz > 0) {
+      return (cycles / hz) * 1000;
+    }
+  }
+  return null;
+}
+
+/**
  * Supply rail the analog front end of THIS board runs on, in volts.
  *
  * A part that builds a resistive divider has to use the rail it is actually

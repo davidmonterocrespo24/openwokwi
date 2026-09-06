@@ -19,7 +19,7 @@
 
 import { PartSimulationRegistry } from './PartSimulationRegistry';
 import { requestLine } from '../line/requestLine';
-import { setAdcVoltage, emitPropertyChange, analogRailVolts } from './partUtils';
+import { setAdcVoltage, emitPropertyChange, analogRailVolts, guestMillis } from './partUtils';
 import { registerSensorUpdate, unregisterSensorUpdate } from '../SensorUpdateRegistry';
 
 // ─── Tilt Switch ─────────────────────────────────────────────────────────────
@@ -244,22 +244,168 @@ PartSimulationRegistry.register('flame-sensor', {
 // ─── Heart Beat Sensor ───────────────────────────────────────────────────────
 
 /**
- * Heart beat sensor — simulates a 60 BPM signal on OUT pin.
- * Every 1000ms: briefly pulls OUT HIGH for 100ms, then LOW again.
+ * Heart beat sensor (KY-039 / optical pulse module) — drives OUT with a
+ * photoplethysmogram, the waveform an optical pulse sensor really produces.
+ *
+ * The module has ONE output pin and sketches read it BOTH ways, so the part
+ * drives both meanings of that pin, exactly as the hardware does:
+ *
+ *  - analogRead / ADC: the PPG itself — a fast systolic upstroke, the dicrotic
+ *    notch of the aortic valve closing, then the slow diastolic decay. Sampled
+ *    into the channel at HB_SAMPLE_MS.
+ *  - digitalRead: one short pulse per beat, the way the module's on-board
+ *    comparator reports it. Emitted while the systolic peak is above
+ *    HB_BEAT_LEVEL, which is ~12% of the cycle (~96 ms at 72 BPM) — the same
+ *    shape as the fixed 100 ms pulse this part used to emit, so sketches that
+ *    count digital edges keep working.
+ *
+ * Until this the part ONLY pulsed the digital pin and never touched the ADC,
+ * so every sketch reading the module the usual way (analogRead / ADC.read())
+ * saw a flat zero and reported 0 BPM. The notch is deliberately kept below the
+ * level a beat-detection threshold sits at, so a naive `value > THRESHOLD`
+ * peak counter sees one peak per cycle, not two.
+ *
+ * Rate comes from the `bpm` property and from the sensor control panel.
  */
+
+const HB_DEFAULT_BPM = 72;
+const HB_MIN_BPM = 30;
+const HB_MAX_BPM = 220;
+/** Sampling period of the analog output. 50 Hz is smooth on a 128 px trace. */
+const HB_SAMPLE_MS = 20;
+/** Rest and peak of the analog swing, as a fraction of the board's ADC rail. */
+const HB_LEVEL_LOW = 0.15;
+const HB_LEVEL_HIGH = 0.95;
+/** Waveform level the digital comparator output follows. Above the notch. */
+const HB_BEAT_LEVEL = 0.55;
+/**
+ * Give up on the ADC after this many failed writes. `setAdcVoltage` answers
+ * false when OUT is not wired to an ADC-capable pad, and the RP2040 branch
+ * warns on every call — retrying 50x a second would flood the console. A few
+ * tries still cover a simulator that is not up yet on the first tick.
+ */
+const HB_ANALOG_TRIES = 16;
+
+/**
+ * One cardiac cycle as [phase, level] control points, cosine-eased between
+ * them. Phase runs 0..1 over one beat; level runs 0 (diastolic floor) to 1
+ * (systolic peak).
+ */
+const HB_WAVEFORM: ReadonlyArray<readonly [number, number]> = [
+  [0.0, 0.06],
+  [0.09, 1.0], // systolic peak
+  [0.2, 0.34], // rapid fall
+  [0.3, 0.42], // dicrotic notch
+  [0.42, 0.28],
+  [1.0, 0.06], // diastolic decay back to the floor
+];
+
+/** Level of the pulse waveform at `phase` (any real; only the fraction matters). */
+export function heartBeatLevel(phase: number): number {
+  const p = phase - Math.floor(phase);
+  for (let i = 1; i < HB_WAVEFORM.length; i++) {
+    const [p1, v1] = HB_WAVEFORM[i];
+    if (p <= p1) {
+      const [p0, v0] = HB_WAVEFORM[i - 1];
+      const t = (p - p0) / (p1 - p0);
+      return v0 + (v1 - v0) * (0.5 - 0.5 * Math.cos(Math.PI * t));
+    }
+  }
+  return HB_WAVEFORM[HB_WAVEFORM.length - 1][1];
+}
+
+function heartBeatClampBpm(value: unknown, fallback: number): number {
+  const n = parseFloat(String(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(HB_MAX_BPM, Math.max(HB_MIN_BPM, n));
+}
+
 PartSimulationRegistry.register('heart-beat-sensor', {
-  attachEvents: (element, simulator, getArduinoPinHelper) => {
+  attachEvents: (element, simulator, getArduinoPinHelper, componentId) => {
     const pin = getArduinoPinHelper('OUT');
     if (pin === null) return () => {};
 
+    const el = element as HTMLElement & { bpm?: string | number };
+    let bpm = heartBeatClampBpm(el.bpm, HB_DEFAULT_BPM);
+
+    const rail = analogRailVolts(simulator);
+    const voltsFor = (level: number) =>
+      rail * (HB_LEVEL_LOW + level * (HB_LEVEL_HIGH - HB_LEVEL_LOW));
+
+    let phase = 0;
+    // Negative, not 0: a clock legitimately reads 0 on the first tick, and a
+    // `last === 0` sentinel would then re-arm on the tick after.
+    let last = -1;
+    let onGuestClock = false;
+    let beat = false;
+    let analogOk = false;
+    let analogTries = 0;
+
+    const writeAnalog = (level: number) => {
+      if (!analogOk && analogTries >= HB_ANALOG_TRIES) return;
+      analogTries++;
+      if (setAdcVoltage(simulator, pin, voltsFor(level))) analogOk = true;
+    };
+
+    // Rest level first, so a sketch that reads before the first tick sees the
+    // sensor sitting at its baseline rather than at a phantom 0 V.
     simulator.setPinState(pin, false);
+    writeAnalog(heartBeatLevel(0));
 
-    const intervalId = setInterval(() => {
-      simulator.setPinState(pin, true); // pulse HIGH
-      setTimeout(() => simulator.setPinState(pin, false), 100);
-    }, 1000);
+    const tick = () => {
+      // Beat on the clock the SKETCH sees. An emulated board runs slower than
+      // real time, and a waveform stepped by the browser's clock sweeps past a
+      // guest managing a couple of loop iterations a second: it samples at
+      // effectively random phases and the BPM it computes from its own millis()
+      // is nowhere near the rate configured here. On the guest clock the sketch
+      // gets the same samples per beat it would get on real hardware, however
+      // fast or slow the emulator happens to be running.
+      const guest = guestMillis(simulator);
+      const useGuest = guest !== null;
+      const now = useGuest
+        ? (guest as number)
+        : typeof performance !== 'undefined'
+          ? performance.now()
+          : Date.now();
+      // Switching clocks (the engine came up, or went away) restarts the delta
+      // rather than integrating the offset between two unrelated timebases.
+      const dt =
+        last < 0 || useGuest !== onGuestClock ? HB_SAMPLE_MS : Math.min(now - last, 1000);
+      onGuestClock = useGuest;
+      last = now;
+      // Advance the phase rather than recomputing it from an epoch: the
+      // waveform then stays continuous when the rate changes mid-beat.
+      phase = (phase + (dt / 1000) * (bpm / 60)) % 1;
 
-    return () => clearInterval(intervalId);
+      const level = heartBeatLevel(phase);
+      writeAnalog(level);
+
+      const nextBeat = level >= HB_BEAT_LEVEL;
+      if (nextBeat !== beat) {
+        beat = nextBeat;
+        simulator.setPinState(pin, beat);
+        // The Wokwi element is a static SVG with no LED property to drive, so
+        // the visible beat is a brightness lift on the element itself.
+        if (el.style) el.style.filter = beat ? 'brightness(1.4)' : '';
+      }
+    };
+
+    const intervalId = setInterval(tick, HB_SAMPLE_MS);
+
+    registerSensorUpdate(componentId, (values) => {
+      if ('bpm' in values) {
+        bpm = heartBeatClampBpm(values.bpm, bpm);
+        el.bpm = bpm;
+        emitPropertyChange(componentId, 'bpm', bpm);
+      }
+    });
+
+    return () => {
+      clearInterval(intervalId);
+      unregisterSensorUpdate(componentId);
+      if (el.style) el.style.filter = '';
+      simulator.setPinState(pin, false);
+    };
   },
 });
 

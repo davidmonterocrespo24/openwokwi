@@ -199,10 +199,27 @@ export class Esp32BridgeShim {
     this.bridge.sendPinEvent(pin, state);
   }
   getCurrentCycles(): number {
+    // Deliberately -1, even when the in-browser engine below DOES have a cycle
+    // counter: several parts read `getCurrentCycles() >= 0` to tell an AVR from
+    // an ESP32 bridge (ComplexParts' servo picks its whole strategy on it).
+    // Guest TIME is exposed separately, through getGuestMicros().
     return -1;
   }
   getClockHz(): number {
     return 240_000_000;
+  }
+  /**
+   * Elapsed guest time in microseconds, or -1 when this board's clock is not
+   * readable from the browser (backend QEMU runs in another process).
+   *
+   * An in-browser engine carries its own virtual clock, and a part generating a
+   * time-varying signal has to step it on THAT clock — see `guestMillis` in
+   * simulation/parts/partUtils. Optional on the bridge: the stock QEMU
+   * `Esp32Bridge` does not implement it and answers -1 here.
+   */
+  getGuestMicros(): number {
+    const b = this.bridge as unknown as { getGuestMicros?: () => number };
+    return typeof b.getGuestMicros === 'function' ? b.getGuestMicros() : -1;
   }
   isRunning(): boolean {
     return this.bridge.connected;

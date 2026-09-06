@@ -404,6 +404,23 @@ export const SENSOR_CONTROLS: Record<string, SensorControlDef> = {
   },
 
   // ── Big Sound Sensor (FC-04) ──────────────────────────────────────────────
+  'heart-beat-sensor': {
+    title: 'Heart Beat Sensor',
+    controls: [
+      {
+        type: 'slider',
+        key: 'bpm',
+        label: 'Heart Rate',
+        min: 30,
+        max: 220,
+        step: 1,
+        unit: 'BPM',
+        defaultValue: 72,
+      },
+    ],
+    defaultValues: { bpm: 72 },
+  },
+
   'big-sound-sensor': {
     title: 'Sound Sensor',
     controls: [
