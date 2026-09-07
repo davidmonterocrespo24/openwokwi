@@ -5626,6 +5626,124 @@ void loop() {
     ],
   },
   {
+    // The gallery had NO example using neopixel / led-ring / neopixel-matrix,
+    // which is why nothing ever executed them and they were dark on every
+    // board except the AVR for months. One per decode path, so the deploy's
+    // pixel smoke and a human both have something to look at: the AVR
+    // bit-bangs the line, the ESP32 hands it to the RMT peripheral, and the
+    // RP2040 drives it from PIO.
+    id: 'uno-neopixel-colours',
+    title: 'Arduino Uno NeoPixel colours',
+    description:
+      'Cycle one WS2812 pixel through red, green and blue on an Uno. The AVR bit-bangs the data line, so the part decodes it from the pin edges.',
+    category: 'basics',
+    difficulty: 'beginner',
+    boardType: 'arduino-uno',
+    libraries: ['Adafruit NeoPixel'],
+    code: `// Arduino Uno — one WS2812 pixel, three colours.
+#include <Adafruit_NeoPixel.h>
+
+#define PIN        6   // DIN. Any digital pin works.
+#define NUM_PIXELS 1
+
+Adafruit_NeoPixel pixels(NUM_PIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  Serial.begin(9600);
+  pixels.begin();
+  pixels.setBrightness(255);
+}
+
+void loop() {
+  // The colour ORDER flag only permutes these three bytes — it can never turn
+  // a dark pixel on, so it is not the thing to change when nothing lights.
+  pixels.setPixelColor(0, pixels.Color(255, 0, 0)); pixels.show();
+  Serial.println("red");   delay(1000);
+  pixels.setPixelColor(0, pixels.Color(0, 255, 0)); pixels.show();
+  Serial.println("green"); delay(1000);
+  pixels.setPixelColor(0, pixels.Color(0, 0, 255)); pixels.show();
+  Serial.println("blue");  delay(1000);
+}`,
+    components: [
+      { type: 'wokwi-neopixel', id: 'npx', x: 470, y: 180, properties: { r: 0, g: 0, b: 0 } },
+    ],
+    wires: [
+      {
+        id: 'w-npx-vdd',
+        start: { componentId: 'arduino-uno', pinName: '5V' },
+        end: { componentId: 'npx', pinName: 'VDD' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-npx-vss',
+        start: { componentId: 'arduino-uno', pinName: 'GND.1' },
+        end: { componentId: 'npx', pinName: 'VSS' },
+        color: '#2c3e50',
+      },
+      {
+        id: 'w-npx-din',
+        start: { componentId: 'npx', pinName: 'DIN' },
+        end: { componentId: 'arduino-uno', pinName: '6' },
+        color: '#22c55e',
+      },
+    ],
+  },
+  {
+    id: 'esp32-neopixel-colours',
+    title: 'ESP32 NeoPixel colours',
+    description:
+      'The same pixel on an ESP32. Adafruit_NeoPixel drives it through the RMT peripheral here, so the pad never toggles at bit rate and the engine hands the decoded frame to the part.',
+    category: 'basics',
+    difficulty: 'beginner',
+    boardType: 'esp32',
+    libraries: ['Adafruit NeoPixel'],
+    code: `// ESP32 — one WS2812 pixel on GPIO18, driven over RMT.
+#include <Adafruit_NeoPixel.h>
+
+#define PIN        18
+#define NUM_PIXELS 1
+
+Adafruit_NeoPixel pixels(NUM_PIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  Serial.begin(115200);
+  pixels.begin();
+  pixels.setBrightness(255);
+}
+
+void loop() {
+  pixels.setPixelColor(0, pixels.Color(255, 0, 0)); pixels.show();
+  Serial.println("red");   delay(1000);
+  pixels.setPixelColor(0, pixels.Color(0, 255, 0)); pixels.show();
+  Serial.println("green"); delay(1000);
+  pixels.setPixelColor(0, pixels.Color(0, 0, 255)); pixels.show();
+  Serial.println("blue");  delay(1000);
+}`,
+    components: [
+      { type: 'wokwi-neopixel', id: 'npx', x: 470, y: 180, properties: { r: 0, g: 0, b: 0 } },
+    ],
+    wires: [
+      {
+        id: 'w-npx-vdd',
+        start: { componentId: 'esp32', pinName: '3V3' },
+        end: { componentId: 'npx', pinName: 'VDD' },
+        color: '#e74c3c',
+      },
+      {
+        id: 'w-npx-vss',
+        start: { componentId: 'esp32', pinName: 'GND' },
+        end: { componentId: 'npx', pinName: 'VSS' },
+        color: '#2c3e50',
+      },
+      {
+        id: 'w-npx-din',
+        start: { componentId: 'npx', pinName: 'DIN' },
+        end: { componentId: 'esp32', pinName: '18' },
+        color: '#22c55e',
+      },
+    ],
+  },
+  {
     id: 'esp32-serial-echo',
     title: 'ESP32 Serial Echo',
     description:
