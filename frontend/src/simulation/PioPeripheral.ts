@@ -30,8 +30,15 @@ export interface PioPeripheral {
   feedWord(word: number, pioIndex?: number, smIndex?: number): Uint8Array[];
   /** True while the firmware is streaming bulk data the peripheral wants the
    *  plumbing to DISCARD (keep only a few words so the PIO TXSTALLs). Words
-   *  taken by this path are NOT fed to the peripheral. */
-  inDiscardableWriteData(): boolean;
+   *  taken by this path are NOT fed to the peripheral.
+   *
+   *  `pioIndex`/`smIndex` say which state machine is being asked about, where
+   *  the host plumbing knows (the RP2350 hook passes them; the RP2040 one
+   *  iterates its machines unindexed and does not). It matters on a board that
+   *  puts two peripherals on one PIO: a radio streaming its 224 KB firmware
+   *  must not make the host throw away the speaker's words on a machine the
+   *  radio never touches. Answer for the whole bus when they are undefined. */
+  inDiscardableWriteData(pioIndex?: number, smIndex?: number): boolean;
   /**
    * Optional: "I have already consumed this state machine's words; the PIO
    * does not need to shift them out."
