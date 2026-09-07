@@ -120,12 +120,12 @@
     },
     "rpi": {
       "hero": {
-        "title": "無料のRaspberry Pi 3シミュレーター",
+        "title": "Raspberry Pi 3 シミュレーター",
         "accent": "完全なLinux · Python · GPIO — ブラウザで",
         "subtitle": "ブラウザでRaspberry Pi 3BをRaspberry Pi OSとともに直接実行—QEMUによるARM Cortex-A53クアッドコアエミュレーション。Pythonの記述、GPIO制御、パッケージのインストール。ハードウェア不要。",
         "ctaPrimary": "Pi 3シミュレーターを開く",
         "ctaSecondary": "ドキュメントを読む",
-        "trust": "無料＆オープンソース · QEMU ARM64 · 完全なRaspberry Pi OS",
+        "trust": "QEMU ARM64 · 完全な Raspberry Pi OS · Maker および Pro プラン",
         "imageAlt": "Raspberry Pi 3ボードのイラスト"
       },
       "what": {

@@ -120,12 +120,12 @@
     },
     "rpi": {
       "hero": {
-        "title": "Simulateur Raspberry Pi 3 gratuit",
+        "title": "Simulateur Raspberry Pi 3",
         "accent": "Linux complet · Python · GPIO — Dans votre navigateur",
         "subtitle": "Exécutez un Raspberry Pi 3B complet avec Raspberry Pi OS directement dans votre navigateur — émulation ARM Cortex-A53 quad-core via QEMU. Écrivez du Python, contrôlez les GPIO, installez des paquets. Aucun matériel nécessaire.",
         "ctaPrimary": "Ouvrir le simulateur Pi 3",
         "ctaSecondary": "Lire la documentation",
-        "trust": "Gratuit et open-source · QEMU ARM64 · Raspberry Pi OS complet",
+        "trust": "QEMU ARM64 · Raspberry Pi OS complet · Offres Maker et Pro",
         "imageAlt": "Illustration de la carte Raspberry Pi 3"
       },
       "what": {

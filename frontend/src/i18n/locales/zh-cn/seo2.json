@@ -120,12 +120,12 @@
     },
     "rpi": {
       "hero": {
-        "title": "免费Raspberry Pi 3仿真器",
+        "title": "Raspberry Pi 3 模拟器",
         "accent": "完整的Linux · Python · GPIO —— 在你的浏览器中",
         "subtitle": "直接在浏览器中运行完整的Raspberry Pi 3B和Raspberry Pi OS——通过QEMU进行ARM Cortex-A53四核仿真。编写Python，控制GPIO，安装软件包。无需硬件。",
         "ctaPrimary": "打开Pi 3仿真器",
         "ctaSecondary": "阅读文档",
-        "trust": "免费开源 · QEMU ARM64 · 完整的Raspberry Pi OS",
+        "trust": "QEMU ARM64 · 完整 Raspberry Pi OS · Maker 和 Pro 套餐",
         "imageAlt": "Raspberry Pi 3板示意图"
       },
       "what": {

@@ -12,9 +12,12 @@
  * `proRoutes.ts`): the OSS app defines a stable doorbell; the overlay plugs in.
  *
  *   - OSS without an overlay  -> default impl returns 'allow'. Self-hosted
- *     deployments don't block in the UI; the missing emulation binary plus a
- *     Pro-framed backend message handle availability (see stm32_lib_manager /
- *     the Pi boot-image provider).
+ *     deployments don't block in the UI: the board can be placed and the
+ *     project stays loadable, but nothing starts. Since 2026-09-06 the
+ *     emulators themselves are not in this repo at all (they live in the
+ *     optional app.pro_boards backend package), so the simulation route
+ *     answers start_pi / start_stm32 with board_access.PRO_BOARD_MESSAGE.
+ *     Availability is a backend answer, never a UI lie.
  *   - With the pro overlay     -> installBoardGateImpl() returns 'block' for a
  *     non-paid user on the web, and the caller fires the upgrade prompt.
  *   - Desktop (Tauri)          -> overlay returns 'allow'; the per-board QEMU

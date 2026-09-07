@@ -167,18 +167,21 @@ RUN rm -f package-lock.json \
 # ---- Stage 2: Final Production Image ----
 FROM python:3.12-slim
 
-# Install system dependencies, nginx, and QEMU runtime.
+# Install system dependencies and nginx.
 #
-# qemu-system-arm + qemu-utils provide qemu-system-aarch64 and qemu-img,
-# both invoked by app/services/qemu_manager.py for Raspberry Pi 3
-# simulation. They were missing for the entire 2024-2026 stretch when
-# Pi 3 simulation was advertised but broken — see docs/BOOT_IMAGES.md.
-# ~200 MB added to the image; trade-off is "Pi 3 actually works".
+# No qemu-system-arm / qemu-utils here any more. They existed only for
+# app/services/qemu_manager.py (Raspberry Pi Linux emulation), which left
+# this repo when the QEMU board lane became paid-only: nothing in the
+# open-source tree invokes qemu-system-aarch64 or qemu-img, so they were
+# ~200 MB of image for a code path that no longer exists. velxio.dev
+# installs them in its own Dockerfile and Velxio Desktop downloads a QEMU
+# build on first use.
 #
-# Other libs (libglib2.0-0, libgcrypt20, libslirp0, libpixman-1-0,
-# libfdt1) used to be needed only as runtime deps for libqemu-xtensa.so;
-# they're still needed but now also pulled in transitively by
-# qemu-system-arm.
+# libglib2.0-0, libgcrypt20, libslirp0, libpixman-1-0 and libfdt1 stay:
+# they are runtime deps of libqemu-xtensa.so (the in-process ESP32
+# emulator, which IS free and open-source) and used to arrive transitively
+# with qemu-system-arm. Dropping that package without keeping them listed
+# here would break every ESP32 simulation.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -193,8 +196,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libusb-1.0-0 \
     git \
     ccache \
-    qemu-system-arm \
-    qemu-utils \
     sdcc \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
