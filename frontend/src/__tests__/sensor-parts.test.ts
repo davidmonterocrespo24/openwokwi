@@ -782,6 +782,51 @@ describe('WS2812 edge decode — scales to the board clock', () => {
     expect(el.b).toBe(1);
   });
 
+  /**
+   * An engine whose PIO does not model instruction delays (rp2040js) emits the
+   * right SHAPE at the wrong scale: measured, a '1' comes out 2 steps high / 1
+   * low and a '0' 1 high / 2 low, a bit period of 3 where the wire says 10.
+   * Every one of those widths is far under any threshold derived from real
+   * WS2812 timing, so an absolute rule reads 0x000000 off a perfectly good
+   * frame — which is what the Pico did.
+   */
+  it('decodes a waveform compressed 3x by an engine that skips PIO delays', () => {
+    const logic = PartSimulationRegistry.get('neopixel')!;
+    let t = 0;
+    let handler: ((pin: number, high: boolean) => void) | null = null;
+    const sim = {
+      pinManager: {
+        onPinChange: vi.fn((_p: number, cb: (p: number, h: boolean) => void) => {
+          handler = cb;
+          return () => {};
+        }),
+        onPwmChange: vi.fn().mockReturnValue(() => {}),
+        triggerPinChange: vi.fn(),
+      },
+      getADC: vi.fn().mockReturnValue(null),
+      setPinState: vi.fn(),
+      getClockHz: () => 125_000_000,
+      getCurrentCycles: () => t,
+    };
+    const el = makeElement() as any;
+    logic.attachEvents!(el, sim as any, pinMap({ DIN: 6 }));
+
+    t += 4000; // latch
+    for (const byte of [0x00, 0xff, 0x00]) {
+      for (let i = 7; i >= 0; i--) {
+        const one = (byte >> i) & 1;
+        handler!(6, true);
+        t += one ? 2 : 1;
+        handler!(6, false);
+        t += one ? 1 : 2;
+      }
+    }
+
+    expect(el.r).toBe(1); // 0xFF in the R slot (GRB order)
+    expect(el.g).toBe(0);
+    expect(el.b).toBe(0);
+  });
+
   it('does not attach the edge decoder when the board has no cycle counter', () => {
     // The ESP32 shim answers -1. Decoding edges against a frozen clock makes
     // every high measure 0 cycles and paints solid black over the frames the
