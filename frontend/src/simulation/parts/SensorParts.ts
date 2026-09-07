@@ -792,10 +792,12 @@ function onRunEpoch(next: (epoch: number) => void): () => void {
 function reportNoPixelData(pinDIN: number): void {
   const message =
     `NeoPixel on DIN ${pinDIN}: no pixel data reached this part in the first ` +
-    `${NO_PIXEL_GRACE_MS / 1000} s of the run. The sketch may be fine — this ` +
-    `board's core can drive WS2812 through a hardware peripheral (RMT on ` +
-    `ESP32, PIO on RP2040) that this engine does not decode. Changing the ` +
-    `colour order, the supply pad or the data pin will not help.`;
+    `${NO_PIXEL_GRACE_MS / 1000} s of the run. The usual cause is that this ` +
+    `board's core drives WS2812 through a hardware peripheral (RMT on ESP32, ` +
+    `PIO on RP2040) that this engine does not decode, and then changing the ` +
+    `colour order, the supply pad or the data pin will not help. A board that ` +
+    `is merely slow to boot looks the same at this point; if that is what ` +
+    `happened, the line below corrects this one.`;
   try {
     window.dispatchEvent(
       new CustomEvent('velxio-circuit-fault', {
@@ -806,6 +808,32 @@ function reportNoPixelData(pinDIN: number): void {
     // No DOM (unit tests) — the console line below is the whole report.
   }
   console.warn(`[ws2812] ${message}`);
+}
+
+/**
+ * Correct a premature no-pixel-data report.
+ *
+ * The grace period cannot tell "this engine will never decode a pixel" from
+ * "this guest has not booted yet": an ESP32-P4 takes over a minute to reach
+ * its first show(), and the warning is already out by then. Rather than pick a
+ * grace long enough for the slowest board — which would make the warning
+ * useless on the fast ones it exists for — say so when the data does arrive.
+ */
+function reportPixelDataArrivedLate(pinDIN: number, msIntoRun: number): void {
+  const message =
+    `NeoPixel on DIN ${pinDIN}: pixel data did arrive, ${(msIntoRun / 1000).toFixed(1)} s ` +
+    `into the run. This board is slow to boot, not undecodable — disregard the ` +
+    `warning above.`;
+  try {
+    window.dispatchEvent(
+      new CustomEvent('velxio-circuit-fault', {
+        detail: { kind: 'pixel-data-late', message },
+      }),
+    );
+  } catch (_) {
+    // No DOM (unit tests) — the console line below is the whole report.
+  }
+  console.info(`[ws2812] ${message}`);
 }
 
 /**
@@ -858,7 +886,14 @@ function attachWs2812Part(
     };
   }
   let gotPixel = false;
+  // Set when the no-pixel warning has gone out for this run, so the first
+  // frame that turns up afterwards can correct it (see below).
+  let warnedAt: number | null = null;
   const paint = (index: number, r: number, g: number, b: number) => {
+    if (!gotPixel && warnedAt !== null) {
+      reportPixelDataArrivedLate(pinDIN, Date.now() - warnedAt + NO_PIXEL_GRACE_MS);
+      warnedAt = null;
+    }
     gotPixel = true;
     onPixel(index, r, g, b);
   };
@@ -900,11 +935,13 @@ function attachWs2812Part(
     if (epoch === lastEpoch) return;
     lastEpoch = epoch;
     gotPixel = false;
+    warnedAt = null;
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
       if (gotPixel || warned) return;
       warned = true;
+      warnedAt = Date.now();
       reportNoPixelData(pinDIN);
     }, NO_PIXEL_GRACE_MS);
   });
