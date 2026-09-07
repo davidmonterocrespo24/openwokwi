@@ -801,7 +801,9 @@ function reportNoPixelData(pinDIN: number): void {
   try {
     window.dispatchEvent(
       new CustomEvent('velxio-circuit-fault', {
-        detail: { kind: 'no-pixel-data', message },
+        // A heuristic, not a fault: the six-second grace can be wrong about a
+        // slow board, and the line below may retract this one.
+        detail: { kind: 'no-pixel-data', message, severity: 'warning' },
       }),
     );
   } catch (_) {
@@ -827,7 +829,7 @@ function reportPixelDataArrivedLate(pinDIN: number, msIntoRun: number): void {
   try {
     window.dispatchEvent(
       new CustomEvent('velxio-circuit-fault', {
-        detail: { kind: 'pixel-data-late', message },
+        detail: { kind: 'pixel-data-late', message, severity: 'info' },
       }),
     );
   } catch (_) {

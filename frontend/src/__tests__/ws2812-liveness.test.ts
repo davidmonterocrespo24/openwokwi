@@ -65,9 +65,13 @@ const pinMap =
     name in map ? map[name] : null;
 
 describe('WS2812 liveness report', () => {
-  let faults: Array<{ kind?: string; message?: string }>;
+  let faults: Array<{ kind?: string; message?: string; severity?: string }>;
   const onFault = (e: Event) =>
-    faults.push((e as CustomEvent).detail as { kind?: string; message?: string });
+    faults.push((e as CustomEvent).detail as {
+      kind?: string;
+      message?: string;
+      severity?: string;
+    });
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -126,6 +130,10 @@ describe('WS2812 liveness report', () => {
 
     const late = faults.find((f) => f.kind === 'pixel-data-late');
     expect(late).toBeDefined();
+    // Not a fault: the agent panel counts 'error' lines and would announce a
+    // failed compile over a build that worked.
+    expect(late!.severity).toBe('info');
+    expect(faults.find((f) => f.kind === 'no-pixel-data')!.severity).toBe('warning');
     expect(late!.message).toContain('DIN 6');
     expect(late!.message).toMatch(/disregard the warning above/);
   });
