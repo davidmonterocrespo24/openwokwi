@@ -318,15 +318,20 @@ class _CallbacksT(ctypes.Structure):
 
 # ─── RMT / WS2812 NeoPixel decoder ───────────────────────────────────────────
 
-_WS2812_HIGH_THRESHOLD = 48  # RMT ticks; high pulse > threshold → bit 1
-
-
 def _decode_rmt_item(value: int) -> tuple[int, int, int, int]:
-    """Unpack a 32-bit RMT item → (level0, duration0, level1, duration1)."""
-    level0    = (value >> 31) & 1
-    duration0 = (value >> 16) & 0x7FFF
-    level1    = (value >> 15) & 1
-    duration1 =  value        & 0x7FFF
+    """Unpack a 32-bit RMT item → (level0, duration0, level1, duration1).
+
+    The layout is duration0[14:0], level0[15], duration1[30:16], level1[31] —
+    duration0 lives in the LOW half (IDF's rmt_symbol_word_t, and the legacy
+    rmt_item32_t before it). The two halves used to be read mirrored, so on a
+    WS2812 symbol — whose second half is always the low period, level1 = 0 —
+    `level0` came out 0 for every item and the bit classifier below, which is
+    gated on level0 == 1, never appended a single bit.
+    """
+    duration0 =  value        & 0x7FFF
+    level0    = (value >> 15) & 1
+    duration1 = (value >> 16) & 0x7FFF
+    level1    = (value >> 31) & 1
     return level0, duration0, level1, duration1
 
 
@@ -350,7 +355,7 @@ class _RmtDecoder:
         Process one RMT item.
         Returns a list of {r, g, b} pixel dicts on end-of-frame, else None.
         """
-        level0, dur0, _, dur1 = _decode_rmt_item(value)
+        level0, dur0, _level1, dur1 = _decode_rmt_item(value)
 
         # Reset pulse (both durations zero) signals end of frame
         if dur0 == 0 and dur1 == 0:
@@ -359,9 +364,15 @@ class _RmtDecoder:
             self._bits.clear()
             return pix or None
 
-        # Classify the high pulse → bit 1 or bit 0
+        # Classify the bit by comparing the two halves of its own symbol, not
+        # against an absolute tick count. A WS2812 '1' is high-longer-than-low
+        # and a '0' is high-shorter-than-low whatever resolution the driver
+        # picked — the in-browser engine decodes it exactly this way. The old
+        # fixed threshold of 48 ticks was an order of magnitude off for the two
+        # drivers in this image, which both build symbols at 10 MHz with 8 ticks
+        # for a 1 and 4 for a 0, so every bit classified as 0: a black strip.
         if level0 == 1 and dur0 > 0:
-            self._bits.append(1 if dur0 > _WS2812_HIGH_THRESHOLD else 0)
+            self._bits.append(1 if dur0 > dur1 else 0)
 
         # Every 24 bits → one GRB pixel → convert to RGB
         while len(self._bits) >= 24:
@@ -682,6 +693,7 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
             ledc_signal_for_channel,
             SIG_LEDC_HS_CH0_OUT_IDX,
             SIG_LEDC_LS_CH_LAST,
+            rmt_signal_base,
         )
     except ImportError:
         import importlib.util as _ilu, pathlib as _pl
@@ -695,7 +707,34 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
         ledc_signal_for_channel = sys.modules['esp32_signals'].ledc_signal_for_channel
         SIG_LEDC_HS_CH0_OUT_IDX = sys.modules['esp32_signals'].SIG_LEDC_HS_CH0_OUT_IDX
         SIG_LEDC_LS_CH_LAST = sys.modules['esp32_signals'].SIG_LEDC_LS_CH_LAST
+        rmt_signal_base = sys.modules['esp32_signals'].rmt_signal_base
     _signal_router = SignalRouter()
+    _rmt_sig_base = rmt_signal_base(machine)
+
+    def _gpio_for_rmt_channel(channel: int) -> int | None:
+        """Which GPIO an RMT TX channel is routed to, or None.
+
+        The decoded pixels are useless to the frontend without this: a NeoPixel
+        PART on the canvas is keyed by its DIN pin, and the channel number
+        cannot reach one, so every ws2812_update was delivered to nobody.
+
+        Read straight from the GPIO matrix rather than the SignalRouter, whose
+        snapshot deliberately keeps only the LEDC signal window.
+        """
+        if _rmt_sig_base is None:
+            return None
+        want = _rmt_sig_base + channel
+        try:
+            out_sel_ptr = lib.qemu_picsimlab_get_internals(2)
+            if not out_sel_ptr:
+                return None
+            out_sel = (ctypes.c_uint32 * _GPIO_COUNT).from_address(out_sel_ptr)
+            for gpio_pin in range(_GPIO_COUNT):
+                if (int(out_sel[gpio_pin]) & 0xFF) == want:
+                    return gpio_pin
+        except Exception:  # noqa: BLE001
+            return None
+        return None
 
     def _refresh_signal_routing() -> None:
         """Scan `gpio_out_sel[40]` and reconcile the SignalRouter.
@@ -1305,7 +1344,8 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
             _rmt_decoders[channel] = _RmtDecoder(channel)
         pixels = _rmt_decoders[channel].feed(value)
         if pixels:
-            _emit({'type': 'ws2812_update', 'channel': channel, 'pixels': pixels})
+            _emit({'type': 'ws2812_update', 'channel': channel,
+                   'pin': _gpio_for_rmt_channel(channel), 'pixels': pixels})
 
     def _on_gpio_matrix(gpio: int, signal_id: int) -> None:
         """Synchronous GPIO Matrix routing event from libqemu 1.1.0+.
