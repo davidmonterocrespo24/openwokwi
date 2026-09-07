@@ -109,19 +109,6 @@ export async function verifyCircuit(
   // blocking "cannot emulate" fault below.
   const nonFiniteBranches = new Set<string>();
 
-  // Run a forced .op solve so currents are scalar and deterministic.
-  const opInput: BuildNetlistInput = { ...input, analysis: { kind: 'op' } };
-  const { netlist, pinNetMap, nets } = buildNetlist(opInput);
-
-  // ── Ideal sources fighting over one net (graph-based, no solve) ────────
-  // Two ideal voltage sources on the same pair of nodes make the .op matrix
-  // singular. ngspice then rejects the whole deck and the live solver publishes
-  // no voltages at all: every meter reads 0 V, every LED goes dark, and until
-  // 2026-09-05 nothing said why (a 7805's VOUT wired into a XIAO's 5V pin was
-  // reported as "my 9 V battery reads 0 V"). Detected from the netlist itself
-  // so both sides get named; blocking, because nothing on the canvas solves.
-  errors.push(...findSourceConflicts(netlist, input));
-
   // ── Line-owning sensors the wired board cannot host (no solve) ────────
   // A DHT22 or an HC-SR04 asks the board it is wired to for the line
   // contract when it mounts (simulation/line/requestLine). A board that
@@ -140,6 +127,26 @@ export async function verifyCircuit(
       message: `${gap.sensorType} on GPIO ${gap.pin} will not answer here: ${gap.why}`,
     });
   }
+
+  // Reported BEFORE the netlist is built, on purpose. This loop reads nothing
+  // but input.components, and buildNetlist throws on a canvas the emitter
+  // cannot express — verifyCircuitFromStore then returns null and the toolbar
+  // treats null as "proceed, say nothing". Ordered after it, an unrelated
+  // netlist failure elsewhere on the canvas swallowed the one warning telling
+  // the user their sensor will never answer.
+  // Run a forced .op solve so currents are scalar and deterministic.
+  const opInput: BuildNetlistInput = { ...input, analysis: { kind: 'op' } };
+  const { netlist, pinNetMap, nets } = buildNetlist(opInput);
+
+  // ── Ideal sources fighting over one net (graph-based, no solve) ────────
+  // Two ideal voltage sources on the same pair of nodes make the .op matrix
+  // singular. ngspice then rejects the whole deck and the live solver publishes
+  // no voltages at all: every meter reads 0 V, every LED goes dark, and until
+  // 2026-09-05 nothing said why (a 7805's VOUT wired into a XIAO's 5V pin was
+  // reported as "my 9 V battery reads 0 V"). Detected from the netlist itself
+  // so both sides get named; blocking, because nothing on the canvas solves.
+  errors.push(...findSourceConflicts(netlist, input));
+
 
   // ── Board over-voltage (graph-based, no solve) ─────────────────────────
   // Runs BEFORE the solve so it still reports even when an external source on

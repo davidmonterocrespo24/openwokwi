@@ -26,7 +26,8 @@
  *     { type: 'ledc_duty',     data: { channel: number, duty_pct: number } }
  *     { type: 'gpio_routing',  data: { gpio: number, signal_id: number } }
  *     { type: 'gpio_routing_clear', data: { gpio: number } }
- *     { type: 'ws2812_update', data: { channel: number, pixels: [number, number, number][] } }
+ *     { type: 'ws2812_update', data: { channel: number, pin?: number,
+ *                                        pixels: Array<{r,g,b}> | [r,g,b][] } }
  *     { type: 'i2c_event',        data: { addr: number, data: number } }
  *     { type: 'i2c_transaction',  data: { addr: number, data: number[] } }
  *     { type: 'spi_event',        data: { data: number } }
@@ -511,8 +512,16 @@ export class Esp32Bridge {
         }
         case 'ws2812_update': {
           const channel = msg.data.channel as number;
-          const raw = msg.data.pixels as [number, number, number][];
-          const pixels: Ws2812Pixel[] = raw.map(([r, g, b]) => ({ r, g, b }));
+          // The QEMU worker sends objects ({r,g,b}, esp32_worker._RmtDecoder);
+          // the header above documents triplets, and destructuring an object as
+          // an array yields three undefineds — a whole strip of NaN. Accept
+          // both rather than pick a side and break the other producer.
+          const raw = msg.data.pixels as Array<
+            [number, number, number] | { r: number; g: number; b: number }
+          >;
+          const pixels: Ws2812Pixel[] = raw.map((px) =>
+            Array.isArray(px) ? { r: px[0], g: px[1], b: px[2] } : px,
+          );
           const pin = msg.data.pin as number | undefined;
           this.onWs2812Update?.(channel, pixels, pin ?? null);
           break;

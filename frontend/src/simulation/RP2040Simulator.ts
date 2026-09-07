@@ -1221,6 +1221,22 @@ export class RP2040Simulator implements LineCapable {
   }
 
   /**
+   * Simulated time in NANOSECONDS, or -1 before the chip exists.
+   *
+   * A CPU cycle count is the wrong ruler for anything a PERIPHERAL emits. The
+   * PIO runs off its own divider and steps between instructions, so several
+   * PIO edges can land inside one CPU cycle and read back as simultaneous —
+   * which is what made a WS2812 driven from PIO (every RP2040 NeoPixel, see
+   * Adafruit_Neopixel_RP2.cpp) decode as zero-width pulses. rp2040js advances
+   * this clock per instruction in execOne, before stepPIO, so it separates
+   * edges the cycle counter cannot.
+   */
+  getCurrentNanos(): number {
+    const clock = (this.rp2040 as unknown as { clock?: { nanos?: number } } | null)?.clock;
+    return typeof clock?.nanos === 'number' ? clock.nanos : -1;
+  }
+
+  /**
    * Schedule a GPIO pin state change at a specific future cycle count.
    * Enables cycle-accurate protocol simulation (e.g. HC-SR04 echo timing).
    */

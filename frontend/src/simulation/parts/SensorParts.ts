@@ -18,9 +18,10 @@
  */
 
 import { PartSimulationRegistry } from './PartSimulationRegistry';
-import { requestLine } from '../line/requestLine';
+import { requestLine, releaseLineGap } from '../line/requestLine';
 import { setAdcVoltage, emitPropertyChange, analogRailVolts, guestMillis } from './partUtils';
 import { registerSensorUpdate, unregisterSensorUpdate } from '../SensorUpdateRegistry';
+import { useSimulatorStore } from '../../store/useSimulatorStore';
 
 // ─── Tilt Switch ─────────────────────────────────────────────────────────────
 
@@ -627,12 +628,24 @@ export function createNeopixelDecoder(
   // every edge timestamped at cycle 0, so every high measured 0 cycles, every
   // bit decoded as 0, and the part painted #000000 on every frame. Reading
   // black off a real signal looks exactly like a part that does nothing.
-  const readCycles = (): number => {
+  // Prefer NANOSECONDS. A cycle count is the wrong ruler for a signal a
+  // PERIPHERAL emits: the RP2040/RP2350 PIO steps between CPU instructions off
+  // its own divider, so several pixel edges land inside one cycle and read back
+  // as simultaneous. Cycles remain the fallback for cores that bit-bang from
+  // CPU code (the AVR), where they are exact.
+  let unitHz = Number(simulator.getClockHz?.()) || 16_000_000;
+  const readNanos = (): number => {
+    const ns = simulator.getCurrentNanos?.();
+    if (typeof ns === 'number' && ns >= 0) {
+      unitHz = 1e9;
+      return ns;
+    }
     const c = simulator.getCurrentCycles?.();
     if (typeof c === 'number' && c >= 0) return c;
     const legacy = simulator.cpu?.cycles;
     return typeof legacy === 'number' ? legacy : -1;
   };
+  const readCycles = readNanos;
   // A board with no cycle counter cannot be decoded from edges at all (the
   // ESP32 shim answers -1: its guest runs in an engine or in QEMU). Refuse
   // rather than decode garbage — those boards deliver whole frames instead,
@@ -640,15 +653,23 @@ export function createNeopixelDecoder(
   // broken clock would paint black straight over them.
   if (readCycles() < 0) return () => {};
 
-  // Physical WS2812B timings in cycles of THIS board's clock: a '1' holds the
-  // line high ~0.7 us and a '0' ~0.35 us, so 0.5 us splits them; a frame is
-  // latched by >50 us low. On a 16 MHz AVR these come out as the 8 and 800 that
-  // used to be hard-coded here — which is why the AVR was the one family where
-  // this worked, and why every faster core silently decoded all-ones or,
-  // without a working clock, all-zeros.
-  const clockHz = Number(simulator.getClockHz?.()) || 16_000_000;
-  const BIT1_THRESHOLD = Math.max(1, Math.round(clockHz * 0.5e-6));
-  const RESET_CYCLES = Math.max(8 * BIT1_THRESHOLD, Math.round(clockHz * 50e-6));
+  // Classify each bit AGAINST ITS OWN BIT PERIOD, not against an absolute
+  // width. A WS2812 '1' holds the line high for ~56% of the bit period and a
+  // '0' for ~28%, and that RATIO is the one thing every engine reproduces: it
+  // is 70/125 vs 35/125 on real silicon, 2/3 vs 1/3 under rp2040js (which does
+  // not model PIO instruction delays, so its waveform is ~3x fast), and 7/10 vs
+  // 2/10 under rp2350js. An absolute threshold is right for exactly one of
+  // those three and silently reads 0x00 or 0xFF for the others.
+  //
+  // Seeded from the nominal 1.25 us bit period so the very first edge pair of a
+  // run has something to compare against; every completed bit replaces it with
+  // what this board actually produces.
+  const perSecond = () => unitHz;
+  let periodRef = Math.max(2, Math.round(perSecond() * 1.25e-6));
+  // The only threshold that stays absolute, because it separates FRAMES rather
+  // than bits: a WS2812 latches after >50 us low, which no bit period comes
+  // near on any engine.
+  const latchGap = () => Math.max(8 * periodRef, Math.round(perSecond() * 50e-6));
 
   let lastRisingCycle = 0;
   let lastFallingCycle = 0;
@@ -659,40 +680,70 @@ export function createNeopixelDecoder(
   let byteBuf: number[] = [];
   let pixelIndex = 0;
 
+  let lastHighDur = 0;
+  // The first bit after a latch is held until its low arrives, because only
+  // then is this board's bit period known. Classifying it against the seeded
+  // period got the top bit of every frame's first byte wrong on the RP2040
+  // (0xFF read back 0x80 — a green pixel at half brightness). Only ever the
+  // FIRST bit of a frame, so the last bit is never left pending and no pixel
+  // is dropped at the end of a run.
+  let pendingHigh = -1;
+
+  /** Fold one decoded bit into the frame, emitting a pixel every 24. */
+  const pushBit = (bit: number) => {
+    bitBuf = (bitBuf << 1) | bit;
+    bitsCollected++;
+    if (bitsCollected < 8) return;
+    byteBuf.push(bitBuf & 0xff);
+    bitBuf = 0;
+    bitsCollected = 0;
+    if (byteBuf.length === 3) {
+      const [g, r, b] = byteBuf;
+      onPixel(pixelIndex++, r, g, b);
+      byteBuf = [];
+    }
+  };
+
   const unsub = pinManager.onPinChange(pinDIN, (_: number, high: boolean) => {
     const now = readCycles();
 
     if (high) {
       const lowDur = now - lastFallingCycle;
-      if (lowDur > RESET_CYCLES) {
+      const isLatch = lowDur > latchGap();
+      // Learn this board's real bit period from the bit that just finished —
+      // its high plus the low that followed. A latch gap is not a bit, so it
+      // never pollutes the reference.
+      if (!isLatch && lowDur > 0) {
+        if (pendingHigh >= 0) periodRef = pendingHigh + lowDur;
+        else if (lastHighDur > 0) periodRef = lastHighDur + lowDur;
+      }
+      if (pendingHigh >= 0) {
+        pushBit(pendingHigh * 2 > periodRef ? 1 : 0);
+        pendingHigh = -1;
+      }
+      if (isLatch) {
         pixelIndex = 0;
         byteBuf = [];
         bitBuf = 0;
         bitsCollected = 0;
+        // Next bit is the frame's first: hold it for its own period.
+        lastHighDur = 0;
       }
       lastRisingCycle = now;
       lastHigh = true;
     } else {
       if (lastHigh) {
         const highDur = now - lastRisingCycle;
-        const bit = highDur > BIT1_THRESHOLD ? 1 : 0;
-
-        bitBuf = (bitBuf << 1) | bit;
-        bitsCollected++;
-
-        if (bitsCollected === 8) {
-          byteBuf.push(bitBuf & 0xff);
-          bitBuf = 0;
-          bitsCollected = 0;
-
-          if (byteBuf.length === 3) {
-            const g = byteBuf[0];
-            const r = byteBuf[1];
-            const b = byteBuf[2];
-            onPixel(pixelIndex++, r, g, b);
-            byteBuf = [];
-          }
+        // No measurable time between the edges means this board reports every
+        // edge in a frame at the same instant. There is no signal to recover;
+        // emitting anyway paints a confident wrong colour (solid black on the
+        // RP boards for two releases). Stay silent and let the liveness
+        // warning in attachWs2812Part tell the user something real.
+        if (periodRef > 0 && (highDur > 0 || lastHighDur > 0)) {
+          if (lastHighDur === 0) pendingHigh = highDur; // frame's first bit
+          else pushBit(highDur * 2 > periodRef ? 1 : 0);
         }
+        lastHighDur = highDur;
       }
       lastFallingCycle = now;
       lastHigh = false;
@@ -700,6 +751,61 @@ export function createNeopixelDecoder(
   });
 
   return unsub;
+}
+
+/** How long a run may go without a single pixel frame before we say so. Long
+ *  enough for a cold guest to boot and reach the first show(). */
+const NO_PIXEL_GRACE_MS = 6000;
+
+/**
+ * Call `next` whenever the simulation re-arms (Run / Reset bump hexEpoch).
+ *
+ * Same subscription the burnout monitor uses. Imported lazily through the store
+ * module the parts already depend on; in a unit test with no live store this
+ * degrades to "never fires", which is what the tests want.
+ */
+function onRunEpoch(next: (epoch: number) => void): () => void {
+  try {
+    const store = useSimulatorStore as unknown as {
+      subscribe?: (fn: (s: { hexEpoch?: number; running?: boolean }) => void) => () => void;
+      getState?: () => { hexEpoch?: number; running?: boolean };
+    };
+    if (typeof store?.subscribe !== 'function') return () => {};
+    const seed = store.getState?.();
+    if (seed?.running) next(seed.hexEpoch ?? 0);
+    return store.subscribe((st) => {
+      if (st.running) next(st.hexEpoch ?? 0);
+    });
+  } catch (_) {
+    return () => {};
+  }
+}
+
+/**
+ * Report, once, that a WS2812 part received nothing for a whole run.
+ *
+ * Goes to `velxio-circuit-fault`, the channel the dead-solve reporter and the
+ * burnout monitor already use, so it lands in the Circuit check group of the
+ * output console the user is already reading — rather than inventing a fourth
+ * place to look.
+ */
+function reportNoPixelData(pinDIN: number): void {
+  const message =
+    `NeoPixel on DIN ${pinDIN}: no pixel data reached this part in the first ` +
+    `${NO_PIXEL_GRACE_MS / 1000} s of the run. The sketch may be fine — this ` +
+    `board's core can drive WS2812 through a hardware peripheral (RMT on ` +
+    `ESP32, PIO on RP2040) that this engine does not decode. Changing the ` +
+    `colour order, the supply pad or the data pin will not help.`;
+  try {
+    window.dispatchEvent(
+      new CustomEvent('velxio-circuit-fault', {
+        detail: { kind: 'no-pixel-data', message },
+      }),
+    );
+  } catch (_) {
+    // No DOM (unit tests) — the console line below is the whole report.
+  }
+  console.warn(`[ws2812] ${message}`);
 }
 
 /**
@@ -729,7 +835,13 @@ function attachWs2812Part(
   pinDIN: number,
   onPixel: (index: number, r: number, g: number, b: number) => void,
 ): () => void {
-  const unsubDecoder = createNeopixelDecoder(simulator as any, pinDIN, onPixel);
+  let gotPixel = false;
+  const paint = (index: number, r: number, g: number, b: number) => {
+    gotPixel = true;
+    onPixel(index, r, g, b);
+  };
+
+  const unsubDecoder = createNeopixelDecoder(simulator as any, pinDIN, paint);
 
   const hw = simulator as {
     subscribeWs2812?: (
@@ -739,10 +851,45 @@ function attachWs2812Part(
   };
   const unsubHardware =
     hw.subscribeWs2812?.(pinDIN, (pixels) => {
-      pixels.forEach((px, i) => onPixel(i, px.r, px.g, px.b));
+      pixels.forEach((px, i) => paint(i, px.r, px.g, px.b));
     }) ?? (() => {});
 
+  // Say something when NOTHING arrives.
+  //
+  // Both sources above fail silently by design: the decoder returns a no-op
+  // when the board has no clock, and the hardware feed is an optional chain.
+  // A part wired correctly to a board whose engine cannot produce its data
+  // therefore sat black and said nothing — that silence is what cost a real
+  // user two weeks, not the missing pixels.
+  //
+  // Deliberately a LIVENESS check and not a capability check. A capability
+  // probe answers "yes" for three of the boards that are actually dark: the
+  // ESP32 shim exposes subscribeWs2812 whatever engine is behind it, and the
+  // RP2040 answers getCurrentCycles() even though its PIO produces no
+  // decodable edges. Only observing that no frame arrived is honest.
+  //
+  // Armed off the store's run epoch, never off attach: parts attach at MOUNT
+  // and re-attach on any rewire, so a timer started here would fire long
+  // before the user pressed Run.
+  let warned = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastEpoch: number | null = null;
+  const armed = onRunEpoch((epoch) => {
+    if (epoch === lastEpoch) return;
+    lastEpoch = epoch;
+    gotPixel = false;
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (gotPixel || warned) return;
+      warned = true;
+      reportNoPixelData(pinDIN);
+    }, NO_PIXEL_GRACE_MS);
+  });
+
   return () => {
+    if (timer !== null) clearTimeout(timer);
+    armed();
     unsubDecoder();
     unsubHardware();
   };
@@ -899,6 +1046,9 @@ PartSimulationRegistry.register('hc-sr04', {
 
     return () => {
       if (answer.mode !== 'none') answer.release();
+      // A refusal left a gap recorded; drop it so a rewire cannot keep
+      // reporting a sensor the user has already moved.
+      else releaseLineGap(componentId);
       unregisterSensorUpdate(componentId);
     };
   },

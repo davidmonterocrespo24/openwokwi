@@ -38,6 +38,31 @@ SIG_LEDC_LS_CH0_OUT_IDX = 79  # add N for LS channel N (0..7)
 SIG_LEDC_LS_CH_LAST     = 86
 
 
+# RMT_SIG_OUT0_IDX per chip, read from the IDF headers shipped in this image
+# (components/soc/<chip>/include/soc/gpio_sig_map.h). Add the RMT TX channel
+# number to get the signal a GPIO must carry for that channel to reach the pad.
+#
+# Needed because the WS2812 frames the RMT decoder produces are useless to the
+# frontend without the GPIO they went out on: a NeoPixel PART on the canvas is
+# keyed by its DIN pin, and an RMT channel number cannot reach one.
+RMT_SIG_OUT0_IDX_BY_CHIP = {
+    'esp32': 87,
+    'esp32-s3': 81,
+    'esp32-c3': 51,
+}
+
+
+def rmt_signal_base(machine: str) -> int | None:
+    """The chip's RMT_SIG_OUT0_IDX, from a machine string like 'esp32-s3'."""
+    if not machine:
+        return None
+    if 'c3' in machine:
+        return RMT_SIG_OUT0_IDX_BY_CHIP['esp32-c3']
+    if 's3' in machine:
+        return RMT_SIG_OUT0_IDX_BY_CHIP['esp32-s3']
+    return RMT_SIG_OUT0_IDX_BY_CHIP['esp32']
+
+
 def ledc_signal_for_channel(channel: int) -> int:
     """Map a velxio-style unified LEDC channel index (0..15) to its
     GPIO Matrix signal source id.
@@ -77,6 +102,8 @@ __all__ = [
     "SIG_LEDC_LS_CH0_OUT_IDX",
     "SIG_LEDC_LS_CH_LAST",
     "SIG_GPIO_DIRECT_OUT_IDX",
+    "RMT_SIG_OUT0_IDX_BY_CHIP",
+    "rmt_signal_base",
     "ledc_signal_for_channel",
     "channel_for_ledc_signal",
 ]
