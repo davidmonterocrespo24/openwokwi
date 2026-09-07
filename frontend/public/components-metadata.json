@@ -2766,41 +2766,6 @@
       ]
     },
     {
-      "id": "heart-beat-sensor",
-      "tagName": "wokwi-heart-beat-sensor",
-      "name": "Heart Beat Sensor",
-      "category": "sensors",
-      "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" rx=\"4\" fill=\"#101820\"/><rect x=\"8\" y=\"12\" width=\"48\" height=\"40\" rx=\"3\" fill=\"#1c5aa8\" stroke=\"#2f7fd6\" stroke-width=\"0.8\"/><circle cx=\"21\" cy=\"26\" r=\"6\" fill=\"#0d2b52\" stroke=\"#6fa8dc\" stroke-width=\"0.8\"/><circle cx=\"21\" cy=\"26\" r=\"2.6\" fill=\"#e04b5a\"/><rect x=\"33\" y=\"20\" width=\"9\" height=\"12\" rx=\"1.5\" fill=\"#0b1c33\" stroke=\"#6fa8dc\" stroke-width=\"0.7\"/><path d=\"M11 43h7l3-7 4 13 4-9 3 3h21\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><g fill=\"#d4af37\"><rect x=\"46\" y=\"14\" width=\"4\" height=\"1.8\"/><rect x=\"46\" y=\"18\" width=\"4\" height=\"1.8\"/><rect x=\"46\" y=\"22\" width=\"4\" height=\"1.8\"/></g></svg>",
-      "properties": [
-        {
-          "name": "bpm",
-          "type": "number",
-          "defaultValue": 72,
-          "control": "number",
-          "min": 30,
-          "max": 220,
-          "description": "Simulated heart rate in beats per minute"
-        }
-      ],
-      "defaultValues": {
-        "bpm": 72
-      },
-      "pinCount": 0,
-      "tags": [
-        "heart-beat-sensor",
-        "heart rate",
-        "heart",
-        "beat",
-        "pulse",
-        "bpm",
-        "ppg",
-        "ky-039",
-        "pulse sensor",
-        "sensor"
-      ],
-      "description": "Optical heart-rate (pulse) sensor module. OUT carries a photoplethysmogram: read it with analogRead for the waveform, or with digitalRead for one pulse per beat. Set the rate with the bpm property or the sensor panel."
-    },
-    {
       "id": "hx711",
       "tagName": "wokwi-hx711",
       "name": "HX711",
@@ -4521,6 +4486,41 @@
         "hc-sr04",
         "hc",
         "sr04"
+      ]
+    },
+    {
+      "id": "heart-beat-sensor",
+      "tagName": "wokwi-heart-beat-sensor",
+      "name": "Heart Beat Sensor",
+      "category": "sensors",
+      "description": "Optical heart-rate (pulse) sensor module. OUT carries a photoplethysmogram: read it with analogRead for the waveform, or with digitalRead for one pulse per beat. Set the rate with the bpm property or the sensor panel.",
+      "thumbnail": "<svg width=\"64\" height=\"64\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"64\" height=\"64\" rx=\"4\" fill=\"#101820\"/><rect x=\"8\" y=\"12\" width=\"48\" height=\"40\" rx=\"3\" fill=\"#1c5aa8\" stroke=\"#2f7fd6\" stroke-width=\"0.8\"/><circle cx=\"21\" cy=\"26\" r=\"6\" fill=\"#0d2b52\" stroke=\"#6fa8dc\" stroke-width=\"0.8\"/><circle cx=\"21\" cy=\"26\" r=\"2.6\" fill=\"#e04b5a\"/><rect x=\"33\" y=\"20\" width=\"9\" height=\"12\" rx=\"1.5\" fill=\"#0b1c33\" stroke=\"#6fa8dc\" stroke-width=\"0.7\"/><path d=\"M11 43h7l3-7 4 13 4-9 3 3h21\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><g fill=\"#d4af37\"><rect x=\"46\" y=\"14\" width=\"4\" height=\"1.8\"/><rect x=\"46\" y=\"18\" width=\"4\" height=\"1.8\"/><rect x=\"46\" y=\"22\" width=\"4\" height=\"1.8\"/></g></svg>",
+      "properties": [
+        {
+          "name": "bpm",
+          "type": "number",
+          "defaultValue": 72,
+          "control": "number",
+          "min": 30,
+          "max": 220,
+          "description": "Simulated heart rate in beats per minute"
+        }
+      ],
+      "defaultValues": {
+        "bpm": 72
+      },
+      "pinCount": 0,
+      "tags": [
+        "heart-beat-sensor",
+        "heart rate",
+        "heart",
+        "beat",
+        "pulse",
+        "bpm",
+        "ppg",
+        "ky-039",
+        "pulse sensor",
+        "sensor"
       ]
     },
     {
