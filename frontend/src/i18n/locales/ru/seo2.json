@@ -120,12 +120,12 @@
     },
     "rpi": {
       "hero": {
-        "title": "Бесплатный симулятор Raspberry Pi 3",
+        "title": "Симулятор Raspberry Pi 3",
         "accent": "Полноценный Linux · Python · GPIO — в вашем браузере",
         "subtitle": "Запустите полноценный Raspberry Pi 3B с Raspberry Pi OS прямо в браузере — эмуляция четырёхъядерного ARM Cortex-A53 через QEMU. Пишите на Python, управляйте GPIO, устанавливайте пакеты. Оборудование не требуется.",
         "ctaPrimary": "Открыть симулятор Pi 3",
         "ctaSecondary": "Читать документацию",
-        "trust": "Бесплатно и с открытым исходным кодом · QEMU ARM64 · Полноценная Raspberry Pi OS",
+        "trust": "QEMU ARM64 · Полная Raspberry Pi OS · Тарифы Maker и Pro",
         "imageAlt": "Иллюстрация платы Raspberry Pi 3"
       },
       "what": {

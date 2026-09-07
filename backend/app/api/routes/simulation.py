@@ -3,6 +3,7 @@ import logging
 import socket
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.esp_qemu_manager import esp_qemu_manager
+from app.services.board_access import PRO_BOARD_MESSAGE
 from app.services.esp32_lib_manager import esp_lib_manager
 from app.core.hooks import dispatch_ws_sim_message, dispatch_ws_sim_disconnect
 
@@ -89,9 +90,16 @@ async def simulation_websocket(websocket: WebSocket, client_id: str):
                 'stm32_serial_input', 'stm32_sensor_attach', 'stm32_sensor_update',
                 'stm32_sensor_detach',
             ):
-                await dispatch_ws_sim_message(
+                handled = await dispatch_ws_sim_message(
                     websocket, client_id, msg_type, msg_data, qemu_callback,
                 )
+                if not handled and msg_type in ('start_pi', 'start_stm32'):
+                    # No extension installed: say so instead of going quiet.
+                    # Silence here reads as a hung Run button — the user gets
+                    # no error, no serial output and no stop. Only the two
+                    # start messages answer; the rest of the lane's traffic
+                    # would just repeat the same line.
+                    await qemu_callback('error', {'message': PRO_BOARD_MESSAGE})
 
             # ── ESP32 lifecycle ──────────────────────────────────────────
             elif msg_type == 'start_esp32':

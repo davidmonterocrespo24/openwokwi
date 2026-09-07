@@ -225,9 +225,12 @@ export const SEO_ROUTES: SeoRoute[] = [
     priority: 0.85,
     changefreq: 'monthly',
     seoMeta: {
-      title: 'Free Raspberry Pi 3 Simulator — Full Linux Emulation in Your Browser | Velxio',
+      // Not "free": Raspberry Pi Linux emulation is a paid feature of
+      // velxio.dev and Velxio Desktop (2026-09-06). The page still targets
+      // the same query, it just stops promising a price it does not have.
+      title: 'Raspberry Pi 3 Simulator — Full Linux Emulation in Your Browser | Velxio',
       description:
-        'Simulate Raspberry Pi 3 for free. Full ARM Cortex-A53 Linux emulation via QEMU — run Python, bash, RPi.GPIO in your browser. No Raspberry Pi hardware needed.',
+        'Simulate a Raspberry Pi 3 online. Full ARM Cortex-A53 Linux emulation via QEMU — run Python, bash and RPi.GPIO in your browser. No Raspberry Pi hardware needed.',
       url: `${DOMAIN}/raspberry-pi-simulator`,
     },
   },
