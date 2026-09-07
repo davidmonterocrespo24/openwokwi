@@ -13,19 +13,14 @@
  * wiring: 220Ω resistor + LED); boards without one get a fresh board whose
  * default sketch blinks the on-board LED. Pro-gated boards (STM32 + QEMU
  * Raspberry Pi) carry the same PRO pill as the component picker and go
- * through the same `boardGateDecision` seam before anything is created.
+ * through the same board-gate seam ('add' action) before anything is created.
  */
 import React, { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { BoardKind } from '../../types/board';
 import { BOARD_KIND_LABELS } from '../../types/board';
-import {
-  boardGateDecision,
-  isProBoardKind,
-  proBoardFeatureName,
-  triggerProUpgradePrompt,
-} from '../../lib/proBoardGate';
+import { blockedByBoardGate, isProBoardKind } from '../../lib/proBoardGate';
 import {
   listProBoards,
   subscribeProBoards,
@@ -314,7 +309,7 @@ export function buildStarterSections(defs: ProBoardDef[]): StarterSection[] {
 }
 
 const ProPill: React.FC = () => (
-  <span className="new-project-pro" title="Pro feature — paid plan or Velxio Desktop">
+  <span className="new-project-pro" title="Pro board — you can place and wire it; running it depends on your plan">
     PRO
   </span>
 );
@@ -345,11 +340,11 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ isOpen, onCl
   if (!isOpen) return null;
 
   const handleSelect = (kind: string | 'blank') => {
-    if (kind !== 'blank' && boardGateDecision(kind as BoardKind) === 'block') {
-      // Same gate as adding the board from the picker: close, prompt, create
-      // nothing. The overlay's upgrade modal takes over from here.
+    if (kind !== 'blank' && blockedByBoardGate(kind as BoardKind, 'add')) {
+      // Same gate as adding the board from the picker ('add' action): the
+      // prompt is already up; close and create nothing. Both land in the
+      // same render, so the order does not show.
       onClose();
-      triggerProUpgradePrompt(proBoardFeatureName(kind));
       return;
     }
     if (kind !== 'blank') trackSelectBoard(kind);

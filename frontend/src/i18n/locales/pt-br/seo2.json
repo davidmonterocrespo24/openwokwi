@@ -125,7 +125,7 @@
         "subtitle": "Execute um Raspberry Pi 3B completo com Raspberry Pi OS diretamente no seu navegador — emulação ARM Cortex-A53 quad-core via QEMU. Escreva Python, controle GPIO, instale pacotes. Sem necessidade de hardware.",
         "ctaPrimary": "Abrir Simulador Pi 3",
         "ctaSecondary": "Ler a Documentação",
-        "trust": "QEMU ARM64 · Raspberry Pi OS completo · Planos Maker e Pro",
+        "trust": "QEMU ARM64 · Raspberry Pi OS completo · Teste gratis, depois planos Maker e Pro",
         "imageAlt": "Ilustração da placa Raspberry Pi 3"
       },
       "what": {
@@ -157,7 +157,7 @@
         "q1": "Posso simular um Raspberry Pi 3 no meu navegador?",
         "a1": "Sim. Velxio emula um Raspberry Pi 3B completo usando QEMU raspi3b — ARM Cortex-A53 quad-core a 1,2 GHz executando Raspberry Pi OS (Linux). Você obtém um terminal real para executar Python, bash e comandos do sistema.",
         "q2": "O simulador de Raspberry Pi esta incluido no plano gratuito?",
-        "a2": "Nao. A emulacao Linux do Raspberry Pi executa um convidado ARM completo em nossos servidores, portanto faz parte dos planos Maker e Pro, ou do Velxio Desktop com licenca paga. O editor e os simuladores de Arduino, ESP32 e Raspberry Pi Pico sao gratuitos e nao exigem conta. O Velxio continua sendo de codigo aberto (GNU AGPLv3).",
+        "a2": "Em parte. Voce pode montar e salvar um circuito com Raspberry Pi com qualquer conta, e uma conta gratuita tem tres sessoes de teste de 15 minutos para executa-lo (cada execucao dentro de uma sessao e gratis). A emulacao ilimitada de Linux na Raspberry Pi roda um convidado ARM completo em nossos servidores, por isso faz parte dos planos Maker e Pro, ou do Velxio Desktop com licenca paga. O editor e os simuladores de Arduino, ESP32 e Raspberry Pi Pico sao gratuitos e nao pedem conta. O Velxio continua sendo codigo aberto (GNU AGPLv3).",
         "q3": "Posso executar scripts Python no simulador Raspberry Pi?",
         "a3": "Sim. O Raspberry Pi 3 emulado executa Raspberry Pi OS completo com Python 3 pré-instalado. Você pode executar scripts Python, usar RPi.GPIO para controle GPIO, instalar pacotes pip e mais.",
         "q4": "Qual é a diferença entre a simulação do Pi Pico e do Pi 3?",

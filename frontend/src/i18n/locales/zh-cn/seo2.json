@@ -125,7 +125,7 @@
         "subtitle": "直接在浏览器中运行完整的Raspberry Pi 3B和Raspberry Pi OS——通过QEMU进行ARM Cortex-A53四核仿真。编写Python，控制GPIO，安装软件包。无需硬件。",
         "ctaPrimary": "打开Pi 3仿真器",
         "ctaSecondary": "阅读文档",
-        "trust": "QEMU ARM64 · 完整 Raspberry Pi OS · Maker 和 Pro 套餐",
+        "trust": "QEMU ARM64 · 完整 Raspberry Pi OS · 免费试用，然后 Maker 和 Pro 方案",
         "imageAlt": "Raspberry Pi 3板示意图"
       },
       "what": {
@@ -157,7 +157,7 @@
         "q1": "我可以在浏览器中模拟Raspberry Pi 3吗？",
         "a1": "是的。Velxio使用QEMU raspi3b仿真完整的Raspberry Pi 3B——ARM Cortex-A53四核1.2 GHz，运行Raspberry Pi OS (Linux)。你得到一个真实的终端来运行Python、bash和系统命令。",
         "q2": "Raspberry Pi 模拟器包含在免费套餐中吗？",
-        "a2": "不包含。Raspberry Pi 的 Linux 模拟会在我们的服务器上运行完整的 ARM 客户机，因此它属于 Maker 和 Pro 套餐，或需付费许可的 Velxio Desktop。编辑器以及 Arduino、ESP32 和 Raspberry Pi Pico 模拟器均免费且无需账号。Velxio 本身仍是开源软件 (GNU AGPLv3)。",
+        "a2": "部分包含。任何账户都可以搭建并保存 Raspberry Pi 电路，免费账户还有三次 15 分钟的试用会话来运行它（会话期间的每次运行都免费）。不限次数的 Raspberry Pi Linux 模拟会在我们的服务器上运行完整的 ARM 客户机，因此属于 Maker 和 Pro 方案，或带付费许可证的 Velxio Desktop。编辑器以及 Arduino、ESP32 和 Raspberry Pi Pico 模拟器免费且无需账户。Velxio 本身仍然开源（GNU AGPLv3）。",
         "q3": "我可以在Raspberry Pi仿真器上运行Python脚本吗？",
         "a3": "是的。仿真的Raspberry Pi 3运行完整的Raspberry Pi OS，预装Python 3。你可以运行Python脚本，使用RPi.GPIO进行GPIO控制，安装pip包等。",
         "q4": "Pi Pico和Pi 3仿真有什么区别？",

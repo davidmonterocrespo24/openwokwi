@@ -16,16 +16,26 @@
 import type { BoardInstance } from '../types/board';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSimulatorStore } from '../store/useSimulatorStore';
+import { useEditorStore } from '../store/useEditorStore';
+import { isProBoardKind } from '../lib/proBoardGate';
 import { buildVlxPayload } from './vlxFile';
 
 const DRAFT_KEY = 'velxio_ws_draft';
 const RESTORE_FLAG = 'velxio_ws_restore';
 
-/** True when the canvas holds something worth preserving (a real build, not
- *  just the empty starter board). */
+/** True when the workspace holds something worth preserving (a real build,
+ *  not just the empty starter board).
+ *
+ *  Parts and wires were the only signals, and the most common reason to
+ *  sign in mid-build has neither: a Pro board placed alone with its code
+ *  written (the sign-in prompt on Run), or a second board on the canvas.
+ *  So a board beyond the starter, a Pro board, or an edited file all count. */
 export function workspaceHasWork(): boolean {
   const sim = useSimulatorStore.getState();
-  return sim.components.length > 0 || sim.wires.length > 0;
+  if (sim.components.length > 0 || sim.wires.length > 0) return true;
+  if (sim.boards.length > 1) return true;
+  if (sim.boards.some((b) => isProBoardKind(b.boardKind))) return true;
+  return useEditorStore.getState().files.some((f) => f.modified);
 }
 
 /**

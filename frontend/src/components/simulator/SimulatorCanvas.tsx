@@ -74,11 +74,7 @@ import { useIsCoarsePointer } from '../../utils/useTouchDevice';
 import type { ComponentMetadata } from '../../types/component-metadata';
 import type { BoardKind, BoardInstance } from '../../types/board';
 import { BOARD_KIND_FQBN, boardDisplayName } from '../../types/board';
-import {
-  boardGateDecision,
-  proBoardFeatureName,
-  triggerProUpgradePrompt,
-} from '../../lib/proBoardGate';
+import { blockedByBoardGate } from '../../lib/proBoardGate';
 import { FlashModal } from './FlashModal';
 import { isTauri as isTauriRuntimeFn } from '../../desktop/tauriBridge';
 import { webFlashAvailable, webFlashMpyAvailable } from '../../lib/proWebFlash';
@@ -3889,13 +3885,10 @@ export const SimulatorCanvas = ({ headerSlot }: SimulatorCanvasProps = {}) => {
         onClose={() => setShowComponentPicker(false)}
         onSelectComponent={handleSelectComponent}
         onSelectBoard={(kind: BoardKind) => {
-          // Pro gate: STM32 + Raspberry Pi emulation is paid-only on the web.
-          // The overlay's gate returns 'block' for non-paid web users; show the
-          // upgrade prompt and skip the add. OSS / desktop / paid -> 'allow'.
-          if (boardGateDecision(kind) === 'block') {
-            triggerProUpgradePrompt(proBoardFeatureName(kind));
-            return;
-          }
+          // Pro gate, 'add' action: the overlay decides whether a non-paid
+          // web user may PLACE this board (it lets the run gate do the
+          // selling, so this normally allows). OSS / desktop / paid -> allow.
+          if (blockedByBoardGate(kind, 'add')) return;
           trackSelectBoard(kind);
           // Same landing rule as components: the visible corner, first free
           // slot. Boards used to be placed 420 world-px right of the ACTIVE

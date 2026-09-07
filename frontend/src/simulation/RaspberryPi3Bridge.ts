@@ -56,7 +56,9 @@ export class RaspberryPi3Bridge {
   onPinChange: ((gpioPin: number, state: boolean) => void) | null = null;
   onConnected: (() => void) | null = null;
   onDisconnected: (() => void) | null = null;
-  onError: ((msg: string) => void) | null = null;
+  /** Backend refused or lost the session. `code` is the server's
+   *  machine-readable reason when it sent one (a gate, a full box). */
+  onError: ((msg: string, code?: string) => void) | null = null;
   onSystemEvent: ((event: string, data: Record<string, unknown>) => void) | null = null;
   /** Guest display command (opaque base64 payload from the DISP protocol
    * op). Overlay boards with built-in screens render it on their element. */
@@ -203,7 +205,7 @@ export class RaspberryPi3Bridge {
           );
           break;
         case 'error':
-          this.onError?.(msg.data.message as string);
+          this.onError?.(msg.data.message as string, msg.data.code as string | undefined);
           break;
       }
     };

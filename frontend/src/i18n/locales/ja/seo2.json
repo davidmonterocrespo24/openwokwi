@@ -125,7 +125,7 @@
         "subtitle": "ブラウザでRaspberry Pi 3BをRaspberry Pi OSとともに直接実行—QEMUによるARM Cortex-A53クアッドコアエミュレーション。Pythonの記述、GPIO制御、パッケージのインストール。ハードウェア不要。",
         "ctaPrimary": "Pi 3シミュレーターを開く",
         "ctaSecondary": "ドキュメントを読む",
-        "trust": "QEMU ARM64 · 完全な Raspberry Pi OS · Maker および Pro プラン",
+        "trust": "QEMU ARM64 · 完全なRaspberry Pi OS · 無料試用、その後MakerおよびProプラン",
         "imageAlt": "Raspberry Pi 3ボードのイラスト"
       },
       "what": {
@@ -157,7 +157,7 @@
         "q1": "ブラウザでRaspberry Pi 3をシミュレーションできますか？",
         "a1": "はい。VelxioはQEMU raspi3bを使用して完全なRaspberry Pi 3Bをエミュレート—1.2 GHzのARM Cortex-A53クアッドコアでRaspberry Pi OS（Linux）を実行。Python、bash、システムコマンドを実行できる実際のターミナルを提供します。",
         "q2": "Raspberry Pi シミュレーターは無料プランに含まれますか?",
-        "a2": "いいえ。Raspberry Pi の Linux エミュレーションは当社サーバー上で完全な ARM ゲストを実行するため、Maker および Pro プラン、または有料ライセンスの Velxio Desktop に含まれます。エディターと Arduino、ESP32、Raspberry Pi Pico のシミュレーターは無料でアカウントも不要です。Velxio 自体はオープンソース (GNU AGPLv3) のままです。",
+        "a2": "一部含まれます。Raspberry Piの回路はどのアカウントでも作成・保存でき、無料アカウントには実行用に15分の試用セッションが3回付きます（セッション中の実行は何度でも無料）。無制限のRaspberry Pi Linuxエミュレーションは当社サーバー上で完全なARMゲストを動かすため、MakerおよびProプラン、または有料ライセンスのVelxio Desktopに含まれます。エディタとArduino、ESP32、Raspberry Pi Picoのシミュレータは無料でアカウント不要です。Velxio自体はオープンソース（GNU AGPLv3）のままです。",
         "q3": "Raspberry PiシミュレーターでPythonスクリプトを実行できますか？",
         "a3": "はい。エミュレートされたRaspberry Pi 3は、Python 3がプリインストールされた完全なRaspberry Pi OSを実行します。Pythonスクリプトの実行、RPi.GPIOを使用したGPIO制御、pipパッケージのインストールなどが可能です。",
         "q4": "Pi PicoとPi 3のシミュレーションの違いは何ですか？",

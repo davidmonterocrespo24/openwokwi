@@ -619,7 +619,7 @@ const PI_BOARD_ART: Record<string, string> = {
 /** Gold PRO pill shown on cards for paid-gated boards (Pi Linux + STM32). */
 const ProBadge: React.FC = () => (
   <span
-    title="Pro feature — paid plan or Velxio Desktop"
+    title="Pro board — you can place and wire it; running it depends on your plan"
     style={{
       position: 'absolute',
       top: 8,

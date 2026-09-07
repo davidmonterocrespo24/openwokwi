@@ -5,6 +5,7 @@ import { publishCompileOutput } from '../../lib/intellisenseRegistry';
 import { useEditorStore, chipFileGroupId } from '../../store/useEditorStore';
 import { useSimulatorStore, piRerunScript } from '../../store/useSimulatorStore';
 import { decideEngine } from '../../lib/instantEngine';
+import { blockedByBoardGate } from '../../lib/proBoardGate';
 import { useElectricalStore } from '../../store/useElectricalStore';
 import { type VerificationResult } from '../../simulation/verify/circuitVerifier';
 import { verifyCircuitFromStore } from '../../simulation/verify/verifyFromStore';
@@ -758,6 +759,16 @@ export const EditorToolbar = ({
   const handleRun = async (skipVerify = false) => {
     console.log('[handleRun] click', { activeBoardId, running, codeChangedSinceLastCompile });
 
+    // Pro gate, first thing: a run the gate refuses must not compile first.
+    // STM32 builds on the server, and the refusal used to arrive only from
+    // startBoard's backstop AFTER the build — an anonymous or trial-exhausted
+    // user waited for arduino-cli just to be told no. Same verdict as the
+    // backstop (which stays, for the paths that do not come through here).
+    if (activeBoardId && !running) {
+      const gated = boards.find((b) => b.id === activeBoardId);
+      if (gated && blockedByBoardGate(gated.boardKind, 'run')) return;
+    }
+
     // Pre-flight: solve the circuit and check for shorts / overcurrent /
     // overpower. If anything trips we hand control to the modal, which
     // resumes by calling `handleRun(true)` for "Run anyway".
@@ -1258,6 +1269,12 @@ export const EditorToolbar = ({
     const boardsList = sim.boards;
     const chips = sim.components.filter((c) => c.metadataId === 'custom-chip');
     if (boardsList.length === 0 && chips.length === 0) return;
+
+    // Same gate-before-compile rule as handleRun, for every board that is
+    // about to start. One prompt is enough: the first refused board fires it.
+    for (const b of boardsList) {
+      if (!b.running && blockedByBoardGate(b.boardKind, 'run')) return;
+    }
 
     // Same pre-flight safety check as handleRun — block on shorts / overcurrent
     // before starting every board, with a "Run anyway" escape.

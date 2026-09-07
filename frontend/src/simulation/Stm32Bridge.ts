@@ -89,7 +89,9 @@ export class Stm32Bridge {
   onPinPull: ((gpioPin: number, pull: 0 | 1 | 2) => void) | null = null;
   onConnected: (() => void) | null = null;
   onDisconnected: (() => void) | null = null;
-  onError: ((msg: string) => void) | null = null;
+  /** Backend refused or lost the session. `code` is the server's
+   *  machine-readable reason when it sent one (a gate, a full box). */
+  onError: ((msg: string, code?: string) => void) | null = null;
   onSystemEvent: ((event: string, data: Record<string, unknown>) => void) | null = null;
   onCrash: ((data: Record<string, unknown>) => void) | null = null;
 
@@ -226,7 +228,7 @@ export class Stm32Bridge {
           break;
         }
         case 'error':
-          this.onError?.(msg.data.message as string);
+          this.onError?.(msg.data.message as string, msg.data.code as string | undefined);
           break;
       }
     };
