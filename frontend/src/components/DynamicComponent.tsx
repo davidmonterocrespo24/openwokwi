@@ -512,7 +512,7 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
       // bridge of the board this component is actually wired to: `gpio_in`
       // for the guest, the canvas-fed `pin<N>` value the browser engine's
       // shims read, and the PinManager so wires and SPICE see the edge.
-      const { piBoardId, wiredBoardId } = (() => {
+      const { piBoardId, piBoardKind, wiredBoardId } = (() => {
         const st = useSimulatorStore.getState();
         const ownPins = new Set<string>();
         for (const w of st.wires) {
@@ -714,13 +714,25 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
         metadata.id,
       );
 
-      cleanupSimulationEvents = logic.attachEvents(
-        el,
-        ownedSimulator,
-        getArduinoPin,
-        id,
-        getPinResolver,
-      );
+      // A part that throws while attaching must not take the editor with it.
+      // `piBoardKind` was referenced here but never destructured, so every
+      // DHT22 or HC-SR04 wired to a Pi-family board threw a ReferenceError out
+      // of attachEvents — and with no error boundary anywhere in this app, the
+      // whole React root unmounted. The user did not get a broken sensor, they
+      // got a blank white page, on a canvas they could no longer edit to undo
+      // it. One missing identifier should cost one dead part, not the app.
+      try {
+        cleanupSimulationEvents = logic.attachEvents(
+          el,
+          ownedSimulator,
+          getArduinoPin,
+          id,
+          getPinResolver,
+        );
+      } catch (e) {
+        console.error(`[part] ${metadata.id} (${id}) failed to attach:`, e);
+        cleanupSimulationEvents = undefined;
+      }
     }
 
     return () => {
