@@ -555,6 +555,17 @@ export const DynamicComponent: React.FC<DynamicComponentProps> = ({
                 mode: 'none' as const,
                 why: 'this board runs a Linux guest that reads its pins over a serial link; timed single-wire sensors are not modelled here',
               },
+            // Addressable pixels are the same story one step further out. A
+            // WS2812 bit cell is 1.25 us; this transport carries levels with
+            // no timestamps at roughly the rate a Python statement runs, so
+            // there is no waveform to decode and there cannot be one. Said out
+            // loud for the same reason as lineSupport: the part otherwise
+            // attaches, decodes nothing, feeds nothing and reports nothing,
+            // which is indistinguishable from a wiring mistake.
+            pixelSupport: () => ({
+              mode: 'none' as const,
+              why: 'this board drives its pins over a level protocol with no bit timing, so a WS2812 data stream cannot be produced or decoded here',
+            }),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any)
         : null;

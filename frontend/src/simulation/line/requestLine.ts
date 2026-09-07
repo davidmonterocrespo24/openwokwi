@@ -88,6 +88,19 @@ export function releaseLineGap(componentId: string): void {
   gaps.delete(`#${componentId}`);
 }
 
+/**
+ * Record a refusal for a part that does not go through requestLine.
+ *
+ * The line contract was built for sensors that OWN a wire and ask the board to
+ * host their timing. An addressable-LED part consumes data instead of asking
+ * for a lease, so it never called in — and its refusal was therefore invisible
+ * to the verifier that exists to print exactly this. Same map, same key, same
+ * Circuit-check line; only the caller is different.
+ */
+export function recordPartGap(gap: LineGap): void {
+  gaps.set(gap.componentId ? `#${gap.componentId}` : `${gap.sensorType}@${gap.pin}`, gap);
+}
+
 function refuse(rec: LineSensorRecord, why: string, opts?: LineRequestOptions): LineRefusal {
   gaps.set(gapKey(rec, opts), {
     sensorType: rec.sensor_type,
