@@ -33,6 +33,25 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      # Node 22 bundles npm 10.9.8, whose dependency resolver crashes on this
+      # tree with "Cannot read properties of null (reading 'edgesOut')" before
+      # installing anything. Both Node 22 shards have been red since
+      # 2026-09-03 because of it; Node 20 ships an older npm and is unaffected.
+      #
+      # It is an npm bug, not a bad dependency: the same package.json installs
+      # cleanly on npm 11 and 12, and dropping @wasm-fmt/clang-format +
+      # @wasm-fmt/ruff_fmt (added 2026-09-04 with the Format-document feature)
+      # also makes 10.9.8 succeed — they are what makes the latent bug fire
+      # every time. Reproduced in a clean node:22 container with nothing but
+      # this package.json.
+      #
+      # Pinning the npm major rather than the exact patch: there is no
+      # lockfile in this repo (deliberately — see .gitignore), so npm resolves
+      # against the live registry on every run and the tree shape shifts on its
+      # own. A floor is what we need, not a freeze.
+      - name: Pin npm (Node 22 ships a resolver that cannot install this tree)
+        run: npm install -g npm@11
+
       # The metadata generator scans wokwi-elements/src/, which only ships in
       # the upstream repo (not on npm). Clone it once for the freshness check.
       - name: Clone wokwi-elements (for metadata regeneration only)
