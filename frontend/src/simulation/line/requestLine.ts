@@ -69,8 +69,27 @@ export function clearLineGaps(): void {
   gaps.clear();
 }
 
+/**
+ * The key a refusal is filed under.
+ *
+ * Keyed by COMPONENT when the caller identifies itself, so a part that is
+ * rewired replaces its own entry instead of leaving one behind. Keyed by
+ * type@pin only for anonymous callers, which is what the map used to do for
+ * everyone: rewire a refused DHT22 from GPIO 4 to a pin the board can host and
+ * the success deleted dht22@5 while dht22@4 stayed, so the Circuit check kept
+ * telling a user who had already fixed their wiring that it was still broken.
+ */
+function gapKey(rec: LineSensorRecord, opts?: LineRequestOptions): string {
+  return opts?.componentId ? `#${opts.componentId}` : `${rec.sensor_type}@${rec.pin}`;
+}
+
+/** Drop a part's recorded refusal — call from a part's cleanup. */
+export function releaseLineGap(componentId: string): void {
+  gaps.delete(`#${componentId}`);
+}
+
 function refuse(rec: LineSensorRecord, why: string, opts?: LineRequestOptions): LineRefusal {
-  gaps.set(`${rec.sensor_type}@${rec.pin}`, {
+  gaps.set(gapKey(rec, opts), {
     sensorType: rec.sensor_type,
     pin: rec.pin,
     why,
@@ -105,7 +124,7 @@ export function requestLine(
     const hub = isLineCapable(sim) && sim.lineHub ? sim.lineHub() : null;
     if (!hub) return refuse(rec, 'the board declares local line support but provides no hub', opts);
     hub.attach(rec);
-    gaps.delete(`${rec.sensor_type}@${rec.pin}`);
+    gaps.delete(gapKey(rec, opts));
     return {
       mode: 'local',
       update: (props) => hub.update(rec.pin, props),
@@ -128,7 +147,7 @@ export function requestLine(
     const { sensor_type, pin, ...props } = rec;
     const taken = chan.registerSensor(sensor_type, pin, props);
     if (!taken) return refuse(rec, 'the host declined the sensor', opts);
-    gaps.delete(`${rec.sensor_type}@${rec.pin}`);
+    gaps.delete(gapKey(rec, opts));
     return {
       mode: 'hosted',
       update: (p) => chan.updateSensor?.(pin, { ...props, ...p }),

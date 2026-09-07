@@ -19,7 +19,7 @@
  */
 
 import { PartSimulationRegistry } from './PartSimulationRegistry';
-import { requestLine } from '../line/requestLine';
+import { requestLine, releaseLineGap } from '../line/requestLine';
 import { VirtualDS1307, VirtualBMP280, VirtualDS3231, VirtualPCF8574 } from '../I2CBusManager';
 import type { I2CDevice } from '../I2CBusManager';
 import { HD44780Decoder } from '../HD44780Decoder';
@@ -634,6 +634,9 @@ PartSimulationRegistry.register('dht22', {
 
     return () => {
       if (answer.mode !== 'none') answer.release();
+      // A refusal left a gap recorded; drop it so a rewire cannot keep
+      // reporting a sensor the user has already moved.
+      else releaseLineGap(componentId);
       unregisterSensorUpdate(componentId);
     };
   },
