@@ -843,6 +843,44 @@ describe('WS2812 edge decode — scales to the board clock', () => {
   });
 });
 
+describe('WS2812 parts — a board that cannot carry pixels says so', () => {
+  // The Linux boards (Raspberry Pi family, UNIHIKER M10) drive their pins over
+  // a level protocol with no bit timing, at roughly the rate a Python
+  // statement runs. A 1.25 us WS2812 bit cell has nowhere to live, so the part
+  // used to attach, decode nothing, feed nothing and report nothing — which
+  // reads to a user exactly like their own wiring mistake.
+  it('records a gap the circuit verifier can print, instead of going quiet', async () => {
+    const { lineGaps, clearLineGaps } = await import('../simulation/line/requestLine');
+    clearLineGaps();
+    const logic = PartSimulationRegistry.get('neopixel')!;
+    const sim = makeSimulator() as any;
+    sim.pixelSupport = () => ({ mode: 'none', why: 'no bit timing on this transport' });
+    const el = makeElement() as any;
+
+    const cleanup = logic.attachEvents!(el, sim, pinMap({ DIN: 6 }), 'npx-1');
+
+    const gap = lineGaps().find((g) => g.componentId === 'npx-1');
+    expect(gap).toBeDefined();
+    expect(gap!.sensorType).toBe('ws2812');
+    expect(gap!.pin).toBe(6);
+    expect(gap!.why).toContain('bit timing');
+    // And it never pretends to listen on a pad it cannot read.
+    expect(sim.pinManager.onPinChange).not.toHaveBeenCalled();
+
+    cleanup!();
+    expect(lineGaps().find((g) => g.componentId === 'npx-1')).toBeUndefined();
+  });
+
+  it('stays silent on a board that CAN carry them', async () => {
+    const { lineGaps, clearLineGaps } = await import('../simulation/line/requestLine');
+    clearLineGaps();
+    const logic = PartSimulationRegistry.get('neopixel')!;
+    const sim = makeSimulator(); // no pixelSupport declared
+    logic.attachEvents!(makeElement() as any, sim as any, pinMap({ DIN: 6 }), 'npx-2');
+    expect(lineGaps().find((g) => g.componentId === 'npx-2')).toBeUndefined();
+  });
+});
+
 describe('WS2812 parts — hardware-decoded frames (ESP32 RMT)', () => {
   // The regression this guards: Adafruit_NeoPixel on ESP32 goes out over RMT,
   // so DIN never toggles at bit rate and the edge decoder sees NOTHING. The

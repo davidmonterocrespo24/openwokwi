@@ -18,7 +18,7 @@
  */
 
 import { PartSimulationRegistry } from './PartSimulationRegistry';
-import { requestLine, releaseLineGap } from '../line/requestLine';
+import { requestLine, releaseLineGap, recordPartGap } from '../line/requestLine';
 import { setAdcVoltage, emitPropertyChange, analogRailVolts, guestMillis } from './partUtils';
 import { registerSensorUpdate, unregisterSensorUpdate } from '../SensorUpdateRegistry';
 import { useSimulatorStore } from '../../store/useSimulatorStore';
@@ -834,7 +834,29 @@ function attachWs2812Part(
   simulator: unknown,
   pinDIN: number,
   onPixel: (index: number, r: number, g: number, b: number) => void,
+  componentId?: string,
 ): () => void {
+  // A board that KNOWS it cannot carry a pixel stream says so, and that
+  // refusal reaches the user through the Circuit check the verifier already
+  // prints for a refused sensor. The Linux boards are the case: they carry
+  // levels with no timestamps at roughly the rate a Python statement runs, so
+  // a 1.25 us bit cell has nowhere to live. Without this the part attaches,
+  // decodes nothing, feeds nothing and reports nothing — which reads to a user
+  // exactly like their own wiring mistake.
+  const declared = (simulator as {
+    pixelSupport?: () => { mode: string; why?: string };
+  }).pixelSupport?.();
+  if (declared && declared.mode === 'none') {
+    recordPartGap({
+      sensorType: 'ws2812',
+      pin: pinDIN,
+      why: declared.why ?? 'this board cannot produce a WS2812 data stream',
+      componentId,
+    });
+    return () => {
+      if (componentId) releaseLineGap(componentId);
+    };
+  }
   let gotPixel = false;
   const paint = (index: number, r: number, g: number, b: number) => {
     gotPixel = true;
@@ -898,7 +920,7 @@ function attachWs2812Part(
 // ─── LED Ring (WS2812B NeoPixel ring) ────────────────────────────────────────
 
 PartSimulationRegistry.register('led-ring', {
-  attachEvents: (element, simulator, getArduinoPinHelper) => {
+  attachEvents: (element, simulator, getArduinoPinHelper, componentId) => {
     const pinDIN = getArduinoPinHelper('DIN');
     if (pinDIN === null) return () => {};
 
@@ -910,7 +932,7 @@ PartSimulationRegistry.register('led-ring', {
       } catch (_) {
         // setPixel not yet available (element not upgraded) — ignore
       }
-    });
+    }, componentId);
 
     return unsub;
   },
@@ -919,7 +941,7 @@ PartSimulationRegistry.register('led-ring', {
 // ─── NeoPixel Matrix (WS2812B matrix grid) ────────────────────────────────────
 
 PartSimulationRegistry.register('neopixel-matrix', {
-  attachEvents: (element, simulator, getArduinoPinHelper) => {
+  attachEvents: (element, simulator, getArduinoPinHelper, componentId) => {
     const pinDIN = getArduinoPinHelper('DIN');
     if (pinDIN === null) return () => {};
 
@@ -934,7 +956,7 @@ PartSimulationRegistry.register('neopixel-matrix', {
       } catch (_) {
         // ignore
       }
-    });
+    }, componentId);
 
     return unsub;
   },
@@ -946,7 +968,7 @@ PartSimulationRegistry.register('neopixel-matrix', {
  * Single addressable RGB LED — decodes the WS2812B data stream on DIN.
  */
 PartSimulationRegistry.register('neopixel', {
-  attachEvents: (element, simulator, getArduinoPinHelper) => {
+  attachEvents: (element, simulator, getArduinoPinHelper, componentId) => {
     const pinDIN = getArduinoPinHelper('DIN');
     if (pinDIN === null) return () => {};
 
@@ -956,7 +978,7 @@ PartSimulationRegistry.register('neopixel', {
       el.r = r / 255;
       el.g = g / 255;
       el.b = b / 255;
-    });
+    }, componentId);
 
     return unsub;
   },
