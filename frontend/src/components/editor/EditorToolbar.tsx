@@ -290,12 +290,21 @@ export const EditorToolbar = ({
   // (on Run) opens it; this entry then lands in the already-open log.
   useEffect(() => {
     const onFault = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { message?: string } | undefined;
+      const detail = (e as CustomEvent).detail as
+        | { message?: string; severity?: 'error' | 'warning' | 'info' }
+        | undefined;
       if (!detail?.message) return;
       const text = detail.message;
+      // Everything on this channel used to land as an ERROR, and the agent
+      // panel counts those: a heuristic that turned out to be wrong, or the
+      // line that says so, both read as "Compile failed with N errors" on a
+      // build that succeeded. Producers may now say what a line is worth;
+      // omitting it keeps the old behaviour for the solver and burnout
+      // reporters, which really are faults.
+      const type = detail.severity ?? 'error';
       setCompileLogs((prev) => [
         ...prev,
-        { timestamp: new Date(), type: 'error', message: text, target: CIRCUIT_CHECK_TARGET },
+        { timestamp: new Date(), type, message: text, target: CIRCUIT_CHECK_TARGET },
       ]);
     };
     window.addEventListener('velxio-circuit-fault', onFault);
