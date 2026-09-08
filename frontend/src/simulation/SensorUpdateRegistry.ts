@@ -42,6 +42,18 @@ export function getLastSensorValues(componentId: string): SensorValues | undefin
 }
 
 /**
+ * The callback currently registered for a component, if any.
+ *
+ * For wrapping rather than replacing: a part that borrows another part's
+ * simulation logic lets that logic register first, then chains its own
+ * behaviour in front of it. Without this the wrapper would have to replace
+ * the callback and the borrowed model would stop hearing the panel.
+ */
+export function getSensorUpdate(componentId: string): SensorUpdateCallback | undefined {
+  return registry.get(componentId);
+}
+
+/**
  * Unregister a component's callback. Called in the cleanup function returned
  * by attachEvents() so stale callbacks don't persist after simulation stops.
  * Values are also cleared so a deleted/recreated component starts fresh.
