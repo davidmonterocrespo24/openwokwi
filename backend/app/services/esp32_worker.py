@@ -641,7 +641,12 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
 
     # Custom-chip runtimes that registered their respective protocols at chip_setup.
     # Mutated when sensor_type=='custom-chip' is processed in initial_sensors.
+    # Must match wasm_chip_runtime.CHIP_UART; defined locally because that
+    # module is imported lazily (the worker may run without app.services on
+    # sys.path, see the ImportError fallback below).
+    CHIP_UART = 1
     _chip_uart_runtimes: list = []          # runtimes that called vx_uart_attach
+
     _chip_spi_runtimes:  list = []          # runtimes that called vx_spi_attach
     _chip_timer_runtimes: list = []         # runtimes with active timers
     _chip_pin_watch_runtimes: list = []     # runtimes that called vx_pin_watch
@@ -1300,13 +1305,18 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
         if _stopped.is_set():
             return
         _emit({'type': 'uart_tx', 'uart': uart_id, 'byte': byte_val})
-        # Dispatch to any custom-chip runtimes that declared a UART.
+        # Dispatch to any custom-chip runtimes that declared a UART, but only
+        # from CHIP_UART. UART0 is the serial monitor: feeding it to a chip
+        # means the chip receives the sketch's own console output, and the
+        # chip's replies land in the monitor as garbage. Chips live on
+        # Serial1, which is what the browser bridge does too.
         # The chip's on_rx_byte callback runs synchronously in this thread.
-        for rt in _chip_uart_runtimes:
-            try:
-                rt.feed_uart_byte(byte_val)
-            except Exception as e:
-                _log(f'[custom-chip uart_tx] error: {e!r}')
+        if uart_id == CHIP_UART:
+            for rt in _chip_uart_runtimes:
+                try:
+                    rt.feed_uart_byte(byte_val)
+                except Exception as e:
+                    _log(f'[custom-chip uart_tx] error: {e!r}')
         # Crash / reboot detection on UART0 only
         if uart_id == 0:
             _uart0_buf.append(byte_val)

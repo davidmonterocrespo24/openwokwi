@@ -32,6 +32,11 @@ from typing import Callable, Optional
 
 import wasmtime
 
+# The UART a chip talks on. UART0 is the serial monitor on every ESP32
+# family, so a chip there collides with the console in both directions.
+CHIP_UART = 1
+
+
 
 # I2C config struct layout (must match velxio-chip.h's vx_i2c_config — 64 bytes)
 #   offset 0  : address      (uint8_t  + 3 bytes pad)
@@ -103,7 +108,7 @@ class WasmChipRuntime:
             pin_reader: (gpio) → 0/1 — reads current GPIO state from QEMU. If absent,
                         vx_pin_read returns the runtime's last-known cached value.
             uart_writer: (uart_id, bytes) → void — injects bytes into the firmware's
-                         UART RX. Called by vx_uart_write.
+                         UART RX. Called by vx_uart_write, always with CHIP_UART.
             timer_scheduler: callback invoked when the chip arms a timer; the worker
                              starts the actual scheduling thread.
         """
@@ -465,7 +470,12 @@ class WasmChipRuntime:
             data = self._read_bytes(buf_ptr, count)
             if self._uart_writer is not None:
                 try:
-                    self._uart_writer(0, data)   # always UART0 in MVP
+                    # CHIP_UART, not UART0: UART0 is the serial monitor on
+                    # every ESP32 family, so a chip writing there appears in
+                    # the console as garbage and reads the sketch's own
+                    # prints back. Chips live on Serial1 — the browser
+                    # bridge (simulatorBridges.ts CHIP_UART) agrees.
+                    self._uart_writer(CHIP_UART, data)
                 except Exception as e:
                     self._emit({"type": "chip_error", "where": "uart_write", "error": str(e)})
                     return 0

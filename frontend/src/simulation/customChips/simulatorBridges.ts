@@ -78,6 +78,13 @@ export function getSimulatorBridges(simulator: any): SimulatorBridges {
  * simulator belongs to, the dispatcher fans bytes out to every listener in
  * `uartListeners` (one per UART chip).
  */
+/**
+ * The UART a chip talks on when the board has more than one. UART0 is the
+ * serial monitor on every ESP32 family, so a chip on UART0 would babble
+ * into the console and read the sketch's own prints back.
+ */
+export const CHIP_UART = 1;
+
 export function ensureUartBridge(simulator: any): void {
   const b = getSimulatorBridges(simulator);
   if (b.uartInstalled) return;
@@ -110,7 +117,26 @@ export function ensureUartBridge(simulator: any): void {
     b.uartInstalled = true;
     return;
   }
-  // esp32/unknown: no client-side UART bridge today (QEMU has its own path).
+  if (kind === 'esp32') {
+    // The ESP32 bridge tags every TX byte with the UART it came from.
+    // UART0 is the serial monitor: a chip must never be fed the sketch's
+    // own console output, and a chip must never write into it. So chips
+    // live on CHIP_UART, which is Serial1 on the Arduino side — the UART
+    // a sketch opens with `Serial1.begin(baud, SERIAL_8N1, rx, tx)`.
+    const previous = simulator.onSerialData;
+    simulator.onSerialData = (charStr: string, uart?: number) => {
+      if (previous) { try { previous(charStr, uart); } catch { /* swallow */ } }
+      if ((uart ?? 0) !== CHIP_UART) return;
+      const code = typeof charStr === 'string' ? charStr.charCodeAt(0) : Number(charStr);
+      if (!Number.isFinite(code)) return;
+      for (const listener of b.uartListeners) {
+        try { listener(code & 0xff); } catch { /* swallow */ }
+      }
+    };
+    b.uartInstalled = true;
+    return;
+  }
+  // unknown: no client-side UART bridge (QEMU has its own path).
 }
 
 /**
@@ -170,6 +196,12 @@ export function avrUartTx(simulator: any, byte: number): void {
   }
   if (kind === 'rp2040' && typeof simulator.serialWriteByte === 'function') {
     try { simulator.serialWriteByte(byte); } catch { /* swallow */ }
+    return;
+  }
+  if (kind === 'esp32' && typeof simulator.sendSerialByte === 'function') {
+    // Straight into the guest's UART1 FIFO — the ESP32 worker/engine does
+    // its own buffering, so there is nothing to drain here.
+    try { simulator.sendSerialByte(byte & 0xff, CHIP_UART); } catch { /* swallow */ }
   }
 }
 
