@@ -115,6 +115,45 @@ const ESP32_C3_DEFAULT: RoleTable = {
   '6': { kind: 'i2c-scl', bus: 0 },
 };
 
+/**
+ * The XIAO family. Every XIAO exposes the same eleven pads (D0-D10) in the
+ * same physical order, but each SoC wires them to different GPIOs — and it
+ * is the GPIO number that reaches this table. Serial1 is UART1 on all three
+ * ESP32 variants; UART0 is the USB console.
+ *
+ * D4/D5 are the I2C pair the Grove connector uses, D6/D7 the UART pair,
+ * D8/D9/D10 the SPI trio.
+ */
+const XIAO_ESP32C6: RoleTable = {
+  '16': { kind: 'uart-tx', uart: 1 },   // D6
+  '17': { kind: 'uart-rx', uart: 1 },   // D7
+  '22': { kind: 'i2c-sda', bus: 0 },    // D4
+  '23': { kind: 'i2c-scl', bus: 0 },    // D5
+  '19': { kind: 'spi-sck', bus: 0 },    // D8
+  '20': { kind: 'spi-miso', bus: 0 },   // D9
+  '18': { kind: 'spi-mosi', bus: 0 },   // D10
+};
+
+const XIAO_ESP32C3: RoleTable = {
+  '21': { kind: 'uart-tx', uart: 1 },   // D6
+  '20': { kind: 'uart-rx', uart: 1 },   // D7
+  '6': { kind: 'i2c-sda', bus: 0 },     // D4
+  '7': { kind: 'i2c-scl', bus: 0 },     // D5
+  '8': { kind: 'spi-sck', bus: 0 },     // D8
+  '9': { kind: 'spi-miso', bus: 0 },    // D9
+  '10': { kind: 'spi-mosi', bus: 0 },   // D10
+};
+
+const XIAO_ESP32S3: RoleTable = {
+  '43': { kind: 'uart-tx', uart: 1 },   // D6
+  '44': { kind: 'uart-rx', uart: 1 },   // D7
+  '5': { kind: 'i2c-sda', bus: 0 },     // D4
+  '6': { kind: 'i2c-scl', bus: 0 },     // D5
+  '7': { kind: 'spi-sck', bus: 0 },     // D8
+  '8': { kind: 'spi-miso', bus: 0 },    // D9
+  '9': { kind: 'spi-mosi', bus: 0 },    // D10
+};
+
 // Pi3B uses BCM numbers internally (after physical→BCM translation)
 const PI3_BCM: RoleTable = {
   '14': { kind: 'uart-tx', uart: 0 },
@@ -153,6 +192,13 @@ function tableFor(boardKind: BoardKind | string): RoleTable | null {
   if (boardKind === 'arduino-uno' || boardKind === 'arduino-nano') return ARDUINO_UNO;
   if (boardKind === 'arduino-mega') return ARDUINO_MEGA;
   if (boardKind === 'raspberry-pi-pico' || boardKind === 'pi-pico-w') return RP2040_DEFAULT;
+  // XIAO before the generic esp32 prefixes: a XIAO's pads land on different
+  // GPIOs than a dev board's, and without this every XIAO fell through to
+  // the Arduino Nano table — so a UART or I2C pin read as plain digital.
+  if (boardKind === 'xiao-esp32c6') return XIAO_ESP32C6;
+  if (boardKind === 'xiao-esp32-c3') return XIAO_ESP32C3;
+  if (boardKind === 'xiao-esp32-s3') return XIAO_ESP32S3;
+  if (boardKind === 'xiao-rp2040') return RP2040_DEFAULT;
   if (boardKind === 'esp32-c3' || (boardKind as string).startsWith('esp32-c3')) return ESP32_C3_DEFAULT;
   if (boardKind === 'esp32' || (boardKind as string).startsWith('esp32')) return ESP32_DEFAULT;
   // Pi Zero/1/2/3/4/5 all share the same 40-pin GPIO header → same BCM table.
