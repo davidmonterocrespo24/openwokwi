@@ -1884,7 +1884,10 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
                      f"({width}x{height}) "
                      f"DC={state['dc_pin']} CS={state['cs_pin']} "
                      f"RST={state['rst_pin']} BUSY={state['busy_pin']}")
-            elif sensor_type in ('ssd1306', 'pcf8574'):
+            elif sensor_type in ('ssd1306', 'pcf8574', 'i2c-write-sink'):
+                # 'i2c-write-sink' is the generic form: any write-only device
+                # whose rendering lives in the browser (the Grove display
+                # chips) is ACKed here and its bytes echoed as i2c_transaction.
                 default_addr = 0x3C if sensor_type == 'ssd1306' else 0x27
                 i2c_addr = int(s.get('addr', default_addr))
                 sink = _I2CWriteSink(i2c_addr, _emit)
@@ -2221,7 +2224,7 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
                     _i2c_slaves[i2c_addr] = slave
                     sensor_data['i2c_addr'] = i2c_addr
                     sensor_data['slave'] = slave
-                elif sensor_type in ('ssd1306', 'pcf8574'):
+                elif sensor_type in ('ssd1306', 'pcf8574', 'i2c-write-sink'):
                     default_addr = 0x3C if sensor_type == 'ssd1306' else 0x27
                     i2c_addr = int(cmd.get('addr', default_addr))
                     sink = _I2CWriteSink(i2c_addr, _emit)
