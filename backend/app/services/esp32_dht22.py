@@ -100,6 +100,22 @@ def dht22_payload(temperature_c: float, humidity_pct: float) -> list[int]:
     return [h_H, h_L, t_H, t_L, chk]
 
 
+def dht11_payload(temperature_c: float, humidity_pct: float) -> list[int]:
+    """The 5 bytes a DHT11 sends: [hum_int, hum_dec, temp_int, temp_dec, checksum].
+
+    The DHT11 reports whole units (its decimal bytes are 0 on the classic part),
+    which is why a DHT22 frame read by a DHT11 driver comes out ten times too
+    large — the frame timing is identical, the payload is not.
+    """
+    hum = max(0, min(100, int(round(humidity_pct))))
+    tmp = int(round(temperature_c))
+    neg = tmp < 0
+    tmp_int = abs(tmp) & 0x7F
+    t_int = tmp_int | (0x80 if neg else 0)
+    chk = (hum + 0 + t_int + 0) & 0xFF
+    return [hum, 0, t_int, 0, chk]
+
+
 def dht22_phases(payload: list[int]) -> list[Phase]:
     """The frame as (level, duration_us) phases, first phase first. After the
     last one the sensor lets go and the pull-up idles the line HIGH."""

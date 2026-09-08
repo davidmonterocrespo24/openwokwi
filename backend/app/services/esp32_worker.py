@@ -54,6 +54,7 @@ try:
         Dht22Trigger as _Dht22Trigger,
         coerce_number as _dht22_num,
         dht22_payload as _dht22_payload_bytes,
+        dht11_payload as _dht11_payload_bytes,
         dht22_phases as _dht22_phases,
     )
 except ImportError:
@@ -67,6 +68,7 @@ except ImportError:
     _Dht22Trigger = _mod_dht.Dht22Trigger        # type: ignore[assignment]
     _dht22_num = _mod_dht.coerce_number          # type: ignore[assignment]
     _dht22_payload_bytes = _mod_dht.dht22_payload  # type: ignore[assignment]
+    _dht11_payload_bytes = _mod_dht.dht11_payload  # type: ignore[assignment]
     _dht22_phases = _mod_dht.dht22_phases        # type: ignore[assignment]
 
 # I2C slave state machines — extracted to a standalone module for testability
@@ -403,7 +405,7 @@ class _RmtDecoder:
 # -icount off: the AP beacon timer runs on QEMU_CLOCK_REALTIME (issue #260).
 ICOUNT_SHIFT_C3 = 3
 ICOUNT_SHIFT_LINE_SENSORS = 4
-LINE_SENSOR_TYPES = ('dht22', 'hc-sr04')
+LINE_SENSOR_TYPES = ('dht22', 'dht11', 'hc-sr04')
 
 
 def icount_shift_for_run(machine: str, wifi_enabled: bool, sensors: list,
@@ -1012,7 +1014,10 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
         guest can only issue a new start after abandoning the previous read."""
         temp = _dht22_num(sensor.get('temperature'), 25.0)
         hum = _dht22_num(sensor.get('humidity'), 50.0)
-        payload = _dht22_payload_bytes(temp, hum)
+        # Same frame timing, different payload: the DHT11 sends whole units.
+        payload = (_dht11_payload_bytes(temp, hum)
+                   if sensor.get('type') == 'dht11'
+                   else _dht22_payload_bytes(temp, hum))
         old = sensor.get('_dht22_reply')
         if old is not None and not old.done:
             _sync_handlers[:] = [h for h in _sync_handlers
@@ -1191,7 +1196,7 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
 
         stype = sensor.get('type', '')
 
-        if stype == 'dht22':
+        if stype in ('dht22', 'dht11'):
             # A level the guest wrote while the pad is an output (QEMU reports
             # no others). The LOW is the start signal; a 1 after it is the
             # open-drain release, how MicroPython's dht driver lets go of the
@@ -1284,7 +1289,7 @@ def main() -> None:  # noqa: C901  (complexity OK for inline worker)
                     _keypad_recompute(_kp)
             with _sensors_lock:
                 sensor = _sensors.get(gpio)
-            if sensor is not None and sensor.get('type') == 'dht22' and direction in (0, 1):
+            if sensor is not None and sensor.get('type') in ('dht22', 'dht11') and direction in (0, 1):
                 # The push-pull release: the pad went INPUT after the LOW.
                 if _dht22_trigger(sensor).on_direction(direction == 1):
                     _dht22_arm(gpio, slot, sensor, 'input release')
