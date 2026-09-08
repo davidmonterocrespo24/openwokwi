@@ -75,9 +75,13 @@ export class LineSensorHub {
     return true;
   }
 
-  /** New property values for the sensor keyed on `pin`. */
+  /**
+   * New property values for the sensor keyed on `pin`. A model that speaks
+   * unprompted may answer the change with a frame — see `LineModel.update`.
+   */
   update(pin: number, props: Record<string, unknown>): void {
-    this.attached.get(pin)?.model.update(props);
+    const frame = this.attached.get(pin)?.model.update(props, this.clock);
+    if (frame) this.timeline.emit(frame, this.clock.now());
   }
 
   detach(pin: number): void {

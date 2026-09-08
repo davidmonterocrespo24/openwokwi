@@ -63,8 +63,19 @@ export interface LineModel {
    * reports the GUEST's drive state, and an injected input changes none of it.
    */
   onPad(e: PadEvent, clock: LineClock): HostEdgeFrame | null;
-  /** New values from the canvas (a slider moved). Unknown keys are ignored. */
-  update(props: Record<string, unknown>): void;
+  /**
+   * New values from the canvas (a slider moved, a button was pressed).
+   * Unknown keys are ignored.
+   *
+   * A model may return a frame here. Most do not: a DHT answers when the
+   * guest asks, so a slider only changes what the NEXT answer carries. But a
+   * device that speaks unprompted — an IR demodulator with a remote pointed
+   * at it — has no guest event to hang a frame on, and pressing the button
+   * on the canvas IS the event. Returning a frame puts it on the wire at the
+   * current cycle, with the same timing guarantees as an answer. `clock` is
+   * there for that: a model that only stores values ignores it.
+   */
+  update(props: Record<string, unknown>, clock: LineClock): HostEdgeFrame | null | void;
   /** Forget protocol state: the board rebooted. */
   reset(): void;
 }

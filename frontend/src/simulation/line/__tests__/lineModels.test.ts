@@ -118,7 +118,7 @@ describe('dht22 model', () => {
 
   it('update() changes the next payload; reset() forgets a half start signal', () => {
     const m = createLineModel({ sensor_type: 'dht22', pin: 4, temperature: 25, humidity: 50 })!;
-    m.update({ temperature: -10.5, humidity: '33.3' });
+    m.update({ temperature: -10.5, humidity: '33.3' }, clockAt(0));
     const [, toLow, release] = events(4, ['high', 'low', 'z']);
     m.onPad(toLow, clockAt(0));
     m.reset();
@@ -176,7 +176,7 @@ describe('hc-sr04 model', () => {
     const us = clockAt(0).us;
     let f = m.onPad(rise, clockAt(0))!;
     expect(f.edges[1].atCycle - f.edges[0].atCycle).toBe(us((400 / 17150) * 1e6));
-    m.update({ distance: 10 });
+    m.update({ distance: 10 }, clockAt(0));
     m.reset();
     f = m.onPad(rise, clockAt(0))!;
     expect(f.edges[1].atCycle - f.edges[0].atCycle).toBe(us((10 / 17150) * 1e6));
