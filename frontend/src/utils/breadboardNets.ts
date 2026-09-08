@@ -17,9 +17,10 @@
  * on the same breadboard belong to the same net iff their group keys match.
  *
  * The same question — "which of this part's pins are the same node?" — comes
- * up for anything that is copper rather than silicon: a shield that carries
- * sockets, a hub, a screw-terminal breakout. `registerInternalNetGroups`
- * lets a part answer it without this file knowing anything about the part.
+ * up for any part that shorts some of its own pins: an I2C hub or
+ * multiplexer whose downstream sockets are one bus, a terminal breakout.
+ * `registerInternalNetGroups` lets a part answer it without this file
+ * knowing anything about the part.
  */
 
 const BREADBOARD_IDS = new Set(['breadboard', 'breadboard-mini']);
@@ -38,8 +39,8 @@ export type InternalNetGroupFn = (pinName: string) => string | null;
 const internalNets = new Map<string, InternalNetGroupFn>();
 
 /**
- * Declare that a part shorts some of its own pins together — a carrier
- * board, a hub, a terminal breakout. Registered at load time by whoever owns
+ * Declare that a part shorts some of its own pins together — a hub, a
+ * multiplexer, a terminal breakout. Registered at load time by whoever owns
  * the part (overlays included); calling twice for one id replaces the entry.
  */
 export function registerInternalNetGroups(metadataId: string, fn: InternalNetGroupFn): void {
