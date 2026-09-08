@@ -26,7 +26,7 @@ import { buildNetlist, sanitizeSpiceId } from '../spice/NetlistBuilder';
 import { runNetlist as runSpice } from '../spice/runNetlist';
 import { UnionFind } from '../spice/unionFind';
 import { BOARD_PIN_GROUPS, auxRailNetName, railVolts } from '../spice/boardPinGroups';
-import { isBreadboard } from '../../utils/breadboardNets';
+import { hasInternalNets } from '../../utils/breadboardNets';
 import type { BuildNetlistInput, ElectricalSolveResult } from '../spice/types';
 import { COMPONENT_RATINGS } from './componentRatings';
 
@@ -377,8 +377,9 @@ export async function verifyCircuit(
         if (entityId === opts.excludeId) continue;
         if (opts.power && dcSourceIds.has(entityId)) continue;
         const comp = compById.get(entityId);
-        // Breadboard internal connectivity is already folded into the nets.
-        if (comp && isBreadboard(comp.metadataId)) continue;
+        // A part that shorts its own pins (breadboard, carrier board) has
+        // that connectivity already folded into the nets.
+        if (comp && hasInternalNets(comp.metadataId)) continue;
         // Channel-only conduction applies to POWER reachability (a MOSFET
         // gate cannot power the drain rail). For RETURN reachability every
         // pin joins: voltage-driven inputs (BJT base, MOSFET gate) are
@@ -456,7 +457,7 @@ export async function verifyCircuit(
       dcSourceIds.has(c.id) ||
       boardVccByKind.has(c.metadataId) ||
       isActiveChip(c.metadataId) ||
-      isBreadboard(c.metadataId) ||
+      hasInternalNets(c.metadataId) ||
       c.metadataId.startsWith('instr-');
 
     const powerRegions = buildRegions({ power: true });

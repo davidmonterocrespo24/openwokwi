@@ -19,7 +19,7 @@
 import { UnionFind } from './unionFind';
 import { componentToSpice } from './componentToSpice';
 import { auxRailNetName, isAuxRailNet } from './boardPinGroups';
-import { isBreadboard, breadboardGroupKey } from '../../utils/breadboardNets';
+import { hasInternalNets, breadboardGroupKey } from '../../utils/breadboardNets';
 import type { BuildNetlistInput, ComponentForSpice, BoardForSpice, WireForSpice } from './types';
 
 /** True for any self-driven supply net: ground, the main rail, or an aux rail. */
@@ -28,11 +28,12 @@ function isRailNet(net: string): boolean {
 }
 
 /**
- * Union the wired pins of every breadboard that share an internal group
- * (5-hole column or power rail). Breadboard connectivity is static, so it is
- * modelled at the union-find level — no SPICE cards needed — which makes it
- * equally visible to buildNetlist, the circuit verifier, and the overlay
- * net maps (all of which run their own bare union-find over wires).
+ * Union the wired pins that a part shorts internally — a breadboard's 5-hole
+ * columns and power rails, or the sockets a carrier board wires in parallel.
+ * That connectivity is static, so it is modelled at the union-find level —
+ * no SPICE cards needed — which makes it equally visible to buildNetlist,
+ * the circuit verifier, and the overlay net maps (all of which run their own
+ * bare union-find over wires).
  */
 function unionBreadboardGroups(
   uf: UnionFind,
@@ -41,7 +42,7 @@ function unionBreadboardGroups(
   pinKey: (componentId: string, pinName: string) => string,
 ): void {
   for (const comp of components) {
-    if (!isBreadboard(comp.metadataId)) continue;
+    if (!hasInternalNets(comp.metadataId)) continue;
     const anchors = new Map<string, string>(); // groupKey → first pin key
     for (const pinName of pinsReferencedByWires(comp.id, wires)) {
       const group = breadboardGroupKey(comp.metadataId, pinName);
