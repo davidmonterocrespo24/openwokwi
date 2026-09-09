@@ -102,7 +102,8 @@ export function analogRailVolts(simulator: AnySimulator): number {
 /**
  * Write an analog voltage to an ADC channel, supporting AVR, RP2040, and ESP32.
  *
- * AVR:    pins 14-19 → ADC channels 0-5, voltage stored directly (0-5V)
+ * AVR:    pins 14-21 → channels 0-7 (Uno / Nano), 54-69 → channels 0-15
+ *         (Mega). Voltage stored directly (0-5V)
  * RP2040: GPIO 26-29 → ADC channels 0-3, converted to 12-bit value (0-4095)
  * ESP32:  GPIO 32-39 → ADC1 channels 4-11, sent via WebSocket bridge
  *
@@ -125,9 +126,19 @@ export function setAdcVoltage(simulator: AnySimulator, pin: number, voltage: num
     console.warn(`[setAdcVoltage] RP2040 pin ${pin} is not an ADC pin (26-29)`);
     return false;
   }
-  // AVR: pins 14-19 → ADC channels 0-5
-  if (pin < 14 || pin > 19) return false;
-  const channel = pin - 14;
+  // AVR. Two families, two pad ranges, and both were wrong before:
+  //
+  //   14-21  A0-A7 on the ATmega328P. The DIP Uno has no A6/A7 and its
+  //          element draws none, but the Nano's TQFP part does have ADC6
+  //          and ADC7 and the Nano element breaks both out — a knob wired
+  //          there fed nothing.
+  //   54-69  A0-A15 on the ATmega2560. Every one of them was out of range,
+  //          so analog input on a Mega did nothing at all.
+  //
+  // Silently, in both cases: this returns false and no caller checks it, so
+  // the sketch reads a steady zero from a knob it can see turning.
+  const channel = pin >= 54 && pin <= 69 ? pin - 54 : pin >= 14 && pin <= 21 ? pin - 14 : -1;
+  if (channel < 0) return false;
   const adc = getADC(simulator);
   if (!adc) return false;
   adc.channelValues[channel] = voltage;
